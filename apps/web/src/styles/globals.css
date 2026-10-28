@@ -27,7 +27,9 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  font-family: system-ui, sans-serif;
+  /* Body face for the whole product: Geist. Headings opt into Poppins via
+     .font-display, so the two roles never compete for the same text. */
+  font-family: 'Geist Variable', system-ui, sans-serif;
   line-height: 1.5;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -212,5 +214,86 @@ body {
   }
   html {
     @apply font-sans;
+  }
+}
+
+/**
+ * Signed-in app surfaces.
+ *
+ * Two faces, one rule: Poppins (.font-display) carries headings and only
+ * headings; Geist carries every piece of body copy, label and control. Cards
+ * are a light translucent material so the landing page's pale-blue wash reads
+ * through them instead of being covered by a solid white page.
+ */
+@layer components {
+  .app-card {
+    border-radius: 1rem;
+    border: 1px solid rgb(255 255 255 / 0.75);
+    background-color: rgb(255 255 255 / 0.86);
+    box-shadow: 0 12px 34px -22px rgb(15 60 90 / 0.4), 0 1px 2px rgb(15 60 90 / 0.04);
+    backdrop-filter: blur(10px) saturate(120%);
+  }
+
+  .app-card-quiet {
+    border-radius: 1rem;
+    border: 1px solid rgb(255 255 255 / 0.7);
+    background-color: rgb(255 255 255 / 0.6);
+  }
+
+  /* Sticky chrome: content scrolls beneath a frosted strip, no hard divider. */
+  .app-chrome {
+    background-color: rgb(255 255 255 / 0.62);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  .app-sidebar {
+    background-color: rgb(255 255 255 / 0.78);
+    backdrop-filter: blur(24px) saturate(160%);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-card,
+  .app-card-quiet,
+  .app-chrome,
+  .app-sidebar {
+    background-color: #fff;
+    backdrop-filter: none;
+  }
+}
+
+/**
+ * Landing-page partner marquee. The track holds an even number of identical
+ * units, so shifting it by exactly half its width lands on the next unit and
+ * the loop repeats with no visible jump.
+ */
+@keyframes partner-marquee-drift {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.partner-marquee {
+  /* Soft edges: logos fade in and out instead of being hard-clipped. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 10%, #000 90%, transparent);
+}
+
+.partner-marquee-track {
+  animation: partner-marquee-drift 30s linear infinite;
+  will-change: transform;
+}  .partner-marquee:hover .partner-marquee-track {
+    animation-play-state: paused;
+  }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .partner-marquee-track {
+    animation: none;
+    transform: none;
+    will-change: auto;
   }
 }

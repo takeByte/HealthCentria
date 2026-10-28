@@ -1,9 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, LoaderCircle } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
+import {
+  EmptyNote,
+  InlineNotice,
+  Segmented,
+  StatTile,
+  StatusChip,
+  dangerChipButton,
+  fieldLabel,
+  panel,
+  primaryButton,
+  secondaryButton,
+  selectClass,
+  textareaClass,
+} from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
@@ -16,7 +30,6 @@ import {
   type StaffAppointment,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
-import { cn } from '../../lib/utils';
 
 export const Route = createFileRoute('/staff/appointments')({
   component: StaffQueue,
@@ -24,14 +37,6 @@ export const Route = createFileRoute('/staff/appointments')({
 
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'declined' | 'completed' | 'cancelled';
 type DatePreset = 'today' | 'week' | 'all';
-
-const STATUS_STYLE: Record<StaffAppointment['status'], string> = {
-  pending: 'bg-amber-100 text-amber-800',
-  confirmed: 'bg-green-100 text-green-800',
-  declined: 'bg-red-100 text-red-800',
-  completed: 'bg-slate-200 text-slate-700',
-  cancelled: 'bg-slate-100 text-slate-500',
-};
 
 function toYMD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -101,48 +106,56 @@ function QueueCard({
   }
 
   return (
-    <article className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_8px_30px_rgba(15,60,90,0.06)]">
+    <article className={panel}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-bold text-slate-900">
-            {patientName(appt)} <span className="font-normal text-slate-500">· {serviceName(appt)}</span>
+        <div className="min-w-0">
+          <h3 className="font-display text-[14.5px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
+            {patientName(appt)}
           </h3>
-          <p className="mt-0.5 text-sm text-slate-600">
-            {formatDay(appt.day)}
+          <p className="mt-0.5 text-[12.5px] text-slate-600">
+            {serviceName(appt)} · {formatDay(appt.day)}
             {appt.timePreference !== 'any' ? ` · ${appt.timePreference === 'morning' ? 'Morning' : 'Afternoon'}` : ''}
-            {patientEmail(appt) && <span className="block text-xs text-slate-400">{patientEmail(appt)}</span>}
           </p>
+          {patientEmail(appt) && (
+            <p className="mt-0.5 truncate text-[11.5px] text-slate-400">{patientEmail(appt)}</p>
+          )}
         </div>
-        <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-bold capitalize', STATUS_STYLE[appt.status])}>
-          {appt.status}
-        </span>
+        <StatusChip status={appt.status} className="shrink-0" />
       </div>
-      {appt.notes && <p className="mt-2 text-sm text-slate-600">Patient notes: {appt.notes}</p>}
+      {appt.notes && (
+        <p className="mt-3 rounded-lg bg-slate-50/80 px-3 py-2 text-[12.5px] leading-5 text-slate-600">
+          <span className="font-semibold text-slate-700">Patient notes: </span>
+          {appt.notes}
+        </p>
+      )}
       {appt.status === 'declined' && appt.declineReason && (
-        <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">Decline reason: {appt.declineReason}</p>
+        <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-[12.5px] leading-5 text-red-800">
+          <span className="font-semibold">Decline reason: </span>
+          {appt.declineReason}
+        </p>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-sm text-destructive">
+        <p role="alert" className="mt-2 text-[12.5px] font-medium text-destructive">
           {error}
         </p>
       )}
 
       {appt.status === 'pending' && !declining && (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3.5 flex gap-2">
           <button
             type="button"
             onClick={() => run('confirm')}
             disabled={busy !== null}
-            className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-teal-600 text-sm font-semibold text-white active:scale-[0.97] disabled:opacity-60"
+            className={`${primaryButton} h-9 flex-1 px-3 text-[13px]`}
           >
-            {busy === 'confirm' && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+            {busy === 'confirm' && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
             Confirm
           </button>
           <button
             type="button"
             onClick={() => setDeclining(true)}
             disabled={busy !== null}
-            className="h-10 flex-1 rounded-xl border border-red-200 text-sm font-semibold text-destructive active:scale-[0.97]"
+            className={`${dangerChipButton} flex-1`}
           >
             Decline
           </button>
@@ -150,8 +163,8 @@ function QueueCard({
       )}
 
       {appt.status === 'pending' && declining && (
-        <div className="mt-3 rounded-xl border border-slate-200 p-3">
-          <label htmlFor={`reason-${appt.id}`} className="mb-1.5 block text-sm font-medium text-slate-800">
+        <div className="mt-3.5 rounded-xl bg-slate-50/80 p-3">
+          <label htmlFor={`reason-${appt.id}`} className={fieldLabel}>
             Decline reason * <span className="font-normal text-slate-500">(shown to the patient)</span>
           </label>
           <textarea
@@ -164,21 +177,21 @@ function QueueCard({
               setReasonError(null);
             }}
             placeholder="e.g. Clinic closed for holiday — please rebook next week"
-            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+            className={textareaClass}
           />
           {reasonError && (
-            <p role="alert" className="mt-1 text-sm text-destructive">
+            <p role="alert" className="mt-1 text-[12.5px] font-medium text-destructive">
               {reasonError}
             </p>
           )}
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2.5 flex gap-2">
             <button
               type="button"
               onClick={() => run('decline')}
               disabled={busy !== null}
-              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-destructive/10 text-sm font-semibold text-destructive active:scale-[0.97] disabled:opacity-60"
+              className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-destructive/10 text-[13px] font-semibold text-destructive transition-transform active:scale-[0.97] disabled:opacity-60"
             >
-              {busy === 'decline' && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+              {busy === 'decline' && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
               Send decline
             </button>
             <button
@@ -189,7 +202,7 @@ function QueueCard({
                 setReasonError(null);
               }}
               disabled={busy !== null}
-              className="h-10 flex-1 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 active:scale-[0.97]"
+              className={`${secondaryButton} h-9 flex-1 text-[13px]`}
             >
               Back
             </button>
@@ -201,21 +214,19 @@ function QueueCard({
         <button
           type="button"
           onClick={() => setCompleting(true)}
-          className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 active:scale-[0.97] sm:w-auto sm:px-5"
+          className={`${secondaryButton} mt-3.5 h-9 px-3.5 text-[13px]`}
         >
           Complete visit
         </button>
       )}
 
       {appt.status === 'confirmed' && completing && (
-        <div className="mt-3 space-y-3 rounded-xl border border-slate-200 p-3">
-          <p className="text-sm font-medium text-slate-800">
+        <div className="mt-3.5 space-y-3 rounded-xl bg-slate-50/80 p-3">
+          <p className="text-[12.5px] font-semibold text-slate-700">
             Visit record <span className="font-normal text-slate-500">(saved on completion, visible to the patient)</span>
           </p>
           <div>
-            <label htmlFor={`diag-${appt.id}`} className="mb-1.5 block text-sm font-medium text-slate-800">
-              Diagnosis
-            </label>
+            <label htmlFor={`diag-${appt.id}`} className={fieldLabel}>Diagnosis</label>
             <textarea
               id={`diag-${appt.id}`}
               rows={2}
@@ -223,13 +234,11 @@ function QueueCard({
               value={diagnosis}
               onChange={(e) => setDiagnosis(e.target.value)}
               placeholder="e.g. Acute viral nasopharyngitis"
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+              className={textareaClass}
             />
           </div>
           <div>
-            <label htmlFor={`rx-${appt.id}`} className="mb-1.5 block text-sm font-medium text-slate-800">
-              Prescription
-            </label>
+            <label htmlFor={`rx-${appt.id}`} className={fieldLabel}>Prescription</label>
             <textarea
               id={`rx-${appt.id}`}
               rows={2}
@@ -237,13 +246,11 @@ function QueueCard({
               value={prescription}
               onChange={(e) => setPrescription(e.target.value)}
               placeholder="e.g. Paracetamol 500mg every 6 hours for 3 days"
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+              className={textareaClass}
             />
           </div>
           <div>
-            <label htmlFor={`vn-${appt.id}`} className="mb-1.5 block text-sm font-medium text-slate-800">
-              Visit notes
-            </label>
+            <label htmlFor={`vn-${appt.id}`} className={fieldLabel}>Visit notes</label>
             <textarea
               id={`vn-${appt.id}`}
               rows={2}
@@ -251,7 +258,7 @@ function QueueCard({
               value={visitNotes}
               onChange={(e) => setVisitNotes(e.target.value)}
               placeholder="Advice, follow-up instructions…"
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+              className={textareaClass}
             />
           </div>
           <div className="flex gap-2">
@@ -259,16 +266,16 @@ function QueueCard({
               type="button"
               onClick={() => run('complete')}
               disabled={busy !== null}
-              className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-teal-600 text-sm font-semibold text-white active:scale-[0.97] disabled:opacity-60"
+              className={`${primaryButton} h-9 flex-1 px-3 text-[13px]`}
             >
-              {busy === 'complete' && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
-              Save & complete
+              {busy === 'complete' && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
+              Save &amp; complete
             </button>
             <button
               type="button"
               onClick={() => setCompleting(false)}
               disabled={busy !== null}
-              className="h-10 flex-1 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 active:scale-[0.97]"
+              className="h-9 flex-1 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.97] disabled:opacity-60"
             >
               Back
             </button>
@@ -277,22 +284,22 @@ function QueueCard({
       )}
 
       {appt.status === 'completed' && (appt.diagnosis || appt.prescription || appt.visitNotes) && (
-        <dl className="mt-3 space-y-1.5 rounded-xl bg-slate-50 p-3 text-sm">
+        <dl className="mt-3 space-y-2 rounded-xl bg-slate-50/80 p-3 text-[12.5px] leading-5">
           {appt.diagnosis && (
             <div>
-              <dt className="font-semibold text-slate-700">Diagnosis</dt>
+              <dt className="font-semibold text-slate-500">Diagnosis</dt>
               <dd className="text-slate-800">{appt.diagnosis}</dd>
             </div>
           )}
           {appt.prescription && (
             <div>
-              <dt className="font-semibold text-slate-700">Prescription</dt>
+              <dt className="font-semibold text-slate-500">Prescription</dt>
               <dd className="text-slate-800">{appt.prescription}</dd>
             </div>
           )}
           {appt.visitNotes && (
             <div>
-              <dt className="font-semibold text-slate-700">Visit notes</dt>
+              <dt className="font-semibold text-slate-500">Visit notes</dt>
               <dd className="text-slate-800">{appt.visitNotes}</dd>
             </div>
           )}
@@ -347,10 +354,21 @@ function StaffQueue() {
   }, [status, preset, serviceId]);
 
   const pending = useMemo(() => (list ?? []).filter((a) => a.status === 'pending'), [list]);
+  const summary = useMemo(() => {
+    const todayKey = toYMD(new Date());
+    const all = list ?? [];
+    return {
+      today: all.filter((a) => a.day === todayKey && (a.status === 'confirmed' || a.status === 'pending')).length,
+      pending: all.filter((a) => a.status === 'pending').length,
+      confirmed: all.filter((a) => a.status === 'confirmed').length,
+      completed: all.filter((a) => a.status === 'completed').length,
+    };
+  }, [list]);
 
   return (
     <DashboardShell
       title="Appointments"
+      subtitle="Confirm, decline or complete today's queue"
       roleLabel={session?.role === 'admin' ? 'Admin' : 'Staff'}
       userName={session?.name}
       userEmail={session?.email ?? ''}
@@ -364,72 +382,106 @@ function StaffQueue() {
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
       >
         {pending.length > 0 ? (
-          <p role="status" className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-2.5 text-[12.5px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-600/20"
+          >
+            <span aria-hidden className="size-2 rounded-full bg-amber-500" />
             {pending.length} request{pending.length === 1 ? '' : 's'} waiting for review
           </p>
         ) : (
           list !== null && (
-            <p role="status" className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-800">
+            <p
+              role="status"
+              className="flex items-center gap-2 rounded-xl bg-teal-600/8 px-4 py-2.5 text-[12.5px] font-semibold text-teal-900 ring-1 ring-inset ring-teal-600/15"
+            >
+              <span aria-hidden className="size-2 rounded-full bg-teal-600" />
               Queue clear — nothing pending.
             </p>
           )
         )}
       </motion.div>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 sm:flex-row sm:items-center">
-        <div role="group" aria-label="Date" className="flex rounded-xl bg-slate-100 p-1">
-          {(['today', 'week', 'all'] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setPreset(p)}
-              aria-pressed={preset === p}
-              className={cn(
-                'h-9 rounded-lg px-4 text-sm font-medium capitalize transition-colors active:scale-[0.97]',
-                preset === p ? 'bg-white text-slate-900 shadow' : 'text-slate-500',
-              )}
-            >
-              {p === 'today' ? 'Today' : p === 'week' ? '7 days' : 'All'}
-            </button>
-          ))}
+      <motion.div
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
+        className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <StatTile
+          icon={CalendarCheck}
+          label="Today"
+          value={list === null ? '—' : summary.today}
+          hint="Confirmed + pending"
+        />
+        <StatTile
+          icon={Clock3}
+          label="Pending"
+          value={list === null ? '—' : summary.pending}
+          hint={summary.pending === 0 ? 'Queue is clear' : 'Needs review'}
+          tone="amber"
+        />
+        <StatTile
+          icon={CalendarCheck}
+          label="Confirmed"
+          value={list === null ? '—' : summary.confirmed}
+          hint="Ready for the visit"
+          tone="sky"
+        />
+        <StatTile
+          icon={CheckCircle2}
+          label="Completed"
+          value={list === null ? '—' : summary.completed}
+          hint="Records saved"
+          tone="slate"
+        />
+      </motion.div>
+
+      <div className={`${panel} py-4`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Segmented
+            ariaLabel="Date range"
+            value={preset}
+            onChange={setPreset}
+            className="sm:w-auto"
+            options={[
+              { key: 'today', label: 'Today' },
+              { key: 'week', label: '7 days' },
+              { key: 'all', label: 'All' },
+            ]}
+          />
+          <select
+            value={serviceId}
+            onChange={(e) => setServiceId(e.target.value)}
+            aria-label="Filter by service"
+            className={`${selectClass} sm:w-auto sm:min-w-44`}
+          >
+            <option value="">All services</option>
+            {services.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as StatusFilter)}
+            aria-label="Filter by status"
+            className={`${selectClass} sm:w-auto sm:min-w-40`}
+          >
+            {(['all', 'pending', 'confirmed', 'declined', 'completed', 'cancelled'] as const).map((s) => (
+              <option key={s} value={s}>
+                {s === 'all' ? 'All statuses' : s[0].toUpperCase() + s.slice(1)}
+              </option>
+            ))}
+          </select>
         </div>
-        <select
-          value={serviceId}
-          onChange={(e) => setServiceId(e.target.value)}
-          aria-label="Filter by service"
-          className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-teal-600"
-        >
-          <option value="">All services</option>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatusFilter)}
-          aria-label="Filter by status"
-          className="h-10 rounded-xl border border-input bg-background px-3 text-sm outline-none focus:border-teal-600"
-        >
-          {(['all', 'pending', 'confirmed', 'declined', 'completed', 'cancelled'] as const).map((s) => (
-            <option key={s} value={s} className="capitalize">
-              {s === 'all' ? 'All statuses' : s[0].toUpperCase() + s.slice(1)}
-            </option>
-          ))}
-        </select>
       </div>
 
-      {error && (
-        <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-      {list === null && !error && <p className="text-sm text-slate-500">Loading queue…</p>}
+      {error && <InlineNotice>{error}</InlineNotice>}
+      {list === null && !error && <EmptyNote>Loading queue…</EmptyNote>}
       {list !== null && list.length === 0 && !error && (
-        <p className="rounded-2xl border border-slate-200/70 bg-white p-6 text-sm text-slate-600">
-          No appointments match these filters.
-        </p>
+        <EmptyNote>No appointments match these filters.</EmptyNote>
       )}
 
       <AnimatePresence mode="popLayout" initial={false}>
@@ -452,8 +504,9 @@ function StaffQueue() {
         </div>
       </AnimatePresence>
 
-      <p className="flex items-center gap-2 text-sm text-slate-500">
-        <CalendarDays size={16} aria-hidden /> Walk-in registration and patient records land in the next steps.
+      <p className="flex items-center gap-2 text-[12.5px] text-slate-500">
+        <CalendarDays size={15} aria-hidden /> Walk-in registration lives under Walk-in; visit records are saved
+        when you complete an appointment.
       </p>
     </DashboardShell>
   );

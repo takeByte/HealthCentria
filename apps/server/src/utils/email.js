@@ -25,5 +25,5 @@ export async function sendEmail(to, subject, text) {
 }
 
 export function announcementEmailText(a) {
-  return `${a.title}\n\n${a.body}\n\n— HealthCentria Barangay Health Center`;
+  return `${a.title}\n\n${a.body}\n\n— E-Kalinga Barangay Health Center`;
 }

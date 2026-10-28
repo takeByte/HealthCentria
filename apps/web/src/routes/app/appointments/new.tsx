@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, LoaderCircle } from 'lucide-react';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { patientNav } from '../../../components/patient-nav';
-import { getSession } from '../../../lib/auth';
+import { EmptyNote, InlineNotice, cardPadding, primaryButton, secondaryButton } from '../../../components/app-ui';
+import { getSession, needsProfileCompletion, setSession } from '../../../lib/auth';
 import { ApiError, bookAppointment, listServices, validDates, type Service } from '../../../lib/api';
 import { getTodayService } from '../../../lib/schedule';
 import { cn } from '../../../lib/utils';
@@ -13,6 +14,11 @@ export const Route = createFileRoute('/app/appointments/new')({
   validateSearch: (search: Record<string, unknown>) => ({
     service: typeof search.service === 'string' ? search.service : undefined,
   }),
+  beforeLoad: () => {
+    if (needsProfileCompletion(getSession())) {
+      throw redirect({ to: '/app/profile/complete' });
+    }
+  },
   component: BookAppointment,
 });
 
@@ -43,6 +49,7 @@ function formatLong(ymd: string): string {
 }
 
 function BookAppointment() {
+  const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
@@ -170,6 +177,12 @@ function BookAppointment() {
       await bookAppointment({ serviceId: service.id, day, timePreference, notes: notes.trim() });
       setDone({ serviceName: service.name, day });
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'PROFILE_INCOMPLETE') {
+        const current = getSession();
+        if (current) setSession({ ...current, profileCompleted: false });
+        await navigate({ to: '/app/profile/complete' });
+        return;
+      }
       setStepError(err instanceof ApiError ? err.message : 'Booking failed. Try again.');
     } finally {
       setPending(false);
@@ -180,35 +193,36 @@ function BookAppointment() {
     return (
       <DashboardShell
         title="Book Appointment"
+        subtitle="Request received"
         roleLabel="Patient"
         userName={session?.name}
         userEmail={session?.email ?? ''}
         todayService={`${today.name} — ${today.detail}`}
         nav={patientNav}
-      notificationsTo="/app/notifications"
+        notificationsTo="/app/notifications"
       >
         <section
           aria-labelledby="booked-heading"
-          className="rounded-2xl border border-slate-200/70 bg-white p-8 text-center shadow-[0_8px_30px_rgba(15,60,90,0.06)]"
+          className={`app-card mx-auto max-w-xl px-6 py-10 text-center`}
         >
-          <h2 id="booked-heading" className="text-xl font-bold text-slate-900">
+          <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-teal-600/10 text-teal-700">
+            <Check size={24} aria-hidden />
+          </span>
+          <h2
+            id="booked-heading"
+            className="mt-4 font-display text-[20px] font-semibold leading-tight tracking-[-0.02em] text-slate-900"
+          >
             Request sent — pending confirmation
           </h2>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+          <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-6 text-slate-600">
             {done.serviceName} on {formatLong(done.day)}. The center will confirm or decline it, and you'll be
             notified by bell and email.
           </p>
-          <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link
-              to="/app/appointments"
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 px-5 font-medium text-white active:scale-[0.97]"
-            >
+          <div className="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row">
+            <Link to="/app/appointments" className={primaryButton}>
               View my appointments
             </Link>
-            <Link
-              to="/app/dashboard"
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 px-5 font-medium text-slate-700 active:scale-[0.97]"
-            >
+            <Link to="/app/dashboard" className={secondaryButton}>
               Back to dashboard
             </Link>
           </div>
@@ -220,12 +234,14 @@ function BookAppointment() {
   return (
     <DashboardShell
       title="Book Appointment"
+      subtitle="Three quick steps — the center confirms after"
       roleLabel="Patient"
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
       nav={patientNav}
       notificationsTo="/app/notifications"
+      mainClassName="max-w-2xl"
     >
       <ol aria-label="Booking progress" className="flex items-center gap-2">
         {STEPS.map((label, i) => (
@@ -233,40 +249,41 @@ function BookAppointment() {
             <span
               aria-current={i === step ? 'step' : undefined}
               className={cn(
-                'flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                i < step && 'bg-teal-600 text-white',
-                i === step && 'bg-gradient-to-r from-teal-600 to-blue-600 text-white',
-                i > step && 'bg-slate-100 text-slate-500',
+                'flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors',
+                i < step && 'bg-teal-700 text-white',
+                i === step && 'bg-slate-900 text-white',
+                i > step && 'bg-slate-200/80 text-slate-500',
               )}
             >
-              {i + 1}
+              {i < step ? <Check size={13} aria-hidden /> : i + 1}
             </span>
-            <span className={cn('hidden text-sm sm:block', i === step ? 'font-medium text-slate-900' : 'text-slate-500')}>
+            <span
+              className={cn(
+                'hidden text-[12.5px] sm:block',
+                i === step ? 'font-semibold text-slate-900' : 'font-medium text-slate-500',
+              )}
+            >
               {label}
             </span>
-            {i < STEPS.length - 1 && <span aria-hidden className="h-px flex-1 bg-slate-200" />}
+            {i < STEPS.length - 1 && <span aria-hidden className="h-px flex-1 bg-slate-300/60" />}
           </li>
         ))}
       </ol>
 
-      {loadError && (
-        <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {loadError}
-        </p>
-      )}
+      {loadError && <InlineNotice>{loadError}</InlineNotice>}
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={step}
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 24 * direction }}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 20 * direction }}
           animate={reduceMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
-          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -24 * direction }}
-          transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-          className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_8px_30px_rgba(15,60,90,0.06)] sm:p-6"
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -20 * direction }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+          className={`app-card ${cardPadding}`}
         >
           {step === 0 && (
-            <div role="radiogroup" aria-label="Choose a service" className="grid gap-3">
-              {services === null && !loadError && <p className="text-sm text-slate-500">Loading services…</p>}
+            <div role="radiogroup" aria-label="Choose a service" className="grid gap-2.5 sm:grid-cols-2">
+              {services === null && !loadError && <EmptyNote>Loading services…</EmptyNote>}
               {services?.map((s) => (
                 <button
                   key={s.id}
@@ -278,15 +295,20 @@ function BookAppointment() {
                     setStepError(null);
                   }}
                   className={cn(
-                    'rounded-2xl border p-4 text-left transition-all active:scale-[0.99]',
+                    'rounded-xl border p-3.5 text-left transition-all active:scale-[0.99]',
                     serviceId === s.id
-                      ? 'border-teal-600 bg-teal-50/60 shadow-[0_8px_30px_rgba(15,60,90,0.10)]'
-                      : 'border-slate-200 hover:border-slate-300',
+                      ? 'border-teal-600/50 bg-teal-600/[0.06] ring-1 ring-teal-600/25'
+                      : 'border-slate-200/80 bg-white/60 hover:border-slate-300 hover:bg-white',
                   )}
                 >
-                  <span className="font-bold text-slate-900">{s.name}</span>
-                  <span className="mt-0.5 block text-sm font-medium text-teal-700">{s.scheduleText}</span>
-                  {s.description && <span className="mt-1 block text-sm text-slate-600">{s.description}</span>}
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="text-[14px] font-semibold text-slate-900">{s.name}</span>
+                    {serviceId === s.id && <Check size={16} className="shrink-0 text-teal-700" aria-hidden />}
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] font-medium text-teal-700">{s.scheduleText}</span>
+                  {s.description && (
+                    <span className="mt-1 block text-[12.5px] leading-5 text-slate-600">{s.description}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -294,16 +316,16 @@ function BookAppointment() {
 
           {step === 1 && service && (
             <div>
-              <p className="text-sm text-slate-600">
+              <p className="text-[13px] leading-5 text-slate-600">
                 <span className="font-semibold text-slate-900">{service.name}</span> — {service.scheduleText}.
                 Only highlighted dates can be booked.
               </p>
               {datesError ? (
-                <p role="alert" className="mt-3 text-sm text-destructive">
+                <p role="alert" className="mt-3 text-[13px] text-destructive">
                   Couldn't load bookable dates. Check your connection and try again.
                 </p>
               ) : dates === null ? (
-                <p className="mt-3 text-sm text-slate-500">Loading calendar…</p>
+                <EmptyNote className="mt-3">Loading calendar…</EmptyNote>
               ) : (
                 <>
                   <div className="mt-4 flex items-center justify-between">
@@ -312,11 +334,11 @@ function BookAppointment() {
                       onClick={() => moveMonth(-1)}
                       disabled={!canPrev}
                       aria-label="Previous month"
-                      className="flex size-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                      className="flex size-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-30 active:scale-[0.97]"
                     >
-                      <ArrowLeft size={18} />
+                      <ArrowLeft size={17} />
                     </button>
-                    <h3 className="font-bold text-slate-900" aria-live="polite">
+                    <h3 className="font-display text-[13.5px] font-semibold text-slate-900" aria-live="polite">
                       {new Date(monthCursor.y, monthCursor.m - 1, 1).toLocaleDateString('en-PH', {
                         month: 'long',
                         year: 'numeric',
@@ -327,14 +349,17 @@ function BookAppointment() {
                       onClick={() => moveMonth(1)}
                       disabled={!canNext}
                       aria-label="Next month"
-                      className="flex size-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                      className="flex size-9 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-30 active:scale-[0.97]"
                     >
-                      <ArrowRight size={18} />
+                      <ArrowRight size={17} />
                     </button>
                   </div>
-                  <div role="grid" aria-label="Pick a date" className="mt-2 grid grid-cols-7 gap-1">
+                  <div role="grid" aria-label="Pick a date" className="mt-3 grid grid-cols-7 gap-1">
                     {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                      <span key={i} className="py-1 text-center text-xs font-semibold text-slate-400">
+                      <span
+                        key={i}
+                        className="pb-1 text-center text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-400"
+                      >
                         {d}
                       </span>
                     ))}
@@ -355,11 +380,11 @@ function BookAppointment() {
                             setStepError(null);
                           }}
                           className={cn(
-                            'flex aspect-square items-center justify-center rounded-xl text-sm transition-all',
+                            'flex aspect-square items-center justify-center rounded-lg text-[13px] transition-all',
                             selected
-                              ? 'bg-gradient-to-r from-teal-600 to-blue-600 font-bold text-white'
+                              ? 'bg-teal-700 font-bold text-white shadow-[0_2px_8px_rgba(13,148,136,0.35)]'
                               : enabled
-                                ? 'font-medium text-slate-800 hover:bg-teal-50 active:scale-95'
+                                ? 'bg-teal-600/[0.07] font-semibold text-teal-900 hover:bg-teal-600/15 active:scale-95'
                                 : 'cursor-not-allowed text-slate-300',
                           )}
                         >
@@ -368,16 +393,16 @@ function BookAppointment() {
                       );
                     })}
                   </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label htmlFor="book-time" className="mb-1.5 block text-sm font-medium text-slate-800">
+                      <label htmlFor="book-time" className="mb-1.5 block text-[12.5px] font-semibold text-slate-700">
                         Time preference
                       </label>
                       <select
                         id="book-time"
                         value={timePreference}
                         onChange={(e) => setTimePreference(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+                        className="h-11 w-full rounded-xl border border-slate-200/80 bg-white px-3 text-[13.5px] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
                       >
                         <option value="any">No preference</option>
                         <option value="morning">Morning</option>
@@ -385,7 +410,7 @@ function BookAppointment() {
                       </select>
                     </div>
                     <div className="sm:col-span-2">
-                      <label htmlFor="book-notes" className="mb-1.5 block text-sm font-medium text-slate-800">
+                      <label htmlFor="book-notes" className="mb-1.5 block text-[12.5px] font-semibold text-slate-700">
                         Notes <span className="font-normal text-slate-500">(optional — symptoms or reason)</span>
                       </label>
                       <textarea
@@ -395,7 +420,7 @@ function BookAppointment() {
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="Briefly describe your concern…"
-                        className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base outline-none placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+                        className="w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-[13.5px] outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
                       />
                     </div>
                   </div>
@@ -405,16 +430,16 @@ function BookAppointment() {
           )}
 
           {step === 2 && service && (
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between gap-4">
+            <dl className="space-y-3 text-[13.5px]">
+              <div className="flex justify-between gap-4 border-b border-slate-200/70 pb-3">
                 <dt className="text-slate-500">Service</dt>
                 <dd className="text-right font-semibold text-slate-900">{service.name}</dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex justify-between gap-4 border-b border-slate-200/70 pb-3">
                 <dt className="text-slate-500">Date</dt>
                 <dd className="text-right font-semibold text-slate-900">{day ? formatLong(day) : '—'}</dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex justify-between gap-4 border-b border-slate-200/70 pb-3">
                 <dt className="text-slate-500">Time</dt>
                 <dd className="text-right font-semibold text-slate-900">
                   {timePreference === 'any' ? 'No preference' : timePreference === 'morning' ? 'Morning' : 'Afternoon'}
@@ -423,10 +448,10 @@ function BookAppointment() {
               {notes.trim() && (
                 <div>
                   <dt className="text-slate-500">Notes</dt>
-                  <dd className="mt-1 rounded-xl bg-slate-50 p-3 text-slate-800">{notes.trim()}</dd>
+                  <dd className="mt-1 rounded-lg bg-slate-50 px-3 py-2.5 leading-6 text-slate-800">{notes.trim()}</dd>
                 </div>
               )}
-              <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-slate-700">
+              <p className="rounded-lg bg-amber-50 px-3 py-2.5 leading-5 text-amber-900">
                 This sends a <strong>pending</strong> request. The center confirms or declines it — you'll be notified.
               </p>
             </dl>
@@ -434,45 +459,28 @@ function BookAppointment() {
         </motion.div>
       </AnimatePresence>
 
-      {stepError && (
-        <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {stepError}
-        </p>
-      )}
+      {stepError && <InlineNotice>{stepError}</InlineNotice>}
 
-      <div className="sticky bottom-4 flex gap-3 rounded-2xl border border-slate-200/70 bg-white/85 p-2 backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+      <div className="sticky bottom-3 flex gap-2.5 rounded-2xl border border-white/70 bg-white/85 p-2 shadow-[0_8px_30px_-12px_rgba(15,60,90,0.25)] backdrop-blur-xl sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
         {step > 0 && (
-          <button
-            type="button"
-            onClick={back}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 font-medium text-slate-700 active:scale-[0.97]"
-          >
-            <ArrowLeft size={18} aria-hidden /> Back
+          <button type="button" onClick={back} className={`${secondaryButton} flex-1`}>
+            <ArrowLeft size={16} aria-hidden /> Back
           </button>
         )}
         {step < STEPS.length - 1 ? (
-          <button
-            type="button"
-            onClick={next}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 text-base font-medium text-white active:scale-[0.97]"
-          >
-            Continue <ArrowRight size={18} aria-hidden />
+          <button type="button" onClick={next} className={`${primaryButton} flex-1`}>
+            Continue <ArrowRight size={16} aria-hidden />
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={pending}
-            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 text-base font-medium text-white active:scale-[0.97] disabled:opacity-60"
-          >
-            {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
+          <button type="button" onClick={submit} disabled={pending} className={`${primaryButton} flex-1`}>
+            {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
             {pending ? 'Sending…' : 'Submit request'}
           </button>
         )}
       </div>
 
-      <p className="flex items-center gap-2 text-sm text-slate-500">
-        <CalendarDays size={16} aria-hidden />
+      <p className="flex items-center gap-1.5 text-[12.5px] text-slate-500">
+        <CalendarDays size={14} aria-hidden />
         <Link to="/app/services" className="underline-offset-4 hover:underline">
           Browse all services
         </Link>

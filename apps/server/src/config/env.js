@@ -18,6 +18,14 @@ const envSchema = z.object({
   // Must match an "Authorized redirect URI" in the Google Cloud console exactly.
   // Defaults to the local API callback.
   GOOGLE_CALLBACK_URL: z.string().optional(),
+
+  // Encrypts credentials an admin stores from the admin UI. Optional so the API
+  // still boots without it; saving custom credentials requires a valid key.
+  // Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  SETTINGS_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'SETTINGS_ENCRYPTION_KEY must be 64 hex characters (32 bytes).')
+    .optional(),
 });
 
 export const env = envSchema.parse(process.env);

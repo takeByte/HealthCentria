@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Bell } from 'lucide-react';
 import { markAllNotificationsRead, markNotificationRead, type NotificationItem } from '../lib/api';
 import { cn } from '../lib/utils';
+import { EmptyNote, chipButton } from './app-ui';
 
 const KNOWN_LINKS = [
   '/app/dashboard',
@@ -67,58 +68,63 @@ export function NotificationCenter({
 
   if (items.length === 0) {
     return (
-      <p className="rounded-2xl border border-slate-200/70 bg-white p-6 text-sm leading-6 text-slate-600">
+      <EmptyNote className="px-5 py-6">
         No notifications yet. Appointment updates, announcements, and reminders will appear here.
-      </p>
+      </EmptyNote>
     );
   }
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="text-sm text-slate-500" role="status">
-          {unread === 0 ? 'All caught up.' : `${unread} unread`}
+      <div className="mb-2.5 flex items-center justify-between px-1">
+        <p className="text-[12px] font-medium text-slate-500" role="status">
+          {unread === 0 ? 'All caught up' : `${unread} unread`}
         </p>
         {unread > 0 && (
-          <button
-            type="button"
-            onClick={clear}
-            disabled={clearing}
-            className="h-9 rounded-xl px-3 text-sm font-medium text-teal-700 hover:bg-teal-50 active:scale-[0.97] disabled:opacity-60"
-          >
+          <button type="button" onClick={clear} disabled={clearing} className={chipButton}>
             Mark all read
           </button>
         )}
       </div>
-      <ul className="space-y-3">
+
+      <ul className="app-card divide-y divide-slate-200/70 overflow-hidden">
         {items.map((item) => {
+          const dest = knownLink(item.link);
+          const cls =
+            'flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/70 active:bg-white';
           const row = (
             <>
               <span
                 aria-hidden
                 className={cn(
-                  'mt-1.5 size-2.5 shrink-0 rounded-full',
+                  'mt-1.5 size-2 shrink-0 rounded-full',
                   item.read ? 'bg-slate-200' : 'bg-teal-600',
                 )}
               />
               <span className="min-w-0 flex-1">
-                <span className={cn('block text-sm', item.read ? 'font-normal text-slate-600' : 'font-semibold text-slate-900')}>
+                <span
+                  className={cn(
+                    'block text-[13.5px] leading-snug',
+                    item.read ? 'font-medium text-slate-600' : 'font-semibold text-slate-900',
+                  )}
+                >
                   {item.title}
                 </span>
-                {item.body && <span className="mt-0.5 block text-sm leading-6 text-slate-600">{item.body}</span>}
+                {item.body && (
+                  <span className="mt-0.5 block text-[12.5px] leading-5 text-slate-600">{item.body}</span>
+                )}
                 {timeAgo(item.createdAt) && (
-                  <span className="mt-0.5 block text-xs text-slate-400">{timeAgo(item.createdAt)}</span>
+                  <span className="mt-1 block text-[11px] font-medium text-slate-400">
+                    {timeAgo(item.createdAt)}
+                  </span>
                 )}
               </span>
             </>
           );
-          const cls =
-            'flex w-full items-start gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 text-left shadow-[0_8px_30px_rgba(15,60,90,0.06)] transition-transform active:scale-[0.99]';
-          const dest = knownLink(item.link);
           return (
             <li key={item.id}>
               {dest ? (
-                <Link to={dest} onClick={() => open(item)} className={cn(cls, 'hover:border-teal-600/40')}>
+                <Link to={dest} onClick={() => open(item)} className={cls}>
                   {row}
                 </Link>
               ) : (
@@ -136,12 +142,12 @@ export function NotificationCenter({
 
 export function BellDot({ unread }: { unread: number }) {
   return (
-    <span className="relative flex size-10 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100">
-      <Bell size={20} aria-hidden />
+    <span className="relative flex size-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-white/80">
+      <Bell size={19} aria-hidden />
       {unread > 0 && (
         <span
           aria-label={`${unread} unread notifications`}
-          className="absolute right-1.5 top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white"
+          className="absolute right-1 top-1 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10.5px] font-bold leading-none text-white ring-2 ring-white"
         >
           {unread > 9 ? '9+' : unread}
         </span>

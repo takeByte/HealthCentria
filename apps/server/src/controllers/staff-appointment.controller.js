@@ -111,8 +111,8 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
   }).catch(() => {});
   notifyEmail(
     appt.patient.email,
-    `HealthCentria: appointment confirmed (${appt.service.name}, ${appt.day})`,
-    `Good news — your ${appt.service.name} appointment on ${appt.day} is confirmed.\n\nPlease arrive on time and bring a valid ID.\n\n— HealthCentria Barangay Health Center`,
+    `E-Kalinga: appointment confirmed (${appt.service.name}, ${appt.day})`,
+    `Good news — your ${appt.service.name} appointment on ${appt.day} is confirmed.\n\nPlease arrive on time and bring a valid ID.\n\n— E-Kalinga Barangay Health Center`,
   ).catch(() => {});
   res.json({ success: true, appointment: present(appt) });
 });
@@ -143,8 +143,8 @@ export const declineAppointment = asyncHandler(async (req, res) => {
   }).catch(() => {});
   notifyEmail(
     appt.patient.email,
-    `HealthCentria: appointment update (${appt.service.name}, ${appt.day})`,
-    `Your ${appt.service.name} appointment on ${appt.day} could not be confirmed.\n\nReason: ${parsed.data.reason}\n\nPlease book another date.\n\n— HealthCentria Barangay Health Center`,
+    `E-Kalinga: appointment update (${appt.service.name}, ${appt.day})`,
+    `Your ${appt.service.name} appointment on ${appt.day} could not be confirmed.\n\nReason: ${parsed.data.reason}\n\nPlease book another date.\n\n— E-Kalinga Barangay Health Center`,
   ).catch(() => {});
   res.json({ success: true, appointment: present(appt) });
 });

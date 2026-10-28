@@ -6,7 +6,16 @@ const auditLogSchema = new mongoose.Schema(
     action: {
       type: String,
       required: true,
-      enum: ['appointment.book', 'appointment.confirm', 'appointment.decline', 'appointment.complete', 'appointment.cancel', 'record.update'],
+      enum: [
+        'appointment.book',
+        'appointment.confirm',
+        'appointment.decline',
+        'appointment.complete',
+        'appointment.cancel',
+        'record.update',
+        'settings.google.update',
+        'settings.google.reset',
+      ],
     },
     appointment: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', index: true },
     patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

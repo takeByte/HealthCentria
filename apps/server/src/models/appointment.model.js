@@ -21,6 +21,8 @@ const appointmentSchema = new mongoose.Schema(
     prescription: { type: String, default: '', trim: true },
     visitNotes: { type: String, default: '', trim: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // Stable marker for idempotent demo seeding (never exposed by the API).
+    seedKey: { type: String, index: true, sparse: true },
   },
   { timestamps: true },
 );

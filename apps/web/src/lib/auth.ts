@@ -8,6 +8,10 @@ export interface AuthSession {
   email: string;
   role: Role;
   name?: string;
+  authProvider?: 'local' | 'google';
+  /** False only for patients who still need to fill in their profile. */
+  profileCompleted?: boolean;
+  avatarUrl?: string;
   createdAt: string;
   /** JWT from the API. Absent only for pre-backend local fallback sessions. */
   token?: string;
@@ -55,6 +59,16 @@ export function resolveDashboard(role: Role): string {
   if (role === 'admin') return '/admin/dashboard';
   if (role === 'staff') return '/staff/dashboard';
   return '/app/dashboard';
+}
+
+/** Patients with an incomplete profile go to the completion form first. */
+export function resolvePostAuthPath(session: AuthSession): string {
+  if (session.role === 'patient' && session.profileCompleted === false) return '/app/profile/complete';
+  return resolveDashboard(session.role);
+}
+
+export function needsProfileCompletion(session: AuthSession | null): boolean {
+  return Boolean(session && session.role === 'patient' && session.profileCompleted === false);
 }
 
 export function getSession(): AuthSession | null {
@@ -109,7 +123,20 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
     const email = typeof user.email === 'string' ? user.email : fallbackEmail;
     const name = typeof user.name === 'string' ? user.name : undefined;
     const token = typeof d.token === 'string' ? d.token : undefined;
-    return { email, role, name, token, createdAt: new Date().toISOString() };
+    const authProvider = user.authProvider === 'google' ? 'google' : user.authProvider === 'local' ? 'local' : undefined;
+    const profileCompleted =
+      typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined;
+    const avatarUrl = typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined;
+    return {
+      email,
+      role,
+      name,
+      authProvider,
+      profileCompleted,
+      avatarUrl,
+      token,
+      createdAt: new Date().toISOString(),
+    };
   }
   return {
     email: fallbackEmail,
@@ -203,13 +230,18 @@ export async function registerPatient(data: RegisterData): Promise<AuthSession> 
 }
 
 /** Absolute URL that starts the server-side Google consent flow. */
-export function googleLoginUrl(): string {
-  return `${API_URL}/api/auth/google`;
+export function googleLoginUrl(clientId?: string): string {
+  const url = `${API_URL}/api/auth/google`;
+  return clientId ? `${url}?client_id=${encodeURIComponent(clientId)}` : url;
 }
 
-/** Full-page redirect to Google — the API handles the callback and returns here. */
-export function startGoogleLogin(): void {
-  window.location.href = googleLoginUrl();
+/**
+ * Full-page redirect to Google — the API handles the callback and returns here.
+ * The caller passes the client ID fetched from /api/auth/google/config so the
+ * flow always uses the credentials that are active right now.
+ */
+export function startGoogleLogin(clientId?: string): void {
+  window.location.href = googleLoginUrl(clientId);
 }
 
 /**
@@ -221,7 +253,16 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('GOOGLE_LOGIN_FAILED');
-  const data = (await res.json()) as { user?: { email?: string; name?: string; role?: string } };
+  const data = (await res.json()) as {
+    user?: {
+      email?: string;
+      name?: string;
+      role?: string;
+      authProvider?: string;
+      profileCompleted?: boolean;
+      avatarUrl?: string;
+    };
+  };
   const user = data.user ?? {};
   const email = typeof user.email === 'string' ? user.email : '';
   const role: Role =
@@ -230,6 +271,9 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
     email,
     role,
     name: typeof user.name === 'string' ? user.name : undefined,
+    authProvider: user.authProvider === 'google' ? 'google' : user.authProvider === 'local' ? 'local' : undefined,
+    profileCompleted: typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined,
+    avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined,
     token,
     createdAt: new Date().toISOString(),
   };

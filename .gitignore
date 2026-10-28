@@ -6,3 +6,5 @@ dist-ssr/
 !.env.example
 .DS_Store
 *.tsbuildinfo
+.tanstack/
+screenshots/

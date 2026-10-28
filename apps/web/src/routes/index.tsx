@@ -9,6 +9,7 @@ import barangayHall from '../assets/barangayhall.png';
 import barangayLogo from '../assets/Barangay11_logo.png';
 import cityLogo from '../assets/CityofMalaybalay_Logo.png';
 import ekalingaLogo from '../assets/E-Kalinga_Logo.png';
+import krmcLogo from '../assets/KRMC_Logo.png';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -66,6 +67,42 @@ const PROMISES = [
     body: 'Schedule changes and health advisories are posted publicly, before you walk in.',
   },
 ];
+
+/** Partners shown in the landing-page strip; order is the marquee reading order. */
+const partners = [
+  {
+    name: 'City of Malaybalay',
+    logo: cityLogo,
+    logoAlt: 'City of Malaybalay official seal',
+    frame: 'border-slate-200 bg-white',
+  },
+  {
+    name: 'HealthCentria',
+    logo: ekalingaLogo,
+    logoAlt: 'HealthCentria logo',
+    frame: 'border-slate-800 bg-slate-900',
+  },
+  {
+    name: 'Barangay 11',
+    logo: barangayLogo,
+    logoAlt: 'Barangay 11 logo',
+    frame: 'border-slate-200 bg-white',
+  },
+  {
+    name: 'KRMC',
+    logo: krmcLogo,
+    logoAlt: 'KRMC logo',
+    frame: 'border-slate-200 bg-white',
+  },
+];
+
+/**
+ * The marquee renders the partner list this many times and slides by half its
+ * width. The count is even and the repeated units are identical, so the slide
+ * lands exactly on the next unit, and the strip stays wider than the card on
+ * wide screens (no blank space before the loop restarts).
+ */
+const MARQUEE_UNITS = 8;
 
 function HomePage() {
   const reduceMotion = useReducedMotion();
@@ -166,45 +203,38 @@ function HomePage() {
 
           <motion.div
             {...fade(0.12, reduceMotion)}
-            className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 sm:mt-14"
+            className="mt-16 flex flex-col items-center gap-4 rounded-2xl border border-slate-200/70 bg-white px-5 py-4 sm:mt-20 sm:flex-row sm:gap-8"
           >
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <p className="shrink-0 text-xs font-semibold uppercase tracking-wider text-slate-500">
               Serving our community with
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-              <span className="inline-flex items-center gap-2">
-                <img
-                  src={cityLogo}
-                  alt="City of Malaybalay official seal"
-                  className="size-9 rounded-full border border-slate-200 bg-white object-cover"
-                  loading="lazy"
-                />
-                <span className="text-sm font-medium text-slate-700">City of Malaybalay</span>
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <img
-                  src={ekalingaLogo}
-                  alt="E-Kalinga logo"
-                  className="size-9 rounded-full border border-slate-800 bg-slate-900 object-cover"
-                  loading="lazy"
-                />
-                <span className="text-sm font-medium text-slate-700">E-Kalinga</span>
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <img
-                  src={barangayLogo}
-                  alt="Barangay 11 logo"
-                  className="size-9 rounded-full border border-slate-200 bg-white object-cover"
-                  loading="lazy"
-                />
-                <span className="text-sm font-medium text-slate-700">Barangay 11</span>
-              </span>
+            <div className="partner-marquee w-full min-w-0 overflow-hidden sm:flex-1">
+              <div className="partner-marquee-track flex w-max">
+                {Array.from({ length: MARQUEE_UNITS }, (_, unit) => (
+                  // Only the first unit is announced; the rest exist to fill the loop.
+                  <div key={unit} className="flex shrink-0" aria-hidden={unit > 0 || undefined}>
+                    {partners.map((partner) => (
+                      <span key={partner.name} className="inline-flex items-center gap-2 pr-8">
+                        <img
+                          src={partner.logo}
+                          alt={partner.logoAlt}
+                          className={`size-9 rounded-full border object-cover ${partner.frame}`}
+                          loading="lazy"
+                        />
+                        <span className="whitespace-nowrap text-sm font-medium text-slate-700">
+                          {partner.name}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </motion.div>
         </section>
 
         <section aria-labelledby="services-heading" className="pb-4">
-          <div className="flex flex-col items-center gap-2 text-center">
+          <div className="mt-12 flex flex-col items-center gap-2 text-center">
             <div>
               <h2 id="services-heading" className="text-xl font-bold tracking-tight text-slate-900">
                 Services
@@ -381,7 +411,7 @@ function HomePage() {
               />
               <img
                 src={ekalingaLogo}
-                alt="E-Kalinga logo"
+                alt="HealthCentria logo"
                 className="size-8 rounded-full border border-slate-800 bg-slate-900 object-cover"
                 loading="lazy"
               />

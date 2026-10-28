@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import { NotificationCenter } from '../../components/notifications';
+import { EmptyNote, InlineNotice } from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import { listNotifications, type NotificationItem } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -36,6 +37,7 @@ function StaffNotifications() {
   return (
     <DashboardShell
       title="Notifications"
+      subtitle="New requests and announcements across the center"
       roleLabel={session?.role === 'admin' ? 'Admin' : 'Staff'}
       userName={session?.name}
       userEmail={session?.email ?? ''}
@@ -47,13 +49,10 @@ function StaffNotifications() {
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+        className="max-w-3xl"
       >
-        {error && (
-          <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-        {items === null && !error && <p className="text-sm text-slate-500">Loading notifications…</p>}
+        {error && <InlineNotice>{error}</InlineNotice>}
+        {items === null && !error && <EmptyNote>Loading notifications…</EmptyNote>}
         {items !== null && <NotificationCenter items={items} onChanged={setItems} />}
       </motion.div>
     </DashboardShell>

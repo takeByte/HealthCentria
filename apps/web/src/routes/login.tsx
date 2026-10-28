@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { PublicHeader } from '../components/public-header';
 import { GoogleIcon } from '../components/google-icon';
 import { Button } from '../components/ui/button';
-import { getSession, isValidEmail, login, startGoogleLogin } from '../lib/auth';
+import { getSession, isValidEmail, login, resolvePostAuthPath, startGoogleLogin } from '../lib/auth';
+import { getGoogleAuthConfig, getPublicSettings } from '../lib/api';
 import { cn } from '../lib/utils';
 import appLogo from '../assets/E-Kalinga_Logo.png';
 import loginImage1 from '../assets/login-image1.jpg';
@@ -28,9 +29,30 @@ function LoginComponent() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Hidden until the server confirms Google sign-in is on, so a disabled
+  // provider never shows a button that would bounce the user through Google.
+  const [googleEnabled, setGoogleEnabled] = useState(false);
 
   const emailInvalid = touched.email && !isValidEmail(email);
   const passwordInvalid = touched.password && password.length === 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getPublicSettings(), getGoogleAuthConfig()])
+      .then(([settings, config]) => {
+        if (cancelled) return;
+        // The client ID comes from the API at runtime — never a build-time constant.
+        setGoogleEnabled(settings.googleSignInEnabled && Boolean(config.clientId));
+      })
+      .catch(() => {
+        // API unreachable: leave the button hidden rather than offer a dead end.
+        if (cancelled) return;
+        setGoogleEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -40,9 +62,7 @@ function LoginComponent() {
     setPending(true);
     try {
       const session = await login({ email, password });
-      await navigate({
-        to: session.role === 'admin' ? '/admin/dashboard' : session.role === 'staff' ? '/staff/dashboard' : '/app/dashboard',
-      });
+      await navigate({ to: resolvePostAuthPath(session) });
     } catch {
       // Generic message on purpose — do not reveal whether the email exists.
       setError('Invalid email or password.');
@@ -51,12 +71,21 @@ function LoginComponent() {
     }
   }
 
-  function handleGoogle() {
+  async function handleGoogle() {
     setError(null);
     setPending(true);
-    // Full-page redirect: the API starts the Google consent flow and later
-    // returns to /auth/callback with a session token.
-    startGoogleLogin();
+    try {
+      // Re-read at click time so an admin's credential change applies without
+      // requiring a page reload.
+      const config = await getGoogleAuthConfig();
+      if (!config.clientId) throw new Error('GOOGLE_NOT_CONFIGURED');
+      // Full-page redirect: the API starts the Google consent flow and later
+      // returns to /auth/callback with a session token.
+      startGoogleLogin(config.clientId);
+    } catch {
+      setError('Google sign-in is not available right now. Log in with your email and password.');
+      setPending(false);
+    }
   }
 
   return (
@@ -191,21 +220,25 @@ function LoginComponent() {
               </Button>
             </form>
 
-            <div className="my-3.5 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-              <span className="h-px flex-1 bg-slate-200" />
-              or
-              <span className="h-px flex-1 bg-slate-200" />
-            </div>
+            {googleEnabled && (
+              <>
+                <div className="my-3.5 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  or
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
 
-            <button
-              type="button"
-              onClick={handleGoogle}
-              disabled={pending}
-              className="flex h-10 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <GoogleIcon className="size-5" />
-              Continue with Google
-            </button>
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={pending}
+                  className="flex h-10 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <GoogleIcon className="size-5" />
+                  Continue with Google
+                </button>
+              </>
+            )}
 
             <div className="mt-4 space-y-1.5 text-center text-sm">
               <p className="text-slate-600">

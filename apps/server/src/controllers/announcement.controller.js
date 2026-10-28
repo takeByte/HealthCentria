@@ -40,7 +40,7 @@ async function emailPatients(announcement) {
   const patients = await User.find({ role: 'patient', active: true }).select('email').lean();
   const recipients = patients.map((p) => p.email).filter(Boolean);
   if (recipients.length === 0) return;
-  await sendEmail(recipients, `HealthCentria: ${announcement.title}`, announcementEmailText(announcement));
+  await sendEmail(recipients, `E-Kalinga: ${announcement.title}`, announcementEmailText(announcement));
 }
 
 export const listAnnouncements = asyncHandler(async (req, res) => {

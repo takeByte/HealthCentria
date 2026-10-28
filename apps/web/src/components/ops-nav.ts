@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Megaphone,
   Settings,
+  UserCog,
   Users,
 } from 'lucide-react';
 import type { ShellNavItem } from './dashboard-shell';
@@ -35,7 +36,8 @@ export const adminNav: ShellNavItem[] = [
   { label: 'Announcements', to: '/staff/announcements', icon: Megaphone },
   { label: 'Notifications', to: '/staff/notifications', icon: Bell },
   { label: 'Reports', to: '/staff/reports', icon: FileText },
-  { label: 'Staff Accounts', to: '/admin/staff-accounts', icon: Settings },
+  { label: 'Staff Accounts', to: '/admin/staff-accounts', icon: UserCog },
+  { label: 'Settings', to: '/admin/settings', icon: Settings },
 ];
 
 export function opsNav(role?: string): ShellNavItem[] {

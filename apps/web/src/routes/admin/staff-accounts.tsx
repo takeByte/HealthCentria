@@ -1,8 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Eye, EyeOff, LoaderCircle, Plus, Search, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { adminNav } from '../../components/ops-nav';
+import {
+  CardHeading,
+  EmptyNote,
+  InlineNotice,
+  StatTile,
+  StatusPill,
+  dangerChipButton,
+  fieldLabel,
+  inputClass,
+  panel,
+  primaryButton,
+  secondaryButton,
+  selectClass,
+} from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
@@ -18,15 +33,13 @@ export const Route = createFileRoute('/admin/staff-accounts')({
   component: StaffAccounts,
 });
 
-const inputClass =
-  'h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25';
-const labelClass = 'mb-1.5 block text-sm font-medium text-slate-800';
-
 function StaffAccounts() {
+  const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
   const [list, setList] = useState<StaffAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const [cName, setCName] = useState('');
   const [cEmail, setCEmail] = useState('');
@@ -118,52 +131,121 @@ function StaffAccounts() {
     }
   }
 
+  const filtered = useMemo(() => {
+    if (!list) return null;
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q));
+  }, [list, search]);
+
+  const summary = useMemo(() => {
+    const all = list ?? [];
+    return {
+      total: all.length,
+      active: all.filter((a) => a.active).length,
+      admins: all.filter((a) => a.role === 'admin').length,
+    };
+  }, [list]);
+
+  const rise = reduceMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
+  const riseTransition = { type: 'spring', bounce: 0, duration: 0.35 } as const;
+
   return (
     <DashboardShell
       title="Staff Accounts"
+      subtitle="Who can sign in to the center's workspace"
       roleLabel="Admin"
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
       nav={adminNav}
       notificationsTo="/staff/notifications"
+      mainClassName="max-w-4xl"
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">
-          {list === null ? 'Loading…' : `${list.length} account${list.length === 1 ? '' : 's'}`}
-        </p>
-        <button
-          type="button"
-          onClick={() => setShowCreate((v) => !v)}
-          className="inline-flex h-11 items-center rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 px-5 font-medium text-white active:scale-[0.97]"
-        >
-          {showCreate ? 'Close' : 'New account'}
-        </button>
-      </div>
+      <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-3">
+        <StatTile icon={ShieldCheck} label="Accounts" value={list === null ? '—' : summary.total} hint="Staff + admins" />
+        <StatTile
+          icon={UserCheck}
+          label="Active"
+          value={list === null ? '—' : summary.active}
+          hint="Can sign in now"
+          tone="sky"
+        />
+        <StatTile
+          icon={UserX}
+          label="Admins"
+          value={list === null ? '—' : summary.admins}
+          hint="Full workspace access"
+          tone="slate"
+        />
+      </motion.div>
 
-      {error && (
-        <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
-      )}
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.04 }}
+        className={`${panel} py-4`}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search
+              size={16}
+              aria-hidden
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              aria-label="Search staff accounts"
+              className={`${inputClass} pl-10`}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreate((v) => !v)}
+            className={showCreate ? `${secondaryButton} shrink-0` : `${primaryButton} shrink-0`}
+          >
+            {showCreate ? <X size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
+            {showCreate ? 'Close' : 'New account'}
+          </button>
+        </div>
+      </motion.div>
+
+      {error && <InlineNotice>{error}</InlineNotice>}
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="grid gap-4 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-[0_8px_30px_rgba(15,60,90,0.06)] sm:grid-cols-2">
+        <motion.form
+          {...rise}
+          transition={riseTransition}
+          onSubmit={handleCreate}
+          className={`${panel} grid gap-4 sm:grid-cols-2`}
+        >
           <div className="sm:col-span-2">
-            <label htmlFor="sa-name" className={labelClass}>Full name *</label>
+            <CardHeading
+              title="New staff account"
+              description="Staff manage the queue. Admins also manage accounts, settings and deletions."
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="sa-name" className={fieldLabel}>Full name *</label>
             <input id="sa-name" value={cName} onChange={(e) => setCName(e.target.value)} placeholder="Nurse Joy" className={inputClass} />
           </div>
           <div>
-            <label htmlFor="sa-email" className={labelClass}>Email *</label>
+            <label htmlFor="sa-email" className={fieldLabel}>Email *</label>
             <input id="sa-email" type="email" value={cEmail} onChange={(e) => setCEmail(e.target.value)} placeholder="staff@example.com" className={inputClass} />
           </div>
           <div>
-            <label htmlFor="sa-role" className={labelClass}>Role *</label>
-            <select id="sa-role" value={cRole} onChange={(e) => setCRole(e.target.value as 'staff' | 'admin')} className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:border-teal-600">
+            <label htmlFor="sa-role" className={fieldLabel}>Role *</label>
+            <select id="sa-role" value={cRole} onChange={(e) => setCRole(e.target.value as 'staff' | 'admin')} className={selectClass}>
               <option value="staff">Staff</option>
               <option value="admin">Admin</option>
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label htmlFor="sa-password" className={labelClass}>Temporary password * (min 8 characters)</label>
+            <label htmlFor="sa-password" className={fieldLabel}>Temporary password * (min 8 characters)</label>
             <div className="relative">
               <input
                 id="sa-password"
@@ -183,78 +265,79 @@ function StaffAccounts() {
               </button>
             </div>
           </div>
-          {cError && <p role="alert" className="text-sm text-destructive sm:col-span-2">{cError}</p>}
-          <button type="submit" disabled={cBusy} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-teal-600 font-semibold text-white active:scale-[0.97] disabled:opacity-60 sm:col-span-2">
+          {cError && <InlineNotice className="sm:col-span-2">{cError}</InlineNotice>}
+          <button type="submit" disabled={cBusy} className={`${primaryButton} sm:col-span-2`}>
             {cBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
             {cBusy ? 'Creating…' : 'Create account'}
           </button>
-        </form>
+        </motion.form>
       )}
 
-      {eError && (
-        <p role="alert" className="rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{eError}</p>
+      {eError && <InlineNotice>{eError}</InlineNotice>}
+
+      {list !== null && list.length === 0 && <EmptyNote>No staff accounts yet.</EmptyNote>}
+      {filtered !== null && filtered.length === 0 && list !== null && list.length > 0 && (
+        <EmptyNote>No account matches “{search.trim()}”.</EmptyNote>
       )}
 
-      <div className="grid gap-4">
-        {(list ?? []).map((a) => (
-          <article key={a.id} className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_8px_30px_rgba(15,60,90,0.06)]">
+      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.08 }} className="grid gap-3.5">
+        {(filtered ?? []).map((a) => (
+          <article key={a.id} className={panel}>
             <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-bold text-slate-900">{a.name}</h3>
-                <p className="mt-0.5 text-sm text-slate-600">{a.email}</p>
+              <div className="min-w-0">
+                <h3 className="font-display text-[14.5px] font-semibold tracking-[-0.01em] text-slate-900">
+                  {a.name}
+                </h3>
+                <p className="mt-0.5 truncate text-[12.5px] text-slate-600">{a.email}</p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className={cn('rounded-full px-2.5 py-1 text-xs font-bold capitalize', a.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-teal-100 text-teal-800')}>
-                  {a.role}
-                </span>
-                <span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', a.active ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600')}>
-                  {a.active ? 'Active' : 'Inactive'}
-                </span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <StatusPill tone={a.role === 'admin' ? 'sky' : 'teal'}>{a.role}</StatusPill>
+                <StatusPill tone={a.active ? 'teal' : 'slate'}>{a.active ? 'Active' : 'Inactive'}</StatusPill>
               </div>
             </div>
             {editingId === a.id ? (
-              <form onSubmit={(e) => handleUpdate(e, a.id)} className="mt-4 grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+              <form onSubmit={(e) => handleUpdate(e, a.id)} className="mt-4 grid gap-4 border-t border-slate-200/70 pt-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor={`edit-name-${a.id}`} className={labelClass}>Full name *</label>
+                  <label htmlFor={`edit-name-${a.id}`} className={fieldLabel}>Full name *</label>
                   <input id={`edit-name-${a.id}`} value={eName} onChange={(e) => setEName(e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label htmlFor={`edit-role-${a.id}`} className={labelClass}>Role *</label>
-                  <select id={`edit-role-${a.id}`} value={eRole} onChange={(e) => setERole(e.target.value as 'staff' | 'admin')} className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base outline-none focus:border-teal-600">
+                  <label htmlFor={`edit-role-${a.id}`} className={fieldLabel}>Role *</label>
+                  <select id={`edit-role-${a.id}`} value={eRole} onChange={(e) => setERole(e.target.value as 'staff' | 'admin')} className={selectClass}>
                     <option value="staff">Staff</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label htmlFor={`edit-pw-${a.id}`} className={labelClass}>Reset password (leave blank to keep)</label>
+                  <label htmlFor={`edit-pw-${a.id}`} className={fieldLabel}>Reset password (leave blank to keep)</label>
                   <input id={`edit-pw-${a.id}`} type="password" autoComplete="new-password" value={ePassword} onChange={(e) => setEPassword(e.target.value)} placeholder="Min 8 characters" className={inputClass} />
                 </div>
-                {eError && <p role="alert" className="text-sm text-destructive sm:col-span-2">{eError}</p>}
+                {eError && <InlineNotice className="sm:col-span-2">{eError}</InlineNotice>}
                 <div className="flex gap-2 sm:col-span-2">
-                  <button type="submit" disabled={eBusy} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-teal-600 text-sm font-semibold text-white active:scale-[0.97] disabled:opacity-60">
-                    {eBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                  <button type="submit" disabled={eBusy} className={`${primaryButton} h-9 flex-1 px-3 text-[13px]`}>
+                    {eBusy && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
                     Save
                   </button>
-                  <button type="button" onClick={() => setEditingId(null)} className="h-10 flex-1 rounded-xl border border-slate-300 text-sm font-medium text-slate-700 active:scale-[0.97]">
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className={`${secondaryButton} h-9 flex-1 px-3 text-[13px]`}
+                  >
                     Cancel
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => startEdit(a)}
-                  className="inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 active:scale-[0.97]"
-                >
+              <div className="mt-3.5 flex gap-2">
+                <button type="button" onClick={() => startEdit(a)} className={`${secondaryButton} h-9 px-3.5 text-[13px]`}>
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => toggleActive(a)}
                   className={cn(
-                    'inline-flex h-10 items-center rounded-xl border px-4 text-sm font-semibold active:scale-[0.97]',
-                    a.active ? 'border-red-200 text-destructive' : 'border-green-200 text-green-800',
+                    a.active ? dangerChipButton : secondaryButton,
+                    'h-9 px-3.5 text-[13px]',
                   )}
                 >
                   {a.active ? 'Deactivate' : 'Reactivate'}
@@ -263,7 +346,7 @@ function StaffAccounts() {
             )}
           </article>
         ))}
-      </div>
+      </motion.div>
     </DashboardShell>
   );
 }

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { PublicHeader } from '../components/public-header';
-import { completeGoogleLogin, resolveDashboard } from '../lib/auth';
+import { completeGoogleLogin, resolvePostAuthPath } from '../lib/auth';
 
 export const Route = createFileRoute('/auth/callback')({
   component: GoogleCallback,
@@ -11,10 +11,13 @@ export const Route = createFileRoute('/auth/callback')({
 const ERROR_MESSAGES: Record<string, string> = {
   google_denied: 'Google sign-in was cancelled.',
   google_not_configured: 'Google sign-in is not available right now.',
+  google_config_changed: 'Google sign-in settings changed. Please try again.',
   google_invalid_request: 'That sign-in link is invalid or expired. Please try again.',
   google_invalid_state: 'That sign-in link is invalid or expired. Please try again.',
   google_exchange_failed: 'We could not verify your Google account. Please try again.',
   google_email_unverified: 'Your Google email address is not verified.',
+  google_account_mismatch: 'This Google account is already linked to a different sign-in. Contact the front desk.',
+  google_disabled: 'Google sign-in is currently disabled. Log in with your email and password, or contact the health center.',
   account_disabled: 'This account has been disabled. Contact the front desk.',
   db_unavailable: 'The service is temporarily unavailable. Try again shortly.',
 };
@@ -39,7 +42,7 @@ function GoogleCallback() {
         if (cancelled) return;
         // Drop the token from the URL so a refresh can't replay it.
         window.history.replaceState({}, '', '/auth/callback');
-        return navigate({ to: resolveDashboard(session.role), replace: true });
+        return navigate({ to: resolvePostAuthPath(session), replace: true });
       })
       .catch(() => {
         if (!cancelled) setError('Could not complete sign-in. Please try again.');
