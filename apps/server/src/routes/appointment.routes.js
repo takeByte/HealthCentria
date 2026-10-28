@@ -9,11 +9,13 @@ import {
   walkInAppointment,
 } from '../controllers/staff-appointment.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { requireCompleteProfile } from '../middleware/requireCompleteProfile.js';
 
 export const appointmentRouter = Router();
 
-// Patients book and manage their own requests.
-appointmentRouter.post('/', requireAuth, requireRole('patient'), bookAppointment);
+// Patients book and manage their own requests. Booking is the only patient
+// action gated by profile completion; viewing and cancelling stay available.
+appointmentRouter.post('/', requireAuth, requireRole('patient'), requireCompleteProfile, bookAppointment);
 appointmentRouter.get('/mine', requireAuth, requireRole('patient'), myAppointments);
 appointmentRouter.patch('/:id/cancel', requireAuth, requireRole('patient'), cancelAppointment);
 

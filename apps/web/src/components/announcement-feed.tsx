@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ChevronDown, Megaphone, Pin } from 'lucide-react';
 import { CATEGORY_LABELS, type Announcement } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -18,15 +18,28 @@ function formatDate(iso: string): string {
     : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** Shared reader used by the public page and the patient feed. */
-export function AnnouncementFeed({ items }: { items: Announcement[] }) {
+/** Shared reader used by the public page, the patient feed and the staff feed. */
+export function AnnouncementFeed({
+  items,
+  actions,
+  emptyNote,
+}: {
+  items: Announcement[];
+  /** Optional row actions (edit/delete) — used by the staff composer list. */
+  actions?: (item: Announcement) => ReactNode;
+  emptyNote?: ReactNode;
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (items.length === 0) {
     return (
       <EmptyNote className="px-5 py-6">
-        No announcements yet. New posts from the center — schedule changes, vaccination days, health advisories —
-        will appear here.
+        {emptyNote ?? (
+          <>
+            No announcements yet. New posts from the center — schedule changes, vaccination days, health advisories —
+            will appear here.
+          </>
+        )}
       </EmptyNote>
     );
   }
@@ -84,6 +97,7 @@ export function AnnouncementFeed({ items }: { items: Announcement[] }) {
             >
               {a.body}
             </p>
+            {actions && <div className="mt-3.5 border-t border-slate-200/70 pt-3.5">{actions(a)}</div>}
           </article>
         );
       })}

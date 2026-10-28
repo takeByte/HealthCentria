@@ -1,11 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState, type FormEvent } from 'react';
-import { LoaderCircle, Plus, X } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { CalendarDays, EyeOff, Layers, LoaderCircle, Plus, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
   CardHeading,
+  EmptyNote,
   InlineNotice,
+  Segmented,
+  StatTile,
   StatusPill,
   fieldLabel,
   inputClass,
@@ -135,12 +139,14 @@ function ScheduleFields({
 }
 
 function ServicesManage() {
+  const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
   const [list, setList] = useState<Service[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const [cName, setCName] = useState('');
   const [cDesc, setCDesc] = useState('');
@@ -210,6 +216,23 @@ function ServicesManage() {
     }
   }
 
+  const filtered = useMemo(() => {
+    if (!list) return null;
+    if (filter === 'active') return list.filter((s) => s.active);
+    if (filter === 'inactive') return list.filter((s) => !s.active);
+    return list;
+  }, [list, filter]);
+
+  const summary = useMemo(() => {
+    const all = list ?? [];
+    return { total: all.length, active: all.filter((s) => s.active).length, inactive: all.filter((s) => !s.active).length };
+  }, [list]);
+
+  const rise = reduceMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
+  const riseTransition = { type: 'spring', bounce: 0, duration: 0.35 } as const;
+
   return (
     <DashboardShell
       title="Services"
@@ -221,12 +244,44 @@ function ServicesManage() {
       nav={opsNav(session?.role)}
       notificationsTo="/staff/notifications"
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[12.5px] text-slate-500">
-          {list === null
-            ? 'Loading…'
-            : `${list.length} service${list.length === 1 ? '' : 's'} · inactive ones are hidden from patients`}
-        </p>
+      <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-3">
+        <StatTile
+          icon={Layers}
+          label="Services"
+          value={list === null ? '—' : summary.total}
+          hint="In the catalog"
+        />
+        <StatTile
+          icon={CalendarDays}
+          label="Active"
+          value={list === null ? '—' : summary.active}
+          hint="Visible for booking"
+          tone="sky"
+        />
+        <StatTile
+          icon={EyeOff}
+          label="Inactive"
+          value={list === null ? '—' : summary.inactive}
+          hint="Hidden from patients"
+          tone="slate"
+        />
+      </motion.div>
+
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.04 }}
+        className="flex flex-wrap items-center justify-between gap-3"
+      >
+        <Segmented
+          ariaLabel="Filter services"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { key: 'all', label: 'All' },
+            { key: 'active', label: 'Active' },
+            { key: 'inactive', label: 'Inactive' },
+          ]}
+        />
         <button
           type="button"
           onClick={() => setShowCreate((v) => !v)}
@@ -235,7 +290,7 @@ function ServicesManage() {
           {showCreate ? <X size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
           {showCreate ? 'Close' : 'New service'}
         </button>
-      </div>
+      </motion.div>
 
       {error && <InlineNotice>{error}</InlineNotice>}
 
@@ -259,8 +314,17 @@ function ServicesManage() {
         </form>
       )}
 
-      <div className="grid gap-3.5">
-        {(list ?? []).map((s) => (
+      {filtered === null && !error && <EmptyNote>Loading services…</EmptyNote>}
+      {filtered !== null && filtered.length === 0 && (
+        <EmptyNote>No services match this filter.</EmptyNote>
+      )}
+
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.08 }}
+        className="grid gap-3.5"
+      >
+        {(filtered ?? []).map((s) => (
           <article key={s.id} className={panel}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -307,7 +371,7 @@ function ServicesManage() {
             )}
           </article>
         ))}
-      </div>
+      </motion.div>
     </DashboardShell>
   );
 }

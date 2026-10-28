@@ -35,6 +35,7 @@ import { Route as StaffServicesRouteImport } from './routes/staff/services'
 import { Route as StaffWalkInRouteImport } from './routes/staff/walk-in'
 import { Route as AppAppointmentsIndexRouteImport } from './routes/app/appointments/index'
 import { Route as AppAppointmentsNewRouteImport } from './routes/app/appointments/new'
+import { Route as AppProfileCompleteRouteImport } from './routes/app/profile/complete'
 import { Route as StaffPatientsPatientIdRouteImport } from './routes/staff/patients.$patientId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -167,6 +168,11 @@ const AppAppointmentsNewRoute = AppAppointmentsNewRouteImport.update({
   path: '/appointments/new',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppProfileCompleteRoute = AppProfileCompleteRouteImport.update({
+  id: '/profile/complete',
+  path: '/profile/complete',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const StaffPatientsPatientIdRoute = StaffPatientsPatientIdRouteImport.update({
   id: '/$patientId',
   path: '/$patientId',
@@ -199,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
   '/app/appointments/new': typeof AppAppointmentsNewRoute
+  '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
   '/app/appointments/': typeof AppAppointmentsIndexRoute
 }
@@ -228,6 +235,7 @@ export interface FileRoutesByTo {
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
   '/app/appointments/new': typeof AppAppointmentsNewRoute
+  '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
   '/app/appointments': typeof AppAppointmentsIndexRoute
 }
@@ -258,6 +266,7 @@ export interface FileRoutesById {
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
   '/app/appointments/new': typeof AppAppointmentsNewRoute
+  '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
   '/app/appointments/': typeof AppAppointmentsIndexRoute
 }
@@ -289,6 +298,7 @@ export interface FileRouteTypes {
     | '/staff/services'
     | '/staff/walk-in'
     | '/app/appointments/new'
+    | '/app/profile/complete'
     | '/staff/patients/$patientId'
     | '/app/appointments/'
   fileRoutesByTo: FileRoutesByTo
@@ -318,6 +328,7 @@ export interface FileRouteTypes {
     | '/staff/services'
     | '/staff/walk-in'
     | '/app/appointments/new'
+    | '/app/profile/complete'
     | '/staff/patients/$patientId'
     | '/app/appointments'
   id:
@@ -347,6 +358,7 @@ export interface FileRouteTypes {
     | '/staff/services'
     | '/staff/walk-in'
     | '/app/appointments/new'
+    | '/app/profile/complete'
     | '/staff/patients/$patientId'
     | '/app/appointments/'
   fileRoutesById: FileRoutesById
@@ -546,6 +558,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAppointmentsNewRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/profile/complete': {
+      id: '/app/profile/complete'
+      path: '/profile/complete'
+      fullPath: '/app/profile/complete'
+      preLoaderRoute: typeof AppProfileCompleteRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/staff/patients/$patientId': {
       id: '/staff/patients/$patientId'
       path: '/$patientId'
@@ -579,6 +598,7 @@ interface AppRouteRouteChildren {
   AppRecordsRoute: typeof AppRecordsRoute
   AppServicesRoute: typeof AppServicesRoute
   AppAppointmentsNewRoute: typeof AppAppointmentsNewRoute
+  AppProfileCompleteRoute: typeof AppProfileCompleteRoute
   AppAppointmentsIndexRoute: typeof AppAppointmentsIndexRoute
 }
 
@@ -589,6 +609,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppRecordsRoute: AppRecordsRoute,
   AppServicesRoute: AppServicesRoute,
   AppAppointmentsNewRoute: AppAppointmentsNewRoute,
+  AppProfileCompleteRoute: AppProfileCompleteRoute,
   AppAppointmentsIndexRoute: AppAppointmentsIndexRoute,
 }
 

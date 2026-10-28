@@ -1,12 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState } from 'react';
-import { LoaderCircle, Megaphone, Pin, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { LoaderCircle, Plus, Search } from 'lucide-react';
+import { AnnouncementFeed } from '../../components/announcement-feed';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
+  CardHeading,
   EmptyNote,
   InlineNotice,
+  chipButton,
+  dangerChipButton,
   fieldLabel,
   inputClass,
   panel,
@@ -27,7 +31,6 @@ import {
   type AnnouncementCategory,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
-import { cn } from '../../lib/utils';
 
 export const Route = createFileRoute('/staff/announcements')({
   component: StaffAnnouncements,
@@ -56,6 +59,8 @@ function StaffAnnouncements() {
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<'all' | AnnouncementCategory>('all');
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +75,16 @@ function StaffAnnouncements() {
       cancelled = true;
     };
   }, []);
+
+  const filtered = useMemo(() => {
+    if (!items) return null;
+    const q = query.trim().toLowerCase();
+    return items.filter((a) => {
+      const matchesCategory = category === 'all' || a.category === category;
+      const matchesQuery = !q || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
+      return matchesCategory && matchesQuery;
+    });
+  }, [items, query, category]);
 
   async function submit() {
     if (!composer) return;
@@ -120,7 +135,7 @@ function StaffAnnouncements() {
   return (
     <DashboardShell
       title="Announcements"
-      subtitle="Everything posted to patients, newest first"
+      subtitle="The shared feed visible to staff and patients, newest first"
       roleLabel={isAdmin ? 'Admin' : 'Staff'}
       userName={session?.name}
       userEmail={session?.email ?? ''}
@@ -128,81 +143,118 @@ function StaffAnnouncements() {
       nav={opsNav(session?.role)}
       notificationsTo="/staff/notifications"
     >
-      <motion.div
+      <motion.section
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-        className="flex items-center justify-between gap-3"
+        className={`${panel} py-4`}
       >
-        <p className="text-[12.5px] leading-5 text-slate-500">
-          Publishing notifies registered patients by email and bell. Only admins can delete.
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            setFormError(null);
-            setComposer({ ...emptyComposer });
-          }}
-          className={`${primaryButton} shrink-0`}
-        >
-          <Plus size={16} aria-hidden /> New post
-        </button>
-      </motion.div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardHeading
+              title="Center announcements"
+              description={
+                items === null
+                  ? 'Loading the feed…'
+                  : `${items.length} post${items.length === 1 ? '' : 's'} · ${items.filter((a) => a.pinned).length} pinned · shared with patients`
+              }
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFormError(null);
+              setComposer({ ...emptyComposer });
+            }}
+            className={`${primaryButton} h-10 shrink-0 px-4 text-[13px]`}
+          >
+            <Plus size={16} aria-hidden /> New post
+          </button>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
+          <div className="relative flex-1">
+            <Search
+              size={16}
+              aria-hidden
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search announcements…"
+              aria-label="Search announcements"
+              className={`${inputClass} pl-10`}
+            />
+          </div>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as 'all' | AnnouncementCategory)}
+            aria-label="Filter by category"
+            className={`${selectClass} sm:w-auto sm:min-w-44`}
+          >
+            <option value="all">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </motion.section>
 
       {error && <InlineNotice>{error}</InlineNotice>}
-      {items === null && !error && <EmptyNote>Loading announcements…</EmptyNote>}
-      {items !== null && items.length === 0 && (
-        <EmptyNote>Nothing posted yet. Use “New post” to publish the first announcement.</EmptyNote>
-      )}
-
-      <div className="space-y-3">
-        {(items ?? []).map((a) => (
-          <article
-            key={a.id}
-            className={cn(panel, a.pinned && 'ring-1 ring-teal-600/25')}
-          >
-            <div className="flex flex-wrap items-center gap-1.5">
-              {a.pinned && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal-700 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-white">
-                  <Pin size={11} aria-hidden /> Pinned
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-600">
-                <Megaphone size={11} aria-hidden />
-                {CATEGORY_LABELS[a.category]}
-              </span>
-            </div>
-            <h3 className="mt-2 font-display text-[15px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
-              {a.title}
-            </h3>
-            <p className="mt-1 line-clamp-3 text-[13px] leading-6 text-slate-600">{a.body}</p>
-            <div className="mt-3.5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setFormError(null);
-                  setComposer({ id: a.id, title: a.title, body: a.body, category: a.category, pinned: a.pinned });
-                }}
-                className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
-              >
-                Edit
-              </button>
-              {isAdmin && (
+      {filtered === null && !error && <EmptyNote>Loading announcements…</EmptyNote>}
+      {filtered !== null && (
+        <motion.div
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
+          className="max-w-4xl"
+        >
+          <AnnouncementFeed
+            items={filtered}
+            emptyNote={
+              items?.length === 0
+                ? 'Nothing posted yet. Use “New post” to publish the first announcement.'
+                : 'No announcements match this search.'
+            }
+            actions={(a) => (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => remove(a.id)}
-                  disabled={deletingId === a.id}
-                  aria-label={`Delete ${a.title}`}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-[13px] font-semibold text-destructive transition-colors hover:bg-red-50 active:scale-[0.97] disabled:opacity-60"
+                  onClick={() => {
+                    setFormError(null);
+                    setComposer({ id: a.id, title: a.title, body: a.body, category: a.category, pinned: a.pinned });
+                  }}
+                  className={chipButton}
                 >
-                  {deletingId === a.id ? <LoaderCircle size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
-                  Delete
+                  Edit
                 </button>
-              )}
-            </div>
-          </article>
-        ))}
-      </div>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => remove(a.id)}
+                    disabled={deletingId === a.id}
+                    aria-label={`Delete ${a.title}`}
+                    className={dangerChipButton}
+                  >
+                    {deletingId === a.id ? (
+                      <LoaderCircle size={14} className="animate-spin" aria-hidden />
+                    ) : null}
+                    Delete
+                  </button>
+                )}
+              </div>
+            )}
+          />
+        </motion.div>
+      )}
+
+      <p className="text-[12.5px] leading-5 text-slate-500">
+        Publishing notifies registered patients by email and bell. Only admins can delete.
+      </p>
 
       <AnimatePresence>
         {composer && (

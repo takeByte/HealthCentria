@@ -1,11 +1,11 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, LoaderCircle } from 'lucide-react';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { patientNav } from '../../../components/patient-nav';
 import { EmptyNote, InlineNotice, cardPadding, primaryButton, secondaryButton } from '../../../components/app-ui';
-import { getSession } from '../../../lib/auth';
+import { getSession, needsProfileCompletion, setSession } from '../../../lib/auth';
 import { ApiError, bookAppointment, listServices, validDates, type Service } from '../../../lib/api';
 import { getTodayService } from '../../../lib/schedule';
 import { cn } from '../../../lib/utils';
@@ -14,6 +14,11 @@ export const Route = createFileRoute('/app/appointments/new')({
   validateSearch: (search: Record<string, unknown>) => ({
     service: typeof search.service === 'string' ? search.service : undefined,
   }),
+  beforeLoad: () => {
+    if (needsProfileCompletion(getSession())) {
+      throw redirect({ to: '/app/profile/complete' });
+    }
+  },
   component: BookAppointment,
 });
 
@@ -44,6 +49,7 @@ function formatLong(ymd: string): string {
 }
 
 function BookAppointment() {
+  const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
@@ -171,6 +177,12 @@ function BookAppointment() {
       await bookAppointment({ serviceId: service.id, day, timePreference, notes: notes.trim() });
       setDone({ serviceName: service.name, day });
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'PROFILE_INCOMPLETE') {
+        const current = getSession();
+        if (current) setSession({ ...current, profileCompleted: false });
+        await navigate({ to: '/app/profile/complete' });
+        return;
+      }
       setStepError(err instanceof ApiError ? err.message : 'Booking failed. Try again.');
     } finally {
       setPending(false);

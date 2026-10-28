@@ -1,14 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, LoaderCircle } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
   EmptyNote,
   InlineNotice,
   Segmented,
+  StatTile,
   StatusChip,
+  dangerChipButton,
   fieldLabel,
   panel,
   primaryButton,
@@ -153,7 +155,7 @@ function QueueCard({
             type="button"
             onClick={() => setDeclining(true)}
             disabled={busy !== null}
-            className="h-9 flex-1 rounded-lg border border-red-200 bg-white text-[13px] font-semibold text-destructive transition-colors hover:bg-red-50 active:scale-[0.97] disabled:opacity-60"
+            className={`${dangerChipButton} flex-1`}
           >
             Decline
           </button>
@@ -200,7 +202,7 @@ function QueueCard({
                 setReasonError(null);
               }}
               disabled={busy !== null}
-              className="h-9 flex-1 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.97] disabled:opacity-60"
+              className={`${secondaryButton} h-9 flex-1 text-[13px]`}
             >
               Back
             </button>
@@ -352,6 +354,16 @@ function StaffQueue() {
   }, [status, preset, serviceId]);
 
   const pending = useMemo(() => (list ?? []).filter((a) => a.status === 'pending'), [list]);
+  const summary = useMemo(() => {
+    const todayKey = toYMD(new Date());
+    const all = list ?? [];
+    return {
+      today: all.filter((a) => a.day === todayKey && (a.status === 'confirmed' || a.status === 'pending')).length,
+      pending: all.filter((a) => a.status === 'pending').length,
+      confirmed: all.filter((a) => a.status === 'confirmed').length,
+      completed: all.filter((a) => a.status === 'completed').length,
+    };
+  }, [list]);
 
   return (
     <DashboardShell
@@ -388,6 +400,41 @@ function StaffQueue() {
             </p>
           )
         )}
+      </motion.div>
+
+      <motion.div
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
+        className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
+      >
+        <StatTile
+          icon={CalendarCheck}
+          label="Today"
+          value={list === null ? '—' : summary.today}
+          hint="Confirmed + pending"
+        />
+        <StatTile
+          icon={Clock3}
+          label="Pending"
+          value={list === null ? '—' : summary.pending}
+          hint={summary.pending === 0 ? 'Queue is clear' : 'Needs review'}
+          tone="amber"
+        />
+        <StatTile
+          icon={CalendarCheck}
+          label="Confirmed"
+          value={list === null ? '—' : summary.confirmed}
+          hint="Ready for the visit"
+          tone="sky"
+        />
+        <StatTile
+          icon={CheckCircle2}
+          label="Completed"
+          value={list === null ? '—' : summary.completed}
+          hint="Records saved"
+          tone="slate"
+        />
       </motion.div>
 
       <div className={`${panel} py-4`}>

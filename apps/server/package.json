@@ -9,6 +9,8 @@
     "build": "echo \"server: no build step (plain JS)\"",
     "seed:user": "node src/scripts/seed-user.js",
     "seed:services": "node src/scripts/seed-services.js",
+    "seed:announcements": "node src/scripts/seed-announcements.js",
+    "seed:demo": "node src/scripts/seed-demo-data.js",
     "reminders": "node src/scripts/send-reminders.js",
     "typecheck": "node --check src/index.js",
     "lint": "node --check src/index.js"

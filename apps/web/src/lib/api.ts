@@ -45,11 +45,13 @@ export interface StaffAppointment extends Appointment {
 export class ApiError extends Error {
   status: number;
   errors?: Record<string, string[]>;
-  constructor(status: number, message: string, errors?: Record<string, string[]>) {
+  code?: string;
+  constructor(status: number, message: string, errors?: Record<string, string[]>, code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.errors = errors;
+    this.code = code;
   }
 }
 
@@ -71,14 +73,14 @@ async function apiFetch<T>(path: string, options: { method?: string; body?: unkn
     },
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   });
-  let data: { message?: string; errors?: Record<string, string[]> } | null = null;
+  let data: { message?: string; errors?: Record<string, string[]>; code?: string } | null = null;
   try {
-    data = (await res.json()) as { message?: string; errors?: Record<string, string[]> };
+    data = (await res.json()) as { message?: string; errors?: Record<string, string[]>; code?: string };
   } catch {
     data = null;
   }
   if (!res.ok) {
-    throw new ApiError(res.status, data?.message ?? `Request failed (${res.status}).`, data?.errors);
+    throw new ApiError(res.status, data?.message ?? `Request failed (${res.status}).`, data?.errors, data?.code);
   }
   return data as T;
 }
@@ -121,6 +123,29 @@ export function myAppointments(): Promise<{ appointments: Appointment[] }> {
 
 export function cancelAppointment(id: string): Promise<{ appointment: Appointment }> {
   return apiFetch(`/api/appointments/${id}/cancel`, { method: 'PATCH' });
+}
+
+export interface PatientProfileInput {
+  fullName: string;
+  birthdate: string;
+  address: string;
+  barangay: string;
+  contactNumber: string;
+}
+
+export interface PatientProfileUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'patient' | 'staff' | 'admin';
+  authProvider: 'local' | 'google';
+  profileCompleted: boolean;
+  avatarUrl: string;
+}
+
+/** Complete a patient's profile after Google sign-in (or after a partial save). */
+export function completePatientProfile(input: PatientProfileInput): Promise<{ success: true; user: PatientProfileUser }> {
+  return apiFetch('/api/patients/profile', { method: 'PUT', body: input });
 }
 
 export function queueAppointments(filters: {
@@ -281,6 +306,7 @@ export interface PatientDetail {
   birthdate: string;
   sex: string;
   address: string;
+  barangay: string;
   householdNumber: string;
   contactNumber: string;
   philHealthNumber: string;
@@ -358,6 +384,37 @@ export interface AuthSettings {
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
+}
+
+export interface GoogleIntegrationSettings {
+  clientIdMasked: string;
+  clientSecretMasked: string;
+  source: 'custom' | 'default';
+}
+
+export function getGoogleIntegrationSettings(): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google');
+}
+
+export function updateGoogleIntegrationSettings(input: {
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google', { method: 'PUT', body: input });
+}
+
+export function resetGoogleIntegrationSettings(): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google', { method: 'DELETE' });
+}
+
+/**
+ * Public: the login button reads the active client ID at runtime. The client ID
+ * is public by design; the secret is never returned by this endpoint.
+ */
+export async function getGoogleAuthConfig(): Promise<{ clientId: string }> {
+  const res = await fetch(`${API_URL}/api/auth/google/config`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Request failed (${res.status}).`);
+  return res.json() as Promise<{ clientId: string }>;
 }
 
 /**

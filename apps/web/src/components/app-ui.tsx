@@ -101,6 +101,57 @@ export function StatusPill({
 
 /* ------------------------------------------------------------- structure --- */
 
+/**
+ * The page-level lead used on the dashboards. It mirrors the patient greeting
+ * card: one warm surface, an eyebrow naming today's context, a clear headline
+ * and a single primary next step.
+ */
+export function PageHero({
+  eyebrow,
+  title,
+  description,
+  action,
+  children,
+  className,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      aria-labelledby="page-hero-title"
+      className={cn('app-card relative isolate overflow-hidden p-5 sm:p-7', className)}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 -top-28 -z-10 size-64 rounded-full bg-teal-300/15 blur-3xl"
+      />
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          {eyebrow && (
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal-700">{eyebrow}</p>
+          )}
+          <h2
+            id="page-hero-title"
+            className="mt-1.5 font-display text-[24px] font-semibold leading-tight tracking-[-0.025em] text-slate-900 sm:text-[30px]"
+          >
+            {title}
+          </h2>
+          {description && (
+            <p className="mt-1.5 max-w-2xl text-[13.5px] leading-6 text-slate-600">{description}</p>
+          )}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function CardHeading({
   title,
   description,

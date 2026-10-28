@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { CalendarCheck, FileText, TrendingUp } from 'lucide-react';
 import { BarChart } from '../../components/charts/bar-chart';
@@ -8,7 +9,7 @@ import { Grid } from '../../components/charts/grid';
 import { ChartTooltip } from '../../components/charts/tooltip/chart-tooltip';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
-import { CardHeading, EmptyNote, InlineNotice, StatTile, panel } from '../../components/app-ui';
+import { CardHeading, EmptyNote, InlineNotice, Segmented, StatTile, panel } from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import { visitsPerService, type VisitsPerServiceRow } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -17,16 +18,22 @@ export const Route = createFileRoute('/staff/reports')({
   component: Reports,
 });
 
+type Range = '30' | '90';
+
 function Reports() {
+  const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
+  const [range, setRange] = useState<Range>('30');
   const [rows, setRows] = useState<VisitsPerServiceRow[] | null>(null);
   const [meta, setMeta] = useState<{ from: string; to: string; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    visitsPerService(30)
+    setError(null);
+    setRows(null);
+    visitsPerService(Number(range))
       .then((r) => {
         if (!cancelled) {
           setRows(r.rows);
@@ -39,9 +46,13 @@ function Reports() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [range]);
 
   const data = (rows ?? []).map((r) => ({ service: r.serviceName, visits: r.count }));
+  const rise = reduceMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
+  const riseTransition = { type: 'spring', bounce: 0, duration: 0.35 } as const;
 
   return (
     <DashboardShell
@@ -54,12 +65,31 @@ function Reports() {
       nav={opsNav(session?.role)}
       notificationsTo="/staff/notifications"
     >
-      <div className="grid gap-3.5 sm:grid-cols-3">
+      <motion.div {...rise} transition={riseTransition} className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px] leading-5 text-slate-600">
+          Completed visits only. Change the window to compare recent activity.
+        </p>
+        <Segmented
+          ariaLabel="Report range"
+          value={range}
+          onChange={setRange}
+          options={[
+            { key: '30', label: '30 days' },
+            { key: '90', label: '90 days' },
+          ]}
+        />
+      </motion.div>
+
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.04 }}
+        className="grid gap-3.5 sm:grid-cols-3"
+      >
         <StatTile
           icon={FileText}
           label="Completed visits"
           value={meta === null ? '—' : meta.total}
-          hint="Last 30 days"
+          hint={`Last ${range} days`}
         />
         <StatTile
           icon={CalendarCheck}
@@ -75,15 +105,15 @@ function Reports() {
           hint={rows && rows.length > 0 ? `${[...rows].sort((a, b) => b.count - a.count)[0].count} visits` : 'No visits yet'}
           tone="slate"
         />
-      </div>
+      </motion.div>
 
-      <section className={panel}>
+      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.08 }} className={panel}>
         <CardHeading
           title="Visits per service"
           description={
             meta
               ? `Completed visits, ${meta.from} → ${meta.to}.`
-              : 'Completed visits in the last 30 days.'
+              : `Completed visits in the last ${range} days.`
           }
         />
         <div className="mt-5">
@@ -91,8 +121,8 @@ function Reports() {
           {rows === null && !error && <EmptyNote>Loading report…</EmptyNote>}
           {rows !== null && rows.length === 0 && !error && (
             <EmptyNote>
-              No completed visits in the last 30 days yet. Complete a visit in the appointments queue and it
-              shows up here.
+              No completed visits in this window yet. Complete a visit in the appointments queue and it shows up
+              here.
             </EmptyNote>
           )}
           {rows !== null && rows.length > 0 && (
@@ -104,7 +134,7 @@ function Reports() {
             </BarChart>
           )}
         </div>
-      </section>
+      </motion.section>
     </DashboardShell>
   );
 }

@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 import { z } from 'zod';
-import { googleOAuth } from '../config/env.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { AppSettings, SETTINGS_KEY, isGoogleSignInEnabled } from '../models/app-settings.model.js';
+import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-credentials.js';
 
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
@@ -13,10 +13,11 @@ function requireDB(res) {
 }
 
 /** Shape the admin UI consumes; `googleConfigured` explains why the switch may not matter. */
-function present(doc) {
+async function present(doc) {
+  const credentials = await resolveGoogleCredentials();
   return {
     googleSignInEnabled: doc?.googleSignInEnabled !== false,
-    googleConfigured: googleOAuth.enabled,
+    googleConfigured: isGoogleConfigured(credentials),
     updatedAt: doc?.updatedAt ?? null,
   };
 }
@@ -33,7 +34,7 @@ export const getPublicSettings = asyncHandler(async (req, res) => {
 export const getSettings = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
-  res.json({ success: true, settings: present(doc) });
+  res.json({ success: true, settings: await present(doc) });
 });
 
 const updateSchema = z.object({ googleSignInEnabled: z.boolean() });
@@ -52,5 +53,5 @@ export const updateSettings = asyncHandler(async (req, res) => {
     { $set: { googleSignInEnabled: parsed.data.googleSignInEnabled } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
-  res.json({ success: true, settings: present(doc) });
+  res.json({ success: true, settings: await present(doc) });
 });

@@ -30,6 +30,19 @@ pnpm dev:server   # http://localhost:5000
 pnpm dev:web      # http://localhost:5173
 ```
 
+## Demo data
+
+Seed accounts, services, appointments/visit records, announcements and notifications
+(shared across the admin, staff and patient views):
+
+```bash
+pnpm --filter @healthcentria/server seed:demo
+```
+
+The seed is idempotent — re-running it updates the demo records instead of
+duplicating them, and it never resets an existing account's password. New demo
+accounts created by the script use the password `Demo1234!`.
+
 ## Build
 
 ```bash

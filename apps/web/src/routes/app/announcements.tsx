@@ -37,7 +37,7 @@ function PatientAnnouncements() {
   return (
     <DashboardShell
       title="Announcements"
-      subtitle="Schedule changes, vaccination days and advisories from staff"
+      subtitle="Schedule changes, vaccination days and advisories from the health center"
       roleLabel="Patient"
       userName={session?.name}
       userEmail={session?.email ?? ''}

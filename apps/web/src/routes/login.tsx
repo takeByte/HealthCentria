@@ -5,8 +5,8 @@ import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { PublicHeader } from '../components/public-header';
 import { GoogleIcon } from '../components/google-icon';
 import { Button } from '../components/ui/button';
-import { getSession, isValidEmail, login, startGoogleLogin } from '../lib/auth';
-import { getPublicSettings } from '../lib/api';
+import { getSession, isValidEmail, login, resolvePostAuthPath, startGoogleLogin } from '../lib/auth';
+import { getGoogleAuthConfig, getPublicSettings } from '../lib/api';
 import { cn } from '../lib/utils';
 import appLogo from '../assets/E-Kalinga_Logo.png';
 import loginImage1 from '../assets/login-image1.jpg';
@@ -38,13 +38,16 @@ function LoginComponent() {
 
   useEffect(() => {
     let cancelled = false;
-    getPublicSettings()
-      .then((r) => {
-        if (!cancelled) setGoogleEnabled(r.googleSignInEnabled);
+    Promise.all([getPublicSettings(), getGoogleAuthConfig()])
+      .then(([settings, config]) => {
+        if (cancelled) return;
+        // The client ID comes from the API at runtime — never a build-time constant.
+        setGoogleEnabled(settings.googleSignInEnabled && Boolean(config.clientId));
       })
       .catch(() => {
         // API unreachable: leave the button hidden rather than offer a dead end.
-        if (!cancelled) setGoogleEnabled(false);
+        if (cancelled) return;
+        setGoogleEnabled(false);
       });
     return () => {
       cancelled = true;
@@ -59,9 +62,7 @@ function LoginComponent() {
     setPending(true);
     try {
       const session = await login({ email, password });
-      await navigate({
-        to: session.role === 'admin' ? '/admin/dashboard' : session.role === 'staff' ? '/staff/dashboard' : '/app/dashboard',
-      });
+      await navigate({ to: resolvePostAuthPath(session) });
     } catch {
       // Generic message on purpose — do not reveal whether the email exists.
       setError('Invalid email or password.');
@@ -70,12 +71,21 @@ function LoginComponent() {
     }
   }
 
-  function handleGoogle() {
+  async function handleGoogle() {
     setError(null);
     setPending(true);
-    // Full-page redirect: the API starts the Google consent flow and later
-    // returns to /auth/callback with a session token.
-    startGoogleLogin();
+    try {
+      // Re-read at click time so an admin's credential change applies without
+      // requiring a page reload.
+      const config = await getGoogleAuthConfig();
+      if (!config.clientId) throw new Error('GOOGLE_NOT_CONFIGURED');
+      // Full-page redirect: the API starts the Google consent flow and later
+      // returns to /auth/callback with a session token.
+      startGoogleLogin(config.clientId);
+    } catch {
+      setError('Google sign-in is not available right now. Log in with your email and password.');
+      setPending(false);
+    }
   }
 
   return (

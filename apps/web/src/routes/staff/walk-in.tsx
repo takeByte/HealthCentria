@@ -1,11 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
-import { CalendarCheck, LoaderCircle } from 'lucide-react';
+import { CalendarCheck, LoaderCircle, ShieldCheck, Users } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
   InlineNotice,
   Segmented,
+  StatTile,
   SuccessNote,
   fieldLabel,
   inputClass,
@@ -38,6 +40,7 @@ function todayYMD(): string {
 type Mode = 'existing' | 'new';
 
 function WalkIn() {
+  const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
   const day = todayYMD();
@@ -126,7 +129,40 @@ function WalkIn() {
       notificationsTo="/staff/notifications"
       mainClassName="max-w-3xl"
     >
-      <section className={panel}>
+      <motion.div
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
+        className="grid gap-3.5 sm:grid-cols-3"
+      >
+        <StatTile
+          icon={CalendarCheck}
+          label="Today"
+          value={day}
+          hint="Same-day visits only"
+        />
+        <StatTile
+          icon={ShieldCheck}
+          label="Auto-confirmed"
+          value="Yes"
+          hint="Present at the desk"
+          tone="sky"
+        />
+        <StatTile
+          icon={Users}
+          label="Services open"
+          value={services.filter((s) => s.active).length}
+          hint="Available for walk-ins"
+          tone="slate"
+        />
+      </motion.div>
+
+      <motion.section
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
+        className={panel}
+      >
         <div className="flex items-start gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
             <CalendarCheck size={18} aria-hidden />
@@ -274,7 +310,7 @@ function WalkIn() {
             {pending ? 'Confirming…' : 'Confirm walk-in'}
           </button>
         </form>
-      </section>
+      </motion.section>
     </DashboardShell>
   );
 }

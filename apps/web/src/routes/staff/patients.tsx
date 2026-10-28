@@ -1,9 +1,18 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { ChevronRight, Search, Users } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronRight, Search, UserCheck, UserX, Users } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
-import { EmptyNote, InlineNotice, StatusPill, inputClass, panel } from '../../components/app-ui';
+import {
+  EmptyNote,
+  InlineNotice,
+  StatTile,
+  StatusPill,
+  inputClass,
+  panel,
+  primaryButton,
+} from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import { listPatients, type PatientSummary } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -22,6 +31,7 @@ function initials(name: string): string {
 }
 
 function PatientsList() {
+  const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
   const [search, setSearch] = useState('');
@@ -49,6 +59,21 @@ function PatientsList() {
     };
   }, [search]);
 
+  const summary = useMemo(() => {
+    const all = list ?? [];
+    return {
+      total: all.length,
+      active: all.filter((p) => p.active).length,
+      inactive: all.filter((p) => !p.active).length,
+      contactable: all.filter((p) => p.contactNumber).length,
+    };
+  }, [list]);
+
+  const rise = reduceMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
+  const riseTransition = { type: 'spring', bounce: 0, duration: 0.35 } as const;
+
   return (
     <DashboardShell
       title="Patients"
@@ -60,7 +85,44 @@ function PatientsList() {
       nav={opsNav(session?.role)}
       notificationsTo="/staff/notifications"
     >
-      <div className={`${panel} py-4`}>
+      <motion.div {...rise} transition={riseTransition} className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[13px] leading-5 text-slate-600">
+          {list === null
+            ? 'Loading the register…'
+            : `${summary.total} patient${summary.total === 1 ? '' : 's'} in this view · ${summary.active} active`}
+        </p>
+        <Link to="/staff/walk-in" className={`${primaryButton} h-10 px-4 text-[13px]`}>
+          Register a walk-in
+        </Link>
+      </motion.div>
+
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.04 }}
+        className="grid gap-3.5 sm:grid-cols-3"
+      >
+        <StatTile icon={Users} label="Patients" value={list === null ? '—' : summary.total} hint="In this view" />
+        <StatTile
+          icon={UserCheck}
+          label="Active"
+          value={list === null ? '—' : summary.active}
+          hint="Can book and sign in"
+          tone="sky"
+        />
+        <StatTile
+          icon={UserX}
+          label="Inactive"
+          value={list === null ? '—' : summary.inactive}
+          hint="Sign-in blocked"
+          tone="slate"
+        />
+      </motion.div>
+
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.08 }}
+        className={`${panel} py-4`}
+      >
         <label htmlFor="patient-search" className="mb-1.5 block text-[12.5px] font-semibold text-slate-700">
           Search by name, email, contact, or household number
         </label>
@@ -79,7 +141,7 @@ function PatientsList() {
             className={`${inputClass} pl-10`}
           />
         </div>
-      </div>
+      </motion.div>
 
       {error && <InlineNotice>{error}</InlineNotice>}
       {list === null && !error && <EmptyNote>Loading patients…</EmptyNote>}
@@ -89,7 +151,11 @@ function PatientsList() {
         </EmptyNote>
       )}
 
-      <div className="grid gap-3.5 md:grid-cols-2">
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.12 }}
+        className="grid gap-3.5 md:grid-cols-2"
+      >
         {(list ?? []).map((p) => (
           <Link
             key={p.id}
@@ -120,7 +186,7 @@ function PatientsList() {
             <ChevronRight size={17} aria-hidden className="shrink-0 text-slate-400" />
           </Link>
         ))}
-      </div>
+      </motion.div>
     </DashboardShell>
   );
 }

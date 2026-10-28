@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { adminSettingsRouter } from './admin-settings.routes.js';
 import { announcementRouter } from './announcement.routes.js';
 import { appointmentRouter } from './appointment.routes.js';
 import { notificationRouter } from './notification.routes.js';
@@ -19,6 +20,7 @@ apiRouter.use('/patients', patientRouter);
 apiRouter.use('/reports', reportRouter);
 apiRouter.use('/staff-accounts', staffRouter);
 apiRouter.use('/services', serviceRouter);
+apiRouter.use('/admin/settings', adminSettingsRouter);
 apiRouter.use('/settings', settingsRouter);
 apiRouter.use('/appointments', appointmentRouter);
 apiRouter.use('/health', healthRouter);

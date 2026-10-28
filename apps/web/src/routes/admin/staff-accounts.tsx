@@ -1,13 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, LoaderCircle, Plus, X } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Eye, EyeOff, LoaderCircle, Plus, Search, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { adminNav } from '../../components/ops-nav';
 import {
   CardHeading,
   EmptyNote,
   InlineNotice,
+  StatTile,
   StatusPill,
+  dangerChipButton,
   fieldLabel,
   inputClass,
   panel,
@@ -31,10 +34,12 @@ export const Route = createFileRoute('/admin/staff-accounts')({
 });
 
 function StaffAccounts() {
+  const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
   const [list, setList] = useState<StaffAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const [cName, setCName] = useState('');
   const [cEmail, setCEmail] = useState('');
@@ -126,6 +131,27 @@ function StaffAccounts() {
     }
   }
 
+  const filtered = useMemo(() => {
+    if (!list) return null;
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q));
+  }, [list, search]);
+
+  const summary = useMemo(() => {
+    const all = list ?? [];
+    return {
+      total: all.length,
+      active: all.filter((a) => a.active).length,
+      admins: all.filter((a) => a.role === 'admin').length,
+    };
+  }, [list]);
+
+  const rise = reduceMotion
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
+  const riseTransition = { type: 'spring', bounce: 0, duration: 0.35 } as const;
+
   return (
     <DashboardShell
       title="Staff Accounts"
@@ -138,24 +164,65 @@ function StaffAccounts() {
       notificationsTo="/staff/notifications"
       mainClassName="max-w-4xl"
     >
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[12.5px] text-slate-500">
-          {list === null ? 'Loading…' : `${list.length} account${list.length === 1 ? '' : 's'}`}
-        </p>
-        <button
-          type="button"
-          onClick={() => setShowCreate((v) => !v)}
-          className={showCreate ? secondaryButton : primaryButton}
-        >
-          {showCreate ? <X size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
-          {showCreate ? 'Close' : 'New account'}
-        </button>
-      </div>
+      <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-3">
+        <StatTile icon={ShieldCheck} label="Accounts" value={list === null ? '—' : summary.total} hint="Staff + admins" />
+        <StatTile
+          icon={UserCheck}
+          label="Active"
+          value={list === null ? '—' : summary.active}
+          hint="Can sign in now"
+          tone="sky"
+        />
+        <StatTile
+          icon={UserX}
+          label="Admins"
+          value={list === null ? '—' : summary.admins}
+          hint="Full workspace access"
+          tone="slate"
+        />
+      </motion.div>
+
+      <motion.div
+        {...rise}
+        transition={{ ...riseTransition, delay: 0.04 }}
+        className={`${panel} py-4`}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search
+              size={16}
+              aria-hidden
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              aria-label="Search staff accounts"
+              className={`${inputClass} pl-10`}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowCreate((v) => !v)}
+            className={showCreate ? `${secondaryButton} shrink-0` : `${primaryButton} shrink-0`}
+          >
+            {showCreate ? <X size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
+            {showCreate ? 'Close' : 'New account'}
+          </button>
+        </div>
+      </motion.div>
 
       {error && <InlineNotice>{error}</InlineNotice>}
 
       {showCreate && (
-        <form onSubmit={handleCreate} className={`${panel} grid gap-4 sm:grid-cols-2`}>
+        <motion.form
+          {...rise}
+          transition={riseTransition}
+          onSubmit={handleCreate}
+          className={`${panel} grid gap-4 sm:grid-cols-2`}
+        >
           <div className="sm:col-span-2">
             <CardHeading
               title="New staff account"
@@ -203,15 +270,18 @@ function StaffAccounts() {
             {cBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
             {cBusy ? 'Creating…' : 'Create account'}
           </button>
-        </form>
+        </motion.form>
       )}
 
       {eError && <InlineNotice>{eError}</InlineNotice>}
 
       {list !== null && list.length === 0 && <EmptyNote>No staff accounts yet.</EmptyNote>}
+      {filtered !== null && filtered.length === 0 && list !== null && list.length > 0 && (
+        <EmptyNote>No account matches “{search.trim()}”.</EmptyNote>
+      )}
 
-      <div className="grid gap-3.5">
-        {(list ?? []).map((a) => (
+      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.08 }} className="grid gap-3.5">
+        {(filtered ?? []).map((a) => (
           <article key={a.id} className={panel}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -266,10 +336,8 @@ function StaffAccounts() {
                   type="button"
                   onClick={() => toggleActive(a)}
                   className={cn(
-                    'inline-flex h-9 items-center rounded-lg border px-3.5 text-[13px] font-semibold transition-colors active:scale-[0.97]',
-                    a.active
-                      ? 'border-red-200 bg-white text-destructive hover:bg-red-50'
-                      : 'border-teal-600/30 bg-white text-teal-800 hover:bg-teal-50',
+                    a.active ? dangerChipButton : secondaryButton,
+                    'h-9 px-3.5 text-[13px]',
                   )}
                 >
                   {a.active ? 'Deactivate' : 'Reactivate'}
@@ -278,7 +346,7 @@ function StaffAccounts() {
             )}
           </article>
         ))}
-      </div>
+      </motion.div>
     </DashboardShell>
   );
 }
