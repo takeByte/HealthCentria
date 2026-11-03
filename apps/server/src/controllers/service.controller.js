@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { Service } from '../models/service.model.js';
-import { isValidServiceDay, scheduleText, todayYMD, upcomingValidDates } from '../utils/service-schedule.js';
+import { logActivity, snapshotChanges } from '../services/activity.js';
+import { scheduleText, todayYMD, upcomingValidDates } from '../utils/service-schedule.js';
 
 const scheduleSchema = z
   .object({
@@ -44,6 +45,10 @@ function present(service) {
     schedule: service.schedule,
     scheduleText: scheduleText(service.schedule),
     active: service.active,
+    createdAt: service.createdAt,
+    updatedAt: service.updatedAt,
+    updatedByName:
+      service.updatedBy && typeof service.updatedBy === 'object' ? service.updatedBy.fullName ?? '' : '',
   };
 }
 
@@ -66,6 +71,17 @@ export const createService = asyncHandler(async (req, res) => {
   }
   try {
     const service = await Service.create(parsed.data);
+    await logActivity({
+      req,
+      action: 'service.create',
+      target: { type: 'service', id: service._id, label: service.name },
+      changes: [
+        ['name', '', service.name],
+        ['active', '', service.active],
+        ['schedule', '', scheduleText(service.schedule)],
+      ],
+      detail: 'Service added to the catalog.',
+    });
     res.status(201).json({ success: true, service: present(service.toObject()) });
   } catch (err) {
     if (err?.code === 11000) {
@@ -83,8 +99,27 @@ export const updateService = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
   }
-  const service = await Service.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true });
+  const service = await Service.findById(req.params.id);
   if (!service) return res.status(404).json({ success: false, message: 'Service not found.' });
+
+  const tracked = ['name', 'description', 'schedule', 'active'];
+  const before = { ...service.toObject(), schedule: scheduleText(service.schedule) };
+  for (const [field, value] of Object.entries(parsed.data)) service.set(field, value);
+  service.updatedBy = req.user.id;
+  await service.save();
+
+  await logActivity({
+    req,
+    action: 'service.update',
+    target: { type: 'service', id: service._id, label: service.name },
+    changes: snapshotChanges(
+      before,
+      { ...service.toObject(), schedule: scheduleText(service.schedule) },
+      tracked,
+    ),
+    detail: `Service updated: ${Object.keys(parsed.data).join(', ')}.`,
+  });
+
   res.json({ success: true, service: present(service.toObject()) });
 });
 

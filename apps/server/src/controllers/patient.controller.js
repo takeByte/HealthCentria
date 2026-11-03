@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
 import { User } from '../models/user.model.js';
+import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
 
 const listQuery = z.object({
@@ -48,6 +49,37 @@ const profileSchema = z.object({
     ),
 });
 
+const SEX_VALUES = ['Female', 'Male', 'Other', 'Prefer not to say'];
+
+const optionalText = (max, message) => z.string().trim().max(max, message).optional();
+
+/** Staff/admin corrections to a patient chart. Account fields are intentionally absent. */
+const staffProfileSchema = z.object({
+  fullName: z.string().trim().min(1, 'Full name is required.').max(120, 'Full name is too long.').optional(),
+  birthdate: z
+    .string()
+    .trim()
+    .min(1, 'Birthdate is required.')
+    .refine(isValidPastBirthdate, 'Enter a valid past birthdate.')
+    .optional(),
+  sex: z.enum(SEX_VALUES).or(z.literal('')).optional(),
+  address: z.string().trim().min(1, 'Address is required.').max(300, 'Address is too long.').optional(),
+  barangay: z.string().trim().min(1, 'Barangay is required.').max(120, 'Barangay is too long.').optional(),
+  householdNumber: optionalText(60, 'Household number is too long.'),
+  contactNumber: z
+    .string()
+    .trim()
+    .transform((value) => value.replace(/[\s-]/g, ''))
+    .refine(
+      (value) => PROFILE_PHONE_REGEX.test(value),
+      'Enter a valid Philippine contact number (09XXXXXXXXX or +639XXXXXXXXX).',
+    )
+    .optional(),
+  philHealthNumber: optionalText(60, 'PhilHealth number is too long.'),
+  emergencyName: optionalText(120, 'Emergency contact name is too long.'),
+  emergencyNumber: optionalText(60, 'Emergency contact number is too long.'),
+});
+
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
     res.status(503).json({ success: false, message: 'Database is not connected. Try again later.' });
@@ -65,6 +97,33 @@ function presentList(u) {
     householdNumber: u.householdNumber ?? '',
     active: u.active,
     createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+  };
+}
+
+function presentProfile(u) {
+  const birthdate = u.birthdate ? new Date(u.birthdate) : null;
+  return {
+    id: String(u._id),
+    name: u.fullName,
+    email: u.email,
+    birthdate: birthdate && !Number.isNaN(birthdate.getTime()) ? birthdate.toISOString().slice(0, 10) : '',
+    sex: u.sex ?? '',
+    address: u.address ?? '',
+    barangay: u.barangay ?? '',
+    householdNumber: u.householdNumber ?? '',
+    contactNumber: u.contactNumber ?? '',
+    philHealthNumber: u.philHealthNumber ?? '',
+    emergencyName: u.emergencyName ?? '',
+    emergencyNumber: u.emergencyNumber ?? '',
+    active: u.active,
+    authProvider: u.provider ?? 'local',
+    profileCompleted: u.profileComplete !== false,
+    avatarUrl: u.avatarUrl ?? '',
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+    updatedByName:
+      u.updatedBy && typeof u.updatedBy === 'object' ? u.updatedBy.fullName ?? '' : '',
   };
 }
 
@@ -98,6 +157,9 @@ function presentVisit(a) {
     prescription: obj.prescription ?? '',
     visitNotes: obj.visitNotes ?? '',
     createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+    updatedByName:
+      obj.updatedBy && typeof obj.updatedBy === 'object' ? obj.updatedBy.fullName ?? '' : '',
   };
 }
 
@@ -106,34 +168,104 @@ export const getPatient = asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
-  const patient = await User.findOne({ _id: req.params.id, role: 'patient' }).lean();
+  const patient = await User.findOne({ _id: req.params.id, role: 'patient' })
+    .populate('updatedBy', 'fullName')
+    .lean();
   if (!patient) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
   const visits = await Appointment.find({ patient: patient._id })
     .populate('service', 'name')
+    .populate('updatedBy', 'fullName')
     .sort({ day: -1, createdAt: -1 })
     .lean();
   res.json({
     success: true,
-    patient: {
-      id: String(patient._id),
-      name: patient.fullName,
-      email: patient.email,
-      birthdate: patient.birthdate,
-      sex: patient.sex,
-      address: patient.address,
-      barangay: patient.barangay ?? '',
-      householdNumber: patient.householdNumber,
-      contactNumber: patient.contactNumber,
-      philHealthNumber: patient.philHealthNumber ?? '',
-      emergencyName: patient.emergencyName,
-      emergencyNumber: patient.emergencyNumber,
-      active: patient.active,
-      createdAt: patient.createdAt,
-    },
+    patient: presentProfile(patient),
     visits: visits.map(presentVisit),
   });
+});
+
+/** GET /api/patients/profile — the signed-in patient's own chart. */
+export const getMyProfile = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const user = await User.findById(req.user.id).lean();
+  if (!user || !user.active) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  if (user.role !== 'patient') {
+    return res.status(403).json({ success: false, message: 'Not allowed for your role.' });
+  }
+  res.json({ success: true, patient: presentProfile(user) });
+});
+
+/** PATCH /api/patients/:id — staff/admin corrections to a patient chart. */
+export const updatePatientRecord = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+
+  const parsed = staffProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: parsed.error.flatten().fieldErrors,
+    });
+  }
+  if (Object.keys(parsed.data).length === 0) {
+    return res.status(400).json({ success: false, message: 'No changes provided.' });
+  }
+
+  const patient = await User.findOne({ _id: req.params.id, role: 'patient' });
+  if (!patient) {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+
+  const data = parsed.data;
+  // Snapshot the tracked fields before writing so the log shows real diffs.
+  const before = {};
+  for (const field of Object.keys(data)) before[field] = patient.get(field);
+  if (data.fullName !== undefined) patient.fullName = data.fullName;
+  if (data.birthdate !== undefined) patient.birthdate = new Date(`${data.birthdate}T00:00:00`);
+  if (data.sex) patient.sex = data.sex;
+  if (data.address !== undefined) patient.address = data.address;
+  if (data.barangay !== undefined) patient.barangay = data.barangay;
+  if (data.householdNumber !== undefined) patient.householdNumber = data.householdNumber;
+  if (data.contactNumber !== undefined) patient.contactNumber = data.contactNumber;
+  if (data.philHealthNumber !== undefined) patient.philHealthNumber = data.philHealthNumber;
+  if (data.emergencyName !== undefined) patient.emergencyName = data.emergencyName;
+  if (data.emergencyNumber !== undefined) patient.emergencyNumber = data.emergencyNumber;
+
+  // Preserve legacy complete records; only promote an incomplete chart once
+  // staff have supplied every field the booking gate expects.
+  if (patient.profileComplete === false) {
+    const complete = Boolean(
+      patient.fullName?.trim() &&
+        patient.birthdate &&
+        patient.sex &&
+        patient.address?.trim() &&
+        patient.barangay?.trim() &&
+        patient.contactNumber?.trim(),
+    );
+    if (complete) patient.profileComplete = true;
+  }
+
+  patient.updatedBy = req.user.id;
+  await patient.save();
+  // Populate so the response carries the editor's name for "Updated by".
+  await patient.populate('updatedBy', 'fullName');
+  await logActivity({
+    req,
+    action: 'patient.update',
+    target: { type: 'patient', id: patient._id, label: patient.fullName },
+    changes: snapshotChanges(before, patient, Object.keys(data)),
+    detail: `Patient chart updated: ${Object.keys(data).join(', ')}.`,
+    patient: patient._id,
+  });
+
+  res.json({ success: true, patient: presentProfile(patient) });
 });
 
 /** PUT /api/patients/profile — patient completes their own profile. */
@@ -157,6 +289,13 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   }
 
   const data = parsed.data;
+  const before = {
+    fullName: user.fullName,
+    birthdate: user.birthdate,
+    address: user.address,
+    barangay: user.barangay,
+    contactNumber: user.contactNumber,
+  };
   user.fullName = data.fullName;
   user.birthdate = new Date(`${data.birthdate}T00:00:00`);
   user.address = data.address;
@@ -168,6 +307,15 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   // Only a fully validated request reaches this point.
   user.profileComplete = true;
   await user.save();
+
+  await logActivity({
+    req,
+    action: 'patient.update',
+    target: { type: 'patient', id: user._id, label: user.fullName },
+    changes: snapshotChanges(before, user, Object.keys(before)),
+    detail: 'Patient completed their own profile.',
+    patient: user._id,
+  });
 
   res.json({ success: true, user: presentUser(user) });
 });

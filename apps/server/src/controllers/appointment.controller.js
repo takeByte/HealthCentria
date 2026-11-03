@@ -2,8 +2,9 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
-import { AuditLog } from '../models/audit-log.model.js';
 import { Service } from '../models/service.model.js';
+import { logActivity } from '../services/activity.js';
+import { removeAppointmentFromCalendar } from '../services/google-calendar.js';
 import { notifyEmail, notifyRoles } from '../utils/notifications.js';
 import { addDaysYMD, isValidServiceDay, todayYMD } from '../utils/service-schedule.js';
 
@@ -35,6 +36,7 @@ function present(a) {
     prescription: a.prescription ?? '',
     visitNotes: a.visitNotes ?? '',
     createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
   };
 }
 
@@ -91,7 +93,20 @@ export const bookAppointment = asyncHandler(async (req, res) => {
     createdBy: req.user.id,
   });
   await appt.populate('service', 'name');
-  await AuditLog.create({ actor: req.user.id, action: 'appointment.book', appointment: appt._id, patient: appt.patient });
+  await logActivity({
+    req,
+    action: 'appointment.book',
+    target: { type: 'appointment', id: appt._id, label: `${appt.service.name} on ${appt.day}` },
+    changes: [
+      ['status', '', 'pending'],
+      ['service', '', appt.service.name],
+      ['day', '', appt.day],
+      ['timePreference', '', appt.timePreference],
+    ],
+    detail: 'Patient requested an appointment.',
+    appointment: appt._id,
+    patient: appt.patient,
+  });
   // Awaited so the bell exists by the time staff reload the queue; failures never break booking.
   await notifyRoles(['staff', 'admin'], {
     type: 'new-request',
@@ -120,10 +135,19 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   if (appt.status !== 'pending' && appt.status !== 'confirmed') {
     return res.status(400).json({ success: false, message: 'Only pending or confirmed appointments can be cancelled.' });
   }
+  const previousStatus = appt.status;
   appt.status = 'cancelled';
   await appt.save();
-  await AuditLog.create({ actor: req.user.id, action: 'appointment.cancel', appointment: appt._id, patient: appt.patient });
   await appt.populate('service', 'name');
+  await logActivity({
+    req,
+    action: 'appointment.cancel',
+    target: { type: 'appointment', id: appt._id, label: `${appt.service.name} on ${appt.day}` },
+    changes: [['status', previousStatus, 'cancelled']],
+    detail: 'Patient cancelled their appointment.',
+    appointment: appt._id,
+    patient: appt.patient,
+  });
   await notifyRoles(['staff', 'admin'], {
     type: 'appointment-cancelled',
     title: `Cancelled: ${appt.service.name} on ${appt.day}`,
@@ -131,5 +155,8 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
     link: '/staff/appointments',
     keyPrefix: `cancelled:${appt._id}`,
   }).catch(() => {});
+  // Remove the mirrored event if one exists. Appointment cancellation succeeds
+  // even if Google is unreachable.
+  void removeAppointmentFromCalendar(appt).catch(() => {});
   res.json({ success: true, appointment: present(appt.toObject()) });
 });

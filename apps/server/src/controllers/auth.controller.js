@@ -10,6 +10,7 @@ import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-cr
 import { hashPassword, verifyPassword } from '../utils/password.js';
 import { presentUser } from '../utils/present-user.js';
 import { signSession } from '../utils/tokens.js';
+import { logActivity } from '../services/activity.js';
 
 const phoneSchema = z
   .string()
@@ -36,12 +37,22 @@ const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
   consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required to register.' }) }),
+  // Verified and stripped by verifyCaptcha before this schema runs; listed
+  // here so the field is part of the documented request shape.
+  captchaToken: z.string().min(1).max(4096).optional(),
 });
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
   password: z.string().min(1, 'Enter your password.'),
+  captchaToken: z.string().min(1).max(4096).optional(),
 });
+
+/** Only a well-formed email reaches the log — never arbitrary typed text. */
+function attemptedEmail(value) {
+  const email = typeof value === 'string' ? value.trim().toLowerCase().slice(0, 200) : '';
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : '';
+}
 
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
@@ -85,6 +96,16 @@ export const register = asyncHandler(async (req, res) => {
     emergencyNumber: data.emergencyNumber,
   });
 
+  await logActivity({
+    req,
+    action: 'auth.register',
+    actorId: user._id,
+    actorName: user.fullName,
+    actorRole: 'patient',
+    target: { type: 'patient', id: user._id, label: user.fullName },
+    detail: 'Self-registered patient account.',
+  });
+
   res.status(201).json({ success: true, token: signSession(user), user: presentUser(user) });
 });
 
@@ -92,6 +113,17 @@ export const login = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
+    const email = attemptedEmail(req.body?.email);
+    if (email) {
+      await logActivity({
+        req,
+        action: 'auth.login_failed',
+        outcome: 'failed',
+        actorName: email,
+        target: { type: 'auth', label: email },
+        detail: 'Malformed sign-in request.',
+      });
+    }
     // Generic message on purpose — do not reveal whether the email exists.
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });
   }
@@ -99,14 +131,57 @@ export const login = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ email });
   if (!user || !user.active) {
+    await logActivity({
+      req,
+      action: 'auth.login_failed',
+      outcome: 'failed',
+      actorName: email,
+      target: { type: 'auth', label: email },
+      detail: user ? 'Account is deactivated.' : 'No account with this email.',
+    });
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });
   }
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
+    await logActivity({
+      req,
+      action: 'auth.login_failed',
+      outcome: 'failed',
+      actorName: email,
+      target: { type: 'auth', label: email },
+      detail: 'Wrong password.',
+    });
     return res.status(401).json({ success: false, message: 'Invalid email or password.' });
   }
 
+  await logActivity({
+    req,
+    action: 'auth.login',
+    actorId: user._id,
+    actorName: user.fullName,
+    actorRole: user.role,
+    target: { type: 'auth', id: user._id, label: user.email },
+    detail: `${user.role} signed in.`,
+  });
+
   res.json({ success: true, token: signSession(user), user: presentUser(user) });
+});
+
+/**
+ * POST /api/auth/logout — records the sign-out.
+ *
+ * Sessions are stateless JWTs, so the server cannot revoke the token; the
+ * client discards it. The entry is still the point: the log shows the end of
+ * the session even though no server state changes.
+ */
+export const logout = asyncHandler(async (req, res) => {
+  await logActivity({
+    req,
+    action: 'auth.logout',
+    target: { type: 'auth', id: req.user.id },
+    detail: 'Signed out.',
+  });
+  res.json({ success: true });
 });
 
 /** GET /api/auth/me — resolve the signed-in user from a Bearer token. */

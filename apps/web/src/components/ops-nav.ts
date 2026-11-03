@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  History,
   LayoutDashboard,
   Megaphone,
   Settings,
@@ -24,6 +25,7 @@ export const staffNav: ShellNavItem[] = [
   { label: 'Services', to: '/staff/services', icon: CalendarDays },
   { label: 'Announcements', to: '/staff/announcements', icon: Megaphone },
   { label: 'Notifications', to: '/staff/notifications', icon: Bell },
+  { label: 'Activity', to: '/staff/activity', icon: History },
   { label: 'Reports', to: '/staff/reports', icon: FileText },
 ];
 
@@ -35,6 +37,7 @@ export const adminNav: ShellNavItem[] = [
   { label: 'Services', to: '/staff/services', icon: CalendarDays },
   { label: 'Announcements', to: '/staff/announcements', icon: Megaphone },
   { label: 'Notifications', to: '/staff/notifications', icon: Bell },
+  { label: 'Activity log', to: '/admin/activity', icon: History },
   { label: 'Reports', to: '/staff/reports', icon: FileText },
   { label: 'Staff Accounts', to: '/admin/staff-accounts', icon: UserCog },
   { label: 'Settings', to: '/admin/settings', icon: Settings },

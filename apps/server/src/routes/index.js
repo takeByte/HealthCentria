@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { activityRouter } from './activity.routes.js';
 import { adminSettingsRouter } from './admin-settings.routes.js';
 import { announcementRouter } from './announcement.routes.js';
 import { appointmentRouter } from './appointment.routes.js';
@@ -14,6 +15,7 @@ import { settingsRouter } from './settings.routes.js';
 export const apiRouter = Router();
 
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/activity', activityRouter);
 apiRouter.use('/announcements', announcementRouter);
 apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/patients', patientRouter);

@@ -19,6 +19,7 @@ import {
   selectClass,
   textareaClass,
 } from '../../components/app-ui';
+import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
@@ -333,6 +334,12 @@ function ServicesManage() {
                   {s.scheduleText}
                 </p>
                 {s.description && <p className="mt-2 text-[12.5px] leading-5 text-slate-600">{s.description}</p>}
+                <RecordMeta
+                  createdAt={s.createdAt}
+                  updatedAt={s.updatedAt}
+                  updatedByName={s.updatedByName}
+                  className="mt-1.5"
+                />
               </div>
               <StatusPill tone={s.active ? 'teal' : 'slate'} className="shrink-0">
                 {s.active ? 'Active' : 'Inactive'}

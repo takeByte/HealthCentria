@@ -48,6 +48,9 @@ const userSchema = new mongoose.Schema(
     philHealthNumber: { type: String, trim: true, default: '' },
     emergencyName: { type: String, default: '', trim: true },
     emergencyNumber: { type: String, default: '', trim: true },
+    // Last staff/admin account to edit this chart (patients editing their own
+    // profile leave it null). Shown as "Updated by" on the patient record.
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true },
 );

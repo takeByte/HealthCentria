@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { User } from '../models/user.model.js';
+import { logActivity } from '../services/activity.js';
 import { hashPassword } from '../utils/password.js';
 
 function requireDB(res) {
@@ -21,6 +22,7 @@ function present(u) {
     role: obj.role,
     active: obj.active,
     createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
   };
 }
 
@@ -66,6 +68,17 @@ export const createStaff = asyncHandler(async (req, res) => {
     role: parsed.data.role,
     fullName: parsed.data.fullName,
   });
+  await logActivity({
+    req,
+    action: 'staff.create',
+    target: { type: 'staff', id: user._id, label: user.fullName },
+    changes: [
+      ['email', '', user.email],
+      ['role', '', user.role],
+      ['active', '', user.active],
+    ],
+    detail: 'Staff account created.',
+  });
   res.status(201).json({ success: true, account: present(user) });
 });
 
@@ -92,10 +105,27 @@ export const updateStaff = asyncHandler(async (req, res) => {
   if (isSelf && parsed.data.active === false) {
     return res.status(400).json({ success: false, message: 'You cannot deactivate your own account.' });
   }
+  const before = { fullName: target.fullName, role: target.role, active: target.active };
   if (parsed.data.fullName !== undefined) target.fullName = parsed.data.fullName;
   if (parsed.data.role !== undefined) target.role = parsed.data.role;
   if (parsed.data.active !== undefined) target.active = parsed.data.active;
   if (parsed.data.password !== undefined) target.passwordHash = await hashPassword(parsed.data.password);
   await target.save();
+
+  const changedFields = Object.keys(parsed.data);
+  await logActivity({
+    req,
+    action: 'staff.update',
+    target: { type: 'staff', id: target._id, label: target.fullName },
+    changes: [
+      ['fullName', before.fullName, target.fullName],
+      ['role', before.role, target.role],
+      ['active', before.active, target.active],
+      // Presence only — the password value never enters the log.
+      ...(parsed.data.password !== undefined ? [['password', '', 'reset']] : []),
+    ],
+    detail: `Staff account updated: ${changedFields.join(', ')}.`,
+  });
+
   res.json({ success: true, account: present(target) });
 });

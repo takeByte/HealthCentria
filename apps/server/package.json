@@ -12,6 +12,7 @@
     "seed:announcements": "node src/scripts/seed-announcements.js",
     "seed:demo": "node src/scripts/seed-demo-data.js",
     "reminders": "node src/scripts/send-reminders.js",
+    "sync:calendar": "node src/scripts/sync-google-calendar.js",
     "typecheck": "node --check src/index.js",
     "lint": "node --check src/index.js"
   },
@@ -19,6 +20,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.2",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.9.0",

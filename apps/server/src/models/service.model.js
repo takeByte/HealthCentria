@@ -16,6 +16,8 @@ const serviceSchema = new mongoose.Schema(
     description: { type: String, default: '', trim: true },
     schedule: { type: scheduleSchema, required: true },
     active: { type: Boolean, default: true },
+    // Last staff/admin account to edit the definition.
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true },
 );

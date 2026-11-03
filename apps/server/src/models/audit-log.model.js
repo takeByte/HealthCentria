@@ -1,27 +1,148 @@
 import mongoose from 'mongoose';
 
+/**
+ * Every entry is append-only: there is no update or delete path in the API.
+ * The only removal is the retention purge, which deletes rows older than the
+ * policy window and then writes its own entry.
+ */
+
+export const ACTIVITY_CATEGORIES = [
+  'auth',
+  'appointments',
+  'clinical',
+  'people',
+  'content',
+  'configuration',
+  'system',
+];
+
+export const ACTIVITY_ACTIONS = [
+  // Sign-in
+  'auth.login',
+  'auth.login_failed',
+  'auth.logout',
+  'auth.register',
+  // Appointments
+  'appointment.book',
+  'appointment.confirm',
+  'appointment.decline',
+  'appointment.cancel',
+  'appointment.complete',
+  'appointment.walkin',
+  // Clinical / charts
+  'patient.update',
+  'record.update',
+  // People
+  'patient.create',
+  'staff.create',
+  'staff.update',
+  // Content
+  'announcement.create',
+  'announcement.update',
+  'announcement.delete',
+  'service.create',
+  'service.update',
+  // Configuration
+  'settings.google.update',
+  'settings.google.reset',
+  'settings.signin.update',
+  'integration.update',
+  // System
+  'activity.purge',
+];
+
+/** Action → category. Kept in one place so every writer and reader agrees. */
+export const ACTION_CATEGORY = {
+  'auth.login': 'auth',
+  'auth.login_failed': 'auth',
+  'auth.logout': 'auth',
+  'auth.register': 'auth',
+  'appointment.book': 'appointments',
+  'appointment.confirm': 'appointments',
+  'appointment.decline': 'appointments',
+  'appointment.cancel': 'appointments',
+  'appointment.complete': 'appointments',
+  'appointment.walkin': 'appointments',
+  'patient.update': 'clinical',
+  'record.update': 'clinical',
+  'patient.create': 'people',
+  'staff.create': 'people',
+  'staff.update': 'people',
+  'announcement.create': 'content',
+  'announcement.update': 'content',
+  'announcement.delete': 'content',
+  'service.create': 'content',
+  'service.update': 'content',
+  'settings.google.update': 'configuration',
+  'settings.google.reset': 'configuration',
+  'settings.signin.update': 'configuration',
+  'integration.update': 'configuration',
+  'activity.purge': 'system',
+};
+
+const PREFIX_CATEGORY = {
+  auth: 'auth',
+  appointment: 'appointments',
+  patient: 'clinical',
+  record: 'clinical',
+  staff: 'people',
+  announcement: 'content',
+  service: 'content',
+  settings: 'configuration',
+  integration: 'configuration',
+  activity: 'system',
+};
+
+/** Entries written before categories existed still resolve to a sensible bucket. */
+export function categoryForAction(action) {
+  if (ACTION_CATEGORY[action]) return ACTION_CATEGORY[action];
+  const prefix = String(action ?? '').split('.')[0];
+  return PREFIX_CATEGORY[prefix] ?? 'system';
+}
+
+const changeSchema = new mongoose.Schema(
+  {
+    field: { type: String, required: true, trim: true },
+    from: { type: String, default: '' },
+    to: { type: String, default: '' },
+  },
+  { _id: false },
+);
+
 const auditLogSchema = new mongoose.Schema(
   {
-    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    action: {
+    // Nullable: a failed sign-in has no verified actor.
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    // Snapshots so an entry still reads correctly after a rename or deletion.
+    actorName: { type: String, default: '', trim: true },
+    actorRole: { type: String, enum: ['patient', 'staff', 'admin', ''], default: '' },
+    action: { type: String, required: true, enum: ACTIVITY_ACTIONS, index: true },
+    // Stored (not derived) so filtering is an index scan.
+    category: { type: String, enum: ACTIVITY_CATEGORIES, required: true, index: true },
+    targetType: {
       type: String,
-      required: true,
-      enum: [
-        'appointment.book',
-        'appointment.confirm',
-        'appointment.decline',
-        'appointment.complete',
-        'appointment.cancel',
-        'record.update',
-        'settings.google.update',
-        'settings.google.reset',
-      ],
+      enum: ['appointment', 'patient', 'staff', 'announcement', 'service', 'settings', 'integration', 'activity', 'auth', ''],
+      default: '',
+      index: true,
     },
+    targetId: { type: String, default: '', index: true },
+    targetLabel: { type: String, default: '', trim: true },
+    changes: { type: [changeSchema], default: [] },
+    outcome: { type: String, enum: ['success', 'failed'], default: 'success', index: true },
+    ip: { type: String, default: '' },
+    userAgent: { type: String, default: '' },
+    // Legacy explicit references, still written by the appointment/patient paths.
     appointment: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', index: true },
-    patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     detail: { type: String, default: '', trim: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
+
+// The three reads the UI makes: newest-first, by category, by actor, by target.
+auditLogSchema.index({ createdAt: -1 });
+auditLogSchema.index({ category: 1, createdAt: -1 });
+auditLogSchema.index({ actor: 1, createdAt: -1 });
+auditLogSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
 
 export const AuditLog = mongoose.models.AuditLog ?? mongoose.model('AuditLog', auditLogSchema);

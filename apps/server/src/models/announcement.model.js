@@ -14,6 +14,7 @@ const announcementSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     publishedAt: { type: Date, default: Date.now },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true },
 );

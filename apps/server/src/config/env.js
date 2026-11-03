@@ -11,6 +11,17 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().default('HealthCentria <onboarding@resend.dev>'),
 
+  // reCAPTCHA v2 (secret half). Optional in development — the auth routes skip
+  // verification when it is absent — but production refuses unverified logins.
+  // The site key is public and lives in the web app env as
+  // VITE_RECAPTCHA_SITE_KEY.
+  RECAPTCHA_SECRET_KEY: z.string().optional(),
+
+  // Number of reverse-proxy hops in front of the API. Leave 0 locally; set to 1
+  // (or more) on Nginx/Render/Railway so rate limiting and activity logs see
+  // the real client IP instead of the proxy's.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+
   // Google OAuth (optional). Sign-in with Google stays disabled until both the
   // client id and secret are set. See README § "Sign in with Google".
   GOOGLE_CLIENT_ID: z.string().optional(),
@@ -26,6 +37,15 @@ const envSchema = z.object({
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, 'SETTINGS_ENCRYPTION_KEY must be 64 hex characters (32 bytes).')
     .optional(),
+
+  // Google Calendar sync (optional). The service account must have the target
+  // calendar shared with it. When these are absent the integration is disabled
+  // and appointment confirmation keeps working exactly as before.
+  GOOGLE_CALENDAR_ID: z.string().optional(),
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
+  GOOGLE_CALENDAR_TIMEZONE: z.string().default('Asia/Manila'),
+  GOOGLE_CALENDAR_LOCATION: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -22,6 +22,9 @@ export interface Service {
   schedule: ServiceSchedule;
   scheduleText: string;
   active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedByName?: string;
 }
 
 export interface Appointment {
@@ -36,10 +39,12 @@ export interface Appointment {
   prescription: string;
   visitNotes: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface StaffAppointment extends Appointment {
   patient: { id: string; name: string; email: string } | string;
+  updatedByName?: string;
 }
 
 export class ApiError extends Error {
@@ -187,6 +192,9 @@ export interface Announcement {
   category: AnnouncementCategory;
   pinned: boolean;
   publishedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedByName?: string;
 }
 
 export const CATEGORY_LABELS: Record<AnnouncementCategory, string> = {
@@ -286,6 +294,7 @@ export interface PatientSummary {
   householdNumber: string;
   active: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PatientVisit {
@@ -297,6 +306,8 @@ export interface PatientVisit {
   prescription: string;
   visitNotes: string;
   createdAt: string;
+  updatedAt?: string;
+  updatedByName?: string;
 }
 
 export interface PatientDetail {
@@ -313,7 +324,25 @@ export interface PatientDetail {
   emergencyName: string;
   emergencyNumber: string;
   active: boolean;
+  authProvider: 'local' | 'google';
+  profileCompleted: boolean;
+  avatarUrl: string;
   createdAt: string;
+  updatedAt?: string;
+  updatedByName?: string;
+}
+
+export interface PatientRecordInput {
+  fullName?: string;
+  birthdate?: string;
+  sex?: 'Female' | 'Male' | 'Other' | 'Prefer not to say' | '';
+  address?: string;
+  barangay?: string;
+  householdNumber?: string;
+  contactNumber?: string;
+  philHealthNumber?: string;
+  emergencyName?: string;
+  emergencyNumber?: string;
 }
 
 export function listPatients(search = ''): Promise<{ patients: PatientSummary[] }> {
@@ -323,6 +352,19 @@ export function listPatients(search = ''): Promise<{ patients: PatientSummary[] 
 
 export function getPatient(id: string): Promise<{ patient: PatientDetail; visits: PatientVisit[] }> {
   return apiFetch(`/api/patients/${id}`);
+}
+
+/** The signed-in patient's own chart. */
+export function getMyPatientProfile(): Promise<{ patient: PatientDetail }> {
+  return apiFetch('/api/patients/profile');
+}
+
+/** Staff/admin corrections to a patient chart. */
+export function updatePatientRecord(
+  id: string,
+  input: PatientRecordInput,
+): Promise<{ patient: PatientDetail }> {
+  return apiFetch(`/api/patients/${id}`, { method: 'PATCH', body: input });
 }
 
 export interface VisitsPerServiceRow {
@@ -357,6 +399,7 @@ export interface StaffAccount {
   role: 'staff' | 'admin';
   active: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export function listStaffAccounts(): Promise<{ accounts: StaffAccount[] }> {
@@ -407,6 +450,52 @@ export function resetGoogleIntegrationSettings(): Promise<{ success: true } & Go
   return apiFetch('/api/admin/settings/google', { method: 'DELETE' });
 }
 
+export interface GoogleCalendarSettings {
+  configured: boolean;
+  enabled: boolean;
+  calendarId: string;
+  timezone: string;
+  pending: number;
+  failed: number;
+  synced: number;
+  lastSyncedAt: string | null;
+  lastError: string;
+}
+
+export interface CalendarSyncSummary {
+  total: number;
+  ok: number;
+  failed: number;
+  skipped: number;
+}
+
+export function getGoogleCalendarSettings(): Promise<{ success: true } & GoogleCalendarSettings> {
+  return apiFetch('/api/admin/settings/google-calendar');
+}
+
+export function updateGoogleCalendarSettings(
+  input: { enabled: boolean },
+): Promise<{ success: true } & GoogleCalendarSettings> {
+  return apiFetch('/api/admin/settings/google-calendar', { method: 'PATCH', body: input });
+}
+
+export function testGoogleCalendarConnection(): Promise<{
+  success: true;
+  calendarId: string;
+  timezone: string;
+}> {
+  return apiFetch('/api/admin/settings/google-calendar/test', { method: 'POST' });
+}
+
+export function syncGoogleCalendar(): Promise<{
+  success: true;
+  retried: CalendarSyncSummary;
+  upcoming: CalendarSyncSummary;
+  status: GoogleCalendarSettings;
+}> {
+  return apiFetch('/api/admin/settings/google-calendar/sync', { method: 'POST' });
+}
+
 /**
  * Public: the login button reads the active client ID at runtime. The client ID
  * is public by design; the secret is never returned by this endpoint.
@@ -433,4 +522,157 @@ export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
 
 export function updateAuthSettings(input: { googleSignInEnabled: boolean }): Promise<{ settings: AuthSettings }> {
   return apiFetch('/api/settings', { method: 'PATCH', body: input });
+}
+
+/** Records the sign-out server-side before the client drops the token. */
+export function logoutRequest(): Promise<{ success: boolean }> {
+  return apiFetch('/api/auth/logout', { method: 'POST' });
+}
+
+/* ------------------------------------------------------------- activity --- */
+
+export type ActivityCategory =
+  | 'auth'
+  | 'appointments'
+  | 'clinical'
+  | 'people'
+  | 'content'
+  | 'configuration'
+  | 'system';
+
+export const ACTIVITY_CATEGORY_LABELS: Record<ActivityCategory, string> = {
+  auth: 'Sign-in',
+  appointments: 'Appointments',
+  clinical: 'Clinical',
+  people: 'People',
+  content: 'Content',
+  configuration: 'Configuration',
+  system: 'System',
+};
+
+export interface ActivityChange {
+  field: string;
+  from: string;
+  to: string;
+}
+
+export interface ActivityEntry {
+  id: string;
+  action: string;
+  category: ActivityCategory;
+  actor: { id: string | null; name: string; role: '' | 'patient' | 'staff' | 'admin' };
+  target: { type: string; id: string; label: string };
+  changes: ActivityChange[];
+  outcome: 'success' | 'failed';
+  ip: string;
+  userAgent: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface ActivityFilters {
+  category?: ActivityCategory | 'all';
+  action?: string;
+  actor?: string;
+  targetType?: string;
+  targetId?: string;
+  outcome?: 'success' | 'failed';
+  q?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ActivityPage {
+  entries: ActivityEntry[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+  retentionDays: number;
+}
+
+function activityQuery(filters: ActivityFilters): string {
+  const params = new URLSearchParams();
+  if (filters.category && filters.category !== 'all') params.set('category', filters.category);
+  if (filters.action) params.set('action', filters.action);
+  if (filters.actor) params.set('actor', filters.actor);
+  if (filters.targetType) params.set('targetType', filters.targetType);
+  if (filters.targetId) params.set('targetId', filters.targetId);
+  if (filters.outcome) params.set('outcome', filters.outcome);
+  if (filters.q) params.set('q', filters.q);
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  if (filters.page) params.set('page', String(filters.page));
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+/** Admin: the full log. */
+export function listActivity(filters: ActivityFilters = {}): Promise<ActivityPage> {
+  return apiFetch(`/api/activity${activityQuery(filters)}`);
+}
+
+/** Staff: work events plus their own sign-ins. */
+export function listMyActivity(filters: ActivityFilters = {}): Promise<ActivityPage> {
+  return apiFetch(`/api/activity/mine${activityQuery(filters)}`);
+}
+
+/** Patient: only entries about their own record. */
+export function listOwnActivity(filters: ActivityFilters = {}): Promise<ActivityPage> {
+  return apiFetch(`/api/activity/me${activityQuery(filters)}`);
+}
+
+export function activitySummary(): Promise<{
+  today: number;
+  failedSignIns: number;
+  recordsEdited: number;
+  stored: number;
+}> {
+  return apiFetch('/api/activity/summary');
+}
+
+export function activityPolicy(): Promise<{
+  retentionDays: number;
+  cutoff: string;
+  oldest: string | null;
+}> {
+  return apiFetch('/api/activity/policy');
+}
+
+export function purgeActivity(): Promise<{
+  deleted: number;
+  cutoff: string;
+  retentionDays: number;
+}> {
+  return apiFetch('/api/activity/purge', { method: 'POST', body: { confirm: true } });
+}
+
+/** Downloads the current filtered view as CSV through the authenticated API. */
+export async function downloadActivityCsv(filters: ActivityFilters = {}): Promise<void> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}/api/activity/export${activityQuery(filters)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // keep the status-based message
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

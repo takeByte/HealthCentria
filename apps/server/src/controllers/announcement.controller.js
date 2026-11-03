@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Announcement } from '../models/announcement.model.js';
 import { User } from '../models/user.model.js';
+import { logActivity, snapshotChanges } from '../services/activity.js';
 import { announcementEmailText, sendEmail } from '../utils/email.js';
 import { notifyRoles } from '../utils/notifications.js';
 
@@ -32,6 +33,10 @@ function present(a) {
     category: a.category,
     pinned: a.pinned,
     publishedAt: a.publishedAt,
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+    updatedByName:
+      a.updatedBy && typeof a.updatedBy === 'object' ? a.updatedBy.fullName ?? '' : '',
   };
 }
 
@@ -59,6 +64,18 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
       .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
   }
   const item = await Announcement.create({ ...parsed.data, publishedAt: new Date(), createdBy: req.user.id });
+  await logActivity({
+    req,
+    action: 'announcement.create',
+    target: { type: 'announcement', id: item._id, label: item.title },
+    changes: [
+      ['title', '', item.title],
+      ['category', '', item.category],
+      ['pinned', '', item.pinned],
+      ['active', '', item.active],
+    ],
+    detail: 'Announcement published to staff and patients.',
+  });
   // In-app bell is awaited (must exist when patients reload); email stays background.
   await notifyRoles(['patient'], {
     type: 'new-announcement',
@@ -79,8 +96,25 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
   }
-  const item = await Announcement.findByIdAndUpdate(req.params.id, parsed.data, { new: true, runValidators: true });
+  const item = await Announcement.findById(req.params.id);
   if (!item) return res.status(404).json({ success: false, message: 'Announcement not found.' });
+
+  const tracked = ['title', 'body', 'category', 'pinned', 'active'];
+  const before = {};
+  for (const field of tracked) before[field] = item.get(field);
+
+  for (const [field, value] of Object.entries(parsed.data)) item.set(field, value);
+  item.updatedBy = req.user.id;
+  await item.save();
+
+  await logActivity({
+    req,
+    action: 'announcement.update',
+    target: { type: 'announcement', id: item._id, label: item.title },
+    changes: snapshotChanges(before, item, tracked),
+    detail: `Announcement updated: ${Object.keys(parsed.data).join(', ')}.`,
+  });
+
   res.json({ success: true, announcement: present(item.toObject()) });
 });
 
@@ -88,5 +122,11 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const item = await Announcement.findByIdAndDelete(req.params.id);
   if (!item) return res.status(404).json({ success: false, message: 'Announcement not found.' });
+  await logActivity({
+    req,
+    action: 'announcement.delete',
+    target: { type: 'announcement', id: item._id, label: item.title },
+    detail: 'Announcement removed from the feed.',
+  });
   res.json({ success: true });
 });

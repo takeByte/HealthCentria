@@ -1,9 +1,9 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type ComponentType } from 'react';
-import { CalendarCheck, LogOut, Menu, X } from 'lucide-react';
+import { CalendarCheck, ChevronDown, LogOut, Menu, UserRound, X } from 'lucide-react';
 import { clearSession } from '../lib/auth';
-import { listNotifications, type NotificationItem } from '../lib/api';
+import { listNotifications, logoutRequest, type NotificationItem } from '../lib/api';
 import { AppBackdrop } from './app-backdrop';
 import { BellDot, NotificationCenter } from './notifications';
 import { cn } from '../lib/utils';
@@ -138,9 +138,11 @@ export function DashboardShell({
   const reduceMotion = useReducedMotion();
   const [drawer, setDrawer] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [bellItems, setBellItems] = useState<NotificationItem[] | null>(null);
   const initial = userName?.trim()?.charAt(0) ?? userEmail.trim().charAt(0).toUpperCase();
+  const profileTo = nav.find((item) => item.to === '/app/profile')?.to;
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +171,12 @@ export function DashboardShell({
   }
 
   async function logout() {
+    // Record the sign-out first; a failed call must never keep the user signed in.
+    try {
+      await logoutRequest();
+    } catch {
+      // Ignore — the local session is cleared either way.
+    }
     clearSession();
     await navigate({ to: '/login' });
   }
@@ -313,25 +321,95 @@ export function DashboardShell({
                 <BellDot unread={unread} />
               </button>
               <span className="mx-1 hidden h-6 w-px bg-slate-200/80 sm:block" aria-hidden />
-              <div className="hidden items-center gap-2.5 sm:flex">
-                <span
-                  aria-hidden
-                  className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
-                >
-                  {initial}
-                </span>
-                <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
-                  {userEmail}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={logout}
-                className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-white/80 active:scale-[0.97]"
-              >
-                <LogOut size={17} aria-hidden />
-                <span className="hidden sm:inline">Log out</span>
-              </button>
+              {profileTo ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setProfileOpen((open) => !open)}
+                    aria-haspopup="menu"
+                    aria-expanded={profileOpen}
+                    aria-label="Open profile menu"
+                    className="flex h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:bg-white/80 active:scale-[0.97]"
+                  >
+                    <span
+                      aria-hidden
+                      className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                    >
+                      {initial}
+                    </span>
+                    <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
+                      {userEmail}
+                    </span>
+                    <ChevronDown size={14} aria-hidden className="hidden text-slate-400 sm:block" />
+                  </button>
+                  <AnimatePresence>
+                    {profileOpen && (
+                      <>
+                        <button
+                          type="button"
+                          aria-hidden
+                          tabIndex={-1}
+                          onClick={() => setProfileOpen(false)}
+                          className="fixed inset-0 z-10 cursor-default"
+                        />
+                        <motion.div
+                          role="menu"
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.15 }}
+                          className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+                        >
+                          <p className="truncate px-2.5 py-2 text-[11.5px] font-semibold text-slate-500">
+                            {userName ?? userEmail}
+                          </p>
+                          <Link
+                            to={profileTo}
+                            role="menuitem"
+                            onClick={() => setProfileOpen(false)}
+                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <UserRound size={16} aria-hidden /> My Profile
+                          </Link>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setProfileOpen(false);
+                              void logout();
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <LogOut size={16} aria-hidden /> Log out
+                          </button>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <>
+                  <div className="hidden items-center gap-2.5 sm:flex">
+                    <span
+                      aria-hidden
+                      className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                    >
+                      {initial}
+                    </span>
+                    <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
+                      {userEmail}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-white/80 active:scale-[0.97]"
+                  >
+                    <LogOut size={17} aria-hidden />
+                    <span className="hidden sm:inline">Log out</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </header>
