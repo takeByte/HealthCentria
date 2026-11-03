@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import {
   deleteGoogleSettings,
+  getGoogleCalendarSettings,
   getGoogleSettings,
+  syncGoogleCalendarSettings,
+  testGoogleCalendarSettings,
+  updateGoogleCalendarSettings,
   updateGoogleSettings,
 } from '../controllers/admin-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
@@ -19,3 +23,10 @@ adminSettingsRouter.use((req, res, next) => {
 adminSettingsRouter.get('/google', getGoogleSettings);
 adminSettingsRouter.put('/google', updateGoogleSettings);
 adminSettingsRouter.delete('/google', deleteGoogleSettings);
+
+// Google Calendar sync is additive: the existing appointment flow continues to
+// work when these env vars are absent or the admin switches sync off.
+adminSettingsRouter.get('/google-calendar', getGoogleCalendarSettings);
+adminSettingsRouter.patch('/google-calendar', updateGoogleCalendarSettings);
+adminSettingsRouter.post('/google-calendar/test', testGoogleCalendarSettings);
+adminSettingsRouter.post('/google-calendar/sync', syncGoogleCalendarSettings);

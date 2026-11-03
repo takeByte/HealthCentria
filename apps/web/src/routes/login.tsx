@@ -1,11 +1,12 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { PublicHeader } from '../components/public-header';
 import { GoogleIcon } from '../components/google-icon';
 import { Button } from '../components/ui/button';
-import { getSession, isValidEmail, login, resolvePostAuthPath, startGoogleLogin } from '../lib/auth';
+import { AuthError, getSession, isValidEmail, login, resolvePostAuthPath, startGoogleLogin } from '../lib/auth';
 import { getGoogleAuthConfig, getPublicSettings } from '../lib/api';
 import { cn } from '../lib/utils';
 import appLogo from '../assets/E-Kalinga_Logo.png';
@@ -19,11 +20,18 @@ export const Route = createFileRoute('/login')({
 const inputClass =
   'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
 
+// Public by design. When it is absent (a fresh checkout without apps/web/.env)
+// the widget is hidden and the server decides — it skips the check in
+// development and fails closed in production.
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+
 function LoginComponent() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const [email, setEmail] = useState(() => getSession()?.email ?? '');
   const [password, setPassword] = useState('');
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
   const [touched, setTouched] = useState({ email: false, password: false });
@@ -59,13 +67,25 @@ function LoginComponent() {
     setTouched({ email: true, password: true });
     setError(null);
     if (!isValidEmail(email) || password.length === 0) return;
+    if (RECAPTCHA_SITE_KEY && !captchaToken) {
+      setError('Please complete the CAPTCHA.');
+      return;
+    }
     setPending(true);
     try {
-      const session = await login({ email, password });
+      const session = await login({
+        email,
+        password,
+        captchaToken: captchaToken ?? undefined,
+      });
       await navigate({ to: resolvePostAuthPath(session) });
-    } catch {
-      // Generic message on purpose — do not reveal whether the email exists.
-      setError('Invalid email or password.');
+    } catch (err) {
+      // Generic message for bad credentials — do not reveal whether the email exists.
+      setError(err instanceof AuthError ? err.message : 'Invalid email or password.');
+      // A token is single-use and was consumed by the failed attempt; make the
+      // user solve a fresh challenge before retrying.
+      recaptchaRef.current?.reset();
+      setCaptchaToken(null);
     } finally {
       setPending(false);
     }
@@ -204,6 +224,18 @@ function LoginComponent() {
                 )}
               </div>
 
+              {RECAPTCHA_SITE_KEY && (
+                <div className="flex justify-center">
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={RECAPTCHA_SITE_KEY}
+                    onChange={(token) => setCaptchaToken(token)}
+                    onExpired={() => setCaptchaToken(null)}
+                    onErrored={() => setCaptchaToken(null)}
+                  />
+                </div>
+              )}
+
               {error && (
                 <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {error}
@@ -212,7 +244,7 @@ function LoginComponent() {
 
               <Button
                 type="submit"
-                disabled={pending}
+                disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
                 className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
               >
                 {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}

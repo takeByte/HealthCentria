@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { AppSettings, SETTINGS_KEY, isGoogleSignInEnabled } from '../models/app-settings.model.js';
+import { logActivity } from '../services/activity.js';
 import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-credentials.js';
 
 function requireDB(res) {
@@ -48,10 +49,24 @@ export const updateSettings = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
   }
+  const previous = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
+  const wasEnabled = previous?.googleSignInEnabled !== false;
+
   const doc = await AppSettings.findOneAndUpdate(
     { key: SETTINGS_KEY },
     { $set: { googleSignInEnabled: parsed.data.googleSignInEnabled } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   ).lean();
+
+  if (wasEnabled !== parsed.data.googleSignInEnabled) {
+    await logActivity({
+      req,
+      action: 'settings.signin.update',
+      target: { type: 'settings', id: SETTINGS_KEY, label: 'Sign-in methods' },
+      changes: [['googleSignInEnabled', wasEnabled, parsed.data.googleSignInEnabled]],
+      detail: `Google sign-in ${parsed.data.googleSignInEnabled ? 'enabled' : 'disabled'}.`,
+    });
+  }
+
   res.json({ success: true, settings: await present(doc) });
 });

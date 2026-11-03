@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle } from 'lucide-react';
@@ -18,6 +18,7 @@ import {
   selectClass,
   textareaClass,
 } from '../../components/app-ui';
+import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
@@ -50,6 +51,10 @@ function patientEmail(a: StaffAppointment): string {
   return typeof a.patient === 'object' ? a.patient.email : '';
 }
 
+function patientId(a: StaffAppointment): string | null {
+  return typeof a.patient === 'object' && a.patient.id ? a.patient.id : null;
+}
+
 function serviceName(a: StaffAppointment): string {
   return typeof a.service === 'object' ? a.service.name : 'Service';
 }
@@ -75,6 +80,7 @@ function QueueCard({
   const [visitNotes, setVisitNotes] = useState('');
   const [busy, setBusy] = useState<'confirm' | 'decline' | 'complete' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const linkedPatientId = patientId(appt);
 
   async function run(action: 'confirm' | 'decline' | 'complete') {
     if (action === 'decline' && !reason.trim()) {
@@ -110,7 +116,17 @@ function QueueCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-display text-[14.5px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
-            {patientName(appt)}
+            {linkedPatientId ? (
+              <Link
+                to="/staff/patients/$patientId"
+                params={{ patientId: linkedPatientId }}
+                className="rounded-sm hover:text-teal-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/30"
+              >
+                {patientName(appt)}
+              </Link>
+            ) : (
+              patientName(appt)
+            )}
           </h3>
           <p className="mt-0.5 text-[12.5px] text-slate-600">
             {serviceName(appt)} · {formatDay(appt.day)}
@@ -119,6 +135,12 @@ function QueueCard({
           {patientEmail(appt) && (
             <p className="mt-0.5 truncate text-[11.5px] text-slate-400">{patientEmail(appt)}</p>
           )}
+          <RecordMeta
+            createdAt={appt.createdAt}
+            updatedAt={appt.updatedAt}
+            updatedByName={appt.updatedByName}
+            className="mt-1.5"
+          />
         </div>
         <StatusChip status={appt.status} className="shrink-0" />
       </div>

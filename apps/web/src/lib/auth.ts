@@ -33,6 +33,8 @@ export interface RegisterData {
   password: string;
   confirmPassword: string;
   consent: boolean;
+  /** reCAPTCHA v2 token from the widget; verified server-side. */
+  captchaToken: string;
 }
 
 export class DuplicateEmailError extends Error {
@@ -40,6 +42,26 @@ export class DuplicateEmailError extends Error {
     super('DUPLICATE_EMAIL');
     this.name = 'DuplicateEmailError';
   }
+}
+
+/**
+ * A failure the API described in words (CAPTCHA rejected, rate limited, service
+ * unavailable). The UI shows this message as-is instead of the generic
+ * "invalid credentials" text.
+ */
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
+function apiMessage(data: unknown): string {
+  if (data && typeof data === 'object') {
+    const message = (data as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return '';
 }
 
 export function isValidEmail(email: string): boolean {
@@ -145,24 +167,35 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
   };
 }
 
-export async function login(input: { email: string; password: string }): Promise<AuthSession> {
+export async function login(input: {
+  email: string;
+  password: string;
+  captchaToken?: string;
+}): Promise<AuthSession> {
   const email = input.email.trim();
   try {
-    const { status, data } = await postJson('/api/auth/login', { email, password: input.password });
+    const { status, data } = await postJson('/api/auth/login', {
+      email,
+      password: input.password,
+      ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
+    });
     if (status === 200 || status === 201) {
       const session = sessionFromApi(data, email);
       setSession(session);
       return session;
     }
-    if (status === 401 || status === 400 || status === 404) {
-      // 404 here means "no such route" on a backend without auth yet — fall through to local demo.
-      // A real backend should return 401 for bad credentials; keep the message generic either way.
-      if (status !== 404) throw new Error('INVALID_CREDENTIALS');
-    } else {
-      throw new Error('LOGIN_FAILED');
+    if (status === 401) {
+      // Generic message on purpose — do not reveal whether the email exists.
+      throw new Error('INVALID_CREDENTIALS');
     }
+    if (status !== 404) {
+      // 400 (CAPTCHA / validation), 429 (rate limited) and 503 (verifier or DB
+      // down) all explain themselves; show that instead of a generic error.
+      throw new AuthError(apiMessage(data) || 'Sign-in failed. Try again.');
+    }
+    // 404 = this backend has no auth routes yet → local demo fallback below.
   } catch (err) {
-    if (err instanceof Error && (err.message === 'INVALID_CREDENTIALS' || err.message === 'LOGIN_FAILED')) {
+    if (err instanceof Error && (err.message === 'INVALID_CREDENTIALS' || err instanceof AuthError)) {
       throw err;
     }
     // Network error or missing /api/auth/* on backend (only /api/health exists) → local demo session.
@@ -193,6 +226,7 @@ export async function registerPatient(data: RegisterData): Promise<AuthSession> 
       email,
       password: data.password,
       consent: data.consent,
+      captchaToken: data.captchaToken,
     });
     if (status === 200 || status === 201) {
       const session = sessionFromApi(resData, email);
@@ -200,10 +234,12 @@ export async function registerPatient(data: RegisterData): Promise<AuthSession> 
       return session;
     }
     if (status === 409) throw new DuplicateEmailError();
-    if (status !== 404) throw new Error('REGISTER_FAILED');
+    if (status !== 404) {
+      throw new AuthError(apiMessage(resData) || 'Registration failed. Try again.');
+    }
     // 404 = backend has no auth routes yet → local fallback below.
   } catch (err) {
-    if (err instanceof DuplicateEmailError || (err instanceof Error && err.message === 'REGISTER_FAILED')) {
+    if (err instanceof DuplicateEmailError || err instanceof AuthError) {
       throw err;
     }
     // Network / missing-route → local fallback.

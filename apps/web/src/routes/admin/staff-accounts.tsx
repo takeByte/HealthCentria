@@ -18,6 +18,7 @@ import {
   secondaryButton,
   selectClass,
 } from '../../components/app-ui';
+import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
@@ -289,6 +290,7 @@ function StaffAccounts() {
                   {a.name}
                 </h3>
                 <p className="mt-0.5 truncate text-[12.5px] text-slate-600">{a.email}</p>
+                <RecordMeta createdAt={a.createdAt} updatedAt={a.updatedAt} className="mt-1" />
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <StatusPill tone={a.role === 'admin' ? 'sky' : 'teal'}>{a.role}</StatusPill>

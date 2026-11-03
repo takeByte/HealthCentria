@@ -3,6 +3,7 @@ import { ChevronDown, Megaphone, Pin } from 'lucide-react';
 import { CATEGORY_LABELS, type Announcement } from '../lib/api';
 import { cn } from '../lib/utils';
 import { EmptyNote, cardPadding } from './app-ui';
+import { RecordMeta } from './record-meta';
 
 const CATEGORY_STYLE: Record<Announcement['category'], string> = {
   'schedule-change': 'bg-amber-600/10 text-amber-800',
@@ -97,6 +98,12 @@ export function AnnouncementFeed({
             >
               {a.body}
             </p>
+            <RecordMeta
+              createdAt={a.createdAt ?? a.publishedAt}
+              updatedAt={a.updatedAt}
+              updatedByName={a.updatedByName}
+              className="mt-2"
+            />
             {actions && <div className="mt-3.5 border-t border-slate-200/70 pt-3.5">{actions(a)}</div>}
           </article>
         );

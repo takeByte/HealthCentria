@@ -1,9 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { KeyRound, LoaderCircle, RotateCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { CalendarDays, KeyRound, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { adminNav } from '../../components/ops-nav';
+import { formatDateTime } from '../../components/record-meta';
 import { Toast, type ToastMessage } from '../../components/toast';
 import {
   CardHeading,
@@ -21,11 +22,16 @@ import { getSession } from '../../lib/auth';
 import {
   ApiError,
   getAuthSettings,
+  getGoogleCalendarSettings,
   getGoogleIntegrationSettings,
   resetGoogleIntegrationSettings,
+  syncGoogleCalendar,
+  testGoogleCalendarConnection,
   updateAuthSettings,
+  updateGoogleCalendarSettings,
   updateGoogleIntegrationSettings,
   type AuthSettings,
+  type GoogleCalendarSettings,
   type GoogleIntegrationSettings,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -156,6 +162,14 @@ function AdminSettings() {
   const [resetOpen, setResetOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
+  const [calendar, setCalendar] = useState<GoogleCalendarSettings | null>(null);
+  const [calendarLoadError, setCalendarLoadError] = useState<string | null>(null);
+  const [calendarSaving, setCalendarSaving] = useState(false);
+  const [calendarTesting, setCalendarTesting] = useState(false);
+  const [calendarSyncing, setCalendarSyncing] = useState(false);
+  const [calendarActionError, setCalendarActionError] = useState<string | null>(null);
+  const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
+
   const dismissToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
@@ -188,6 +202,29 @@ function AdminSettings() {
         if (!cancelled) {
           setGoogleLoadError(
             err instanceof ApiError ? err.message : 'Could not load Google credentials. Reload the page to try again.',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getGoogleCalendarSettings()
+      .then((r) => {
+        if (!cancelled) {
+          setCalendar(r);
+          setCalendarLoadError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setCalendarLoadError(
+            err instanceof ApiError
+              ? err.message
+              : 'Could not load Google Calendar status. Reload the page to try again.',
           );
         }
       });
@@ -273,6 +310,72 @@ function AdminSettings() {
     }
   }
 
+  async function setCalendarSync(next: boolean) {
+    if (!calendar || calendarSaving) return;
+    const previous = calendar;
+    setCalendarSaving(true);
+    setCalendarActionError(null);
+    setCalendarMessage(null);
+    // Optimistic: the switch flips immediately and rolls back if the API rejects it.
+    setCalendar({ ...calendar, enabled: next });
+    try {
+      const r = await updateGoogleCalendarSettings({ enabled: next });
+      setCalendar(r);
+      setCalendarMessage(`Automatic calendar sync ${next ? 'enabled' : 'disabled'}.`);
+    } catch (err) {
+      setCalendar(previous);
+      setCalendarActionError(
+        err instanceof ApiError ? err.message : 'Could not save the calendar setting. Try again.',
+      );
+    } finally {
+      setCalendarSaving(false);
+    }
+  }
+
+  async function testCalendar() {
+    if (!calendar?.configured || calendarTesting) return;
+    setCalendarTesting(true);
+    setCalendarActionError(null);
+    setCalendarMessage(null);
+    try {
+      const r = await testGoogleCalendarConnection();
+      setCalendarMessage(`Connected to Google Calendar (${r.calendarId}).`);
+    } catch (err) {
+      setCalendarActionError(
+        err instanceof ApiError ? err.message : 'Could not connect to Google Calendar. Try again.',
+      );
+    } finally {
+      setCalendarTesting(false);
+    }
+  }
+
+  async function syncCalendarNow() {
+    if (!calendar?.configured || calendarSyncing) return;
+    setCalendarSyncing(true);
+    setCalendarActionError(null);
+    setCalendarMessage(null);
+    try {
+      const r = await syncGoogleCalendar();
+      setCalendar(r.status);
+      const failed = r.retried.failed + r.upcoming.failed;
+      if (failed > 0) {
+        setCalendarActionError(
+          `Sync finished with ${failed} failed item(s). Check the calendar sharing and server logs, then try again.`,
+        );
+      } else {
+        setCalendarMessage(
+          `Sync finished. Retried ${r.retried.ok}/${r.retried.total}; upcoming ${r.upcoming.ok}/${r.upcoming.total}.`,
+        );
+      }
+    } catch (err) {
+      setCalendarActionError(
+        err instanceof ApiError ? err.message : 'Could not sync with Google Calendar. Try again.',
+      );
+    } finally {
+      setCalendarSyncing(false);
+    }
+  }
+
   const googleOn = settings?.googleSignInEnabled ?? false;
   const hasNewGoogleValue = Boolean(googleClientId.trim() || googleClientSecret.trim());
 
@@ -280,7 +383,7 @@ function AdminSettings() {
     <>
       <DashboardShell
         title="Settings"
-        subtitle="How patients sign in to HealthCentria"
+        subtitle="Sign-in methods and connected services"
         roleLabel="Admin"
         userName={session?.name}
         userEmail={session?.email ?? ''}
@@ -295,9 +398,9 @@ function AdminSettings() {
           transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
         >
           <PageHero
-            eyebrow="Access & security"
-            title="How patients sign in"
-            description="Control the sign-in methods available at the door. Email and password always stay available for local accounts."
+            eyebrow="Access & integrations"
+            title="Sign-in & integrations"
+            description="Control how patients sign in and which services the clinic calendar mirrors to. Email and password always stay available for local accounts."
             action={
               settings === null ? (
                 <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
@@ -483,6 +586,149 @@ function AdminSettings() {
                 </button>
               </div>
             </form>
+          )}
+        </motion.section>
+
+        <motion.section
+          id="google-calendar"
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.12 }}
+          className={panel}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-xl">
+              <CardHeading
+                title="Google Calendar"
+                description="Mirror confirmed appointments and walk-ins to one clinic calendar. Pending requests stay in the app. This is additive — booking, confirmation, and cancellation keep working if Google is unavailable."
+              />
+            </div>
+
+            {calendar === null ? (
+              <StatusPill tone={calendarLoadError ? 'red' : 'slate'}>
+                {calendarLoadError ? 'Unavailable' : 'Loading…'}
+              </StatusPill>
+            ) : !calendar.configured ? (
+              <StatusPill tone="amber">Not configured</StatusPill>
+            ) : (
+              <StatusPill tone={calendar.enabled ? 'teal' : 'slate'}>
+                {calendar.enabled ? 'On' : 'Off'}
+              </StatusPill>
+            )}
+          </div>
+
+          {calendarLoadError && <InlineNotice className="mt-4">{calendarLoadError}</InlineNotice>}
+          {calendarActionError && <InlineNotice className="mt-4">{calendarActionError}</InlineNotice>}
+          {calendarMessage && <SuccessNote className="mt-4">{calendarMessage}</SuccessNote>}
+
+          {calendar && !calendar.configured && (
+            <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3.5 text-[12.5px] leading-6 text-slate-600 ring-1 ring-inset ring-slate-200">
+              <div className="flex items-center gap-2 font-semibold text-slate-800">
+                <CalendarDays size={16} className="text-slate-500" aria-hidden />
+                Clinic calendar is not connected
+              </div>
+              <p className="mt-2">
+                Add <code className="font-mono text-[11.5px]">GOOGLE_CALENDAR_ID</code>,{' '}
+                <code className="font-mono text-[11.5px]">GOOGLE_SERVICE_ACCOUNT_EMAIL</code>, and{' '}
+                <code className="font-mono text-[11.5px]">GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY</code> to{' '}
+                <code className="font-mono text-[11.5px]">apps/server/.env</code>, then restart the API. Use the
+                clinic calendar's ID from its settings (not “primary”), share it with the service account, and give
+                it “Make changes to events”.
+              </p>
+              <p className="mt-2">
+                No patient or staff screen changes. Until it is configured, appointments behave exactly as they do
+                now.
+              </p>
+            </div>
+          )}
+
+          {calendar && calendar.configured && (
+            <div className="mt-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                <div className="flex items-center gap-2.5">
+                  <StatusPill tone={calendar.enabled ? 'teal' : 'slate'}>
+                    {calendar.enabled ? 'On' : 'Off'}
+                  </StatusPill>
+                  <span className="text-[13px] font-medium text-slate-700">
+                    Sync confirmed appointments automatically
+                  </span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  {calendarSaving && <LoaderCircle size={16} className="animate-spin text-slate-400" aria-hidden />}
+                  <Toggle
+                    checked={calendar.enabled}
+                    disabled={calendarSaving || calendarTesting || calendarSyncing}
+                    label="Sync confirmed appointments to Google Calendar"
+                    onChange={setCalendarSync}
+                  />
+                </div>
+              </div>
+
+              <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2">
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Calendar ID</dt>
+                  <dd className="mt-1 break-all font-mono text-[11.5px] leading-5 text-slate-700">
+                    {calendar.calendarId || 'Not set'}
+                  </dd>
+                </div>
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Time zone</dt>
+                  <dd className="mt-1 text-slate-700">{calendar.timezone}</dd>
+                </div>
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Last successful sync
+                  </dt>
+                  <dd className="mt-1 text-slate-700">{formatDateTime(calendar.lastSyncedAt)}</dd>
+                </div>
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Linked events</dt>
+                  <dd className="mt-1 text-slate-700">
+                    {calendar.synced} synced · {calendar.pending} pending · {calendar.failed} failed
+                  </dd>
+                </div>
+              </dl>
+
+              {calendar.lastError && (
+                <InlineNotice>Last sync error: {calendar.lastError}</InlineNotice>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={testCalendar}
+                  disabled={calendarTesting || calendarSyncing}
+                  className={secondaryButton}
+                >
+                  {calendarTesting ? (
+                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw size={16} aria-hidden />
+                  )}
+                  {calendarTesting ? 'Testing…' : 'Test connection'}
+                </button>
+                <button
+                  type="button"
+                  onClick={syncCalendarNow}
+                  disabled={calendarTesting || calendarSyncing}
+                  className={primaryButton}
+                >
+                  {calendarSyncing ? (
+                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw size={16} aria-hidden />
+                  )}
+                  {calendarSyncing ? 'Syncing…' : 'Sync upcoming'}
+                </button>
+              </div>
+
+              <p className="text-[12px] leading-5 text-slate-500">
+                Events are all-day, marked private, and contain only the patient name and service. Keep the clinic
+                calendar private and shared only with authorized staff. Clinical notes and contact details are never
+                sent. Cancelling an appointment removes its event. Manual sync still works when automatic sync is
+                off.
+              </p>
+            </div>
           )}
         </motion.section>
       </DashboardShell>

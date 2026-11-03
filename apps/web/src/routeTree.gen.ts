@@ -16,15 +16,18 @@ import { Route as AppRouteRouteImport } from './routes/app/route'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as StaffRouteRouteImport } from './routes/staff/route'
+import { Route as AdminActivityRouteImport } from './routes/admin/activity'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminStaffAccountsRouteImport } from './routes/admin/staff-accounts'
+import { Route as AppActivityRouteImport } from './routes/app/activity'
 import { Route as AppAnnouncementsRouteImport } from './routes/app/announcements'
 import { Route as AppDashboardRouteImport } from './routes/app/dashboard'
 import { Route as AppNotificationsRouteImport } from './routes/app/notifications'
 import { Route as AppRecordsRouteImport } from './routes/app/records'
 import { Route as AppServicesRouteImport } from './routes/app/services'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as StaffActivityRouteImport } from './routes/staff/activity'
 import { Route as StaffAnnouncementsRouteImport } from './routes/staff/announcements'
 import { Route as StaffAppointmentsRouteImport } from './routes/staff/appointments'
 import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
@@ -35,7 +38,9 @@ import { Route as StaffServicesRouteImport } from './routes/staff/services'
 import { Route as StaffWalkInRouteImport } from './routes/staff/walk-in'
 import { Route as AppAppointmentsIndexRouteImport } from './routes/app/appointments/index'
 import { Route as AppAppointmentsNewRouteImport } from './routes/app/appointments/new'
+import { Route as AppProfileIndexRouteImport } from './routes/app/profile/index'
 import { Route as AppProfileCompleteRouteImport } from './routes/app/profile/complete'
+import { Route as StaffPatientsIndexRouteImport } from './routes/staff/patients.index'
 import { Route as StaffPatientsPatientIdRouteImport } from './routes/staff/patients.$patientId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -73,6 +78,11 @@ const StaffRouteRoute = StaffRouteRouteImport.update({
   path: '/staff',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminActivityRoute = AdminActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminDashboardRoute = AdminDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -87,6 +97,11 @@ const AdminStaffAccountsRoute = AdminStaffAccountsRouteImport.update({
   id: '/staff-accounts',
   path: '/staff-accounts',
   getParentRoute: () => AdminRouteRoute,
+} as any)
+const AppActivityRoute = AppActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AppRouteRoute,
 } as any)
 const AppAnnouncementsRoute = AppAnnouncementsRouteImport.update({
   id: '/announcements',
@@ -117,6 +132,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const StaffActivityRoute = StaffActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => StaffRouteRoute,
 } as any)
 const StaffAnnouncementsRoute = StaffAnnouncementsRouteImport.update({
   id: '/announcements',
@@ -168,10 +188,20 @@ const AppAppointmentsNewRoute = AppAppointmentsNewRouteImport.update({
   path: '/appointments/new',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppProfileIndexRoute = AppProfileIndexRouteImport.update({
+  id: '/profile/',
+  path: '/profile/',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppProfileCompleteRoute = AppProfileCompleteRouteImport.update({
   id: '/profile/complete',
   path: '/profile/complete',
   getParentRoute: () => AppRouteRoute,
+} as any)
+const StaffPatientsIndexRoute = StaffPatientsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => StaffPatientsRoute,
 } as any)
 const StaffPatientsPatientIdRoute = StaffPatientsPatientIdRouteImport.update({
   id: '/$patientId',
@@ -187,15 +217,18 @@ export interface FileRoutesByFullPath {
   '/announcements': typeof AnnouncementsRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
+  '/app/activity': typeof AppActivityRoute
   '/app/announcements': typeof AppAnnouncementsRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
@@ -208,6 +241,8 @@ export interface FileRoutesByFullPath {
   '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
   '/app/appointments/': typeof AppAppointmentsIndexRoute
+  '/app/profile/': typeof AppProfileIndexRoute
+  '/staff/patients/': typeof StaffPatientsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -217,20 +252,22 @@ export interface FileRoutesByTo {
   '/announcements': typeof AnnouncementsRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
+  '/app/activity': typeof AppActivityRoute
   '/app/announcements': typeof AppAnnouncementsRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
-  '/staff/patients': typeof StaffPatientsRouteWithChildren
   '/staff/reports': typeof StaffReportsRoute
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
@@ -238,6 +275,8 @@ export interface FileRoutesByTo {
   '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
   '/app/appointments': typeof AppAppointmentsIndexRoute
+  '/app/profile': typeof AppProfileIndexRoute
+  '/staff/patients': typeof StaffPatientsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -248,15 +287,18 @@ export interface FileRoutesById {
   '/announcements': typeof AnnouncementsRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/admin/activity': typeof AdminActivityRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
+  '/app/activity': typeof AppActivityRoute
   '/app/announcements': typeof AppAnnouncementsRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
@@ -269,6 +311,8 @@ export interface FileRoutesById {
   '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
   '/app/appointments/': typeof AppAppointmentsIndexRoute
+  '/app/profile/': typeof AppProfileIndexRoute
+  '/staff/patients/': typeof StaffPatientsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -280,15 +324,18 @@ export interface FileRouteTypes {
     | '/announcements'
     | '/login'
     | '/register'
+    | '/admin/activity'
     | '/admin/dashboard'
     | '/admin/settings'
     | '/admin/staff-accounts'
+    | '/app/activity'
     | '/app/announcements'
     | '/app/dashboard'
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
     | '/auth/callback'
+    | '/staff/activity'
     | '/staff/announcements'
     | '/staff/appointments'
     | '/staff/dashboard'
@@ -301,6 +348,8 @@ export interface FileRouteTypes {
     | '/app/profile/complete'
     | '/staff/patients/$patientId'
     | '/app/appointments/'
+    | '/app/profile/'
+    | '/staff/patients/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -310,20 +359,22 @@ export interface FileRouteTypes {
     | '/announcements'
     | '/login'
     | '/register'
+    | '/admin/activity'
     | '/admin/dashboard'
     | '/admin/settings'
     | '/admin/staff-accounts'
+    | '/app/activity'
     | '/app/announcements'
     | '/app/dashboard'
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
     | '/auth/callback'
+    | '/staff/activity'
     | '/staff/announcements'
     | '/staff/appointments'
     | '/staff/dashboard'
     | '/staff/notifications'
-    | '/staff/patients'
     | '/staff/reports'
     | '/staff/services'
     | '/staff/walk-in'
@@ -331,6 +382,8 @@ export interface FileRouteTypes {
     | '/app/profile/complete'
     | '/staff/patients/$patientId'
     | '/app/appointments'
+    | '/app/profile'
+    | '/staff/patients'
   id:
     | '__root__'
     | '/'
@@ -340,15 +393,18 @@ export interface FileRouteTypes {
     | '/announcements'
     | '/login'
     | '/register'
+    | '/admin/activity'
     | '/admin/dashboard'
     | '/admin/settings'
     | '/admin/staff-accounts'
+    | '/app/activity'
     | '/app/announcements'
     | '/app/dashboard'
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
     | '/auth/callback'
+    | '/staff/activity'
     | '/staff/announcements'
     | '/staff/appointments'
     | '/staff/dashboard'
@@ -361,6 +417,8 @@ export interface FileRouteTypes {
     | '/app/profile/complete'
     | '/staff/patients/$patientId'
     | '/app/appointments/'
+    | '/app/profile/'
+    | '/staff/patients/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -425,6 +483,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/activity': {
+      id: '/admin/activity'
+      path: '/activity'
+      fullPath: '/admin/activity'
+      preLoaderRoute: typeof AdminActivityRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/dashboard': {
       id: '/admin/dashboard'
       path: '/dashboard'
@@ -445,6 +510,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/staff-accounts'
       preLoaderRoute: typeof AdminStaffAccountsRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/app/activity': {
+      id: '/app/activity'
+      path: '/activity'
+      fullPath: '/app/activity'
+      preLoaderRoute: typeof AppActivityRouteImport
+      parentRoute: typeof AppRouteRoute
     }
     '/app/announcements': {
       id: '/app/announcements'
@@ -487,6 +559,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/staff/activity': {
+      id: '/staff/activity'
+      path: '/activity'
+      fullPath: '/staff/activity'
+      preLoaderRoute: typeof StaffActivityRouteImport
+      parentRoute: typeof StaffRouteRoute
     }
     '/staff/announcements': {
       id: '/staff/announcements'
@@ -558,12 +637,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAppointmentsNewRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/profile/': {
+      id: '/app/profile/'
+      path: '/profile'
+      fullPath: '/app/profile/'
+      preLoaderRoute: typeof AppProfileIndexRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/profile/complete': {
       id: '/app/profile/complete'
       path: '/profile/complete'
       fullPath: '/app/profile/complete'
       preLoaderRoute: typeof AppProfileCompleteRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/staff/patients/': {
+      id: '/staff/patients/'
+      path: '/'
+      fullPath: '/staff/patients/'
+      preLoaderRoute: typeof StaffPatientsIndexRouteImport
+      parentRoute: typeof StaffPatientsRoute
     }
     '/staff/patients/$patientId': {
       id: '/staff/patients/$patientId'
@@ -576,12 +669,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteRouteChildren {
+  AdminActivityRoute: typeof AdminActivityRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffAccountsRoute: typeof AdminStaffAccountsRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminActivityRoute: AdminActivityRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffAccountsRoute: AdminStaffAccountsRoute,
@@ -592,6 +687,7 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 )
 
 interface AppRouteRouteChildren {
+  AppActivityRoute: typeof AppActivityRoute
   AppAnnouncementsRoute: typeof AppAnnouncementsRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
@@ -600,9 +696,11 @@ interface AppRouteRouteChildren {
   AppAppointmentsNewRoute: typeof AppAppointmentsNewRoute
   AppProfileCompleteRoute: typeof AppProfileCompleteRoute
   AppAppointmentsIndexRoute: typeof AppAppointmentsIndexRoute
+  AppProfileIndexRoute: typeof AppProfileIndexRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
+  AppActivityRoute: AppActivityRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppNotificationsRoute: AppNotificationsRoute,
@@ -611,6 +709,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAppointmentsNewRoute: AppAppointmentsNewRoute,
   AppProfileCompleteRoute: AppProfileCompleteRoute,
   AppAppointmentsIndexRoute: AppAppointmentsIndexRoute,
+  AppProfileIndexRoute: AppProfileIndexRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
@@ -619,10 +718,12 @@ const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(
 
 interface StaffPatientsRouteChildren {
   StaffPatientsPatientIdRoute: typeof StaffPatientsPatientIdRoute
+  StaffPatientsIndexRoute: typeof StaffPatientsIndexRoute
 }
 
 const StaffPatientsRouteChildren: StaffPatientsRouteChildren = {
   StaffPatientsPatientIdRoute: StaffPatientsPatientIdRoute,
+  StaffPatientsIndexRoute: StaffPatientsIndexRoute,
 }
 
 const StaffPatientsRouteWithChildren = StaffPatientsRoute._addFileChildren(
@@ -630,6 +731,7 @@ const StaffPatientsRouteWithChildren = StaffPatientsRoute._addFileChildren(
 )
 
 interface StaffRouteRouteChildren {
+  StaffActivityRoute: typeof StaffActivityRoute
   StaffAnnouncementsRoute: typeof StaffAnnouncementsRoute
   StaffAppointmentsRoute: typeof StaffAppointmentsRoute
   StaffDashboardRoute: typeof StaffDashboardRoute
@@ -641,6 +743,7 @@ interface StaffRouteRouteChildren {
 }
 
 const StaffRouteRouteChildren: StaffRouteRouteChildren = {
+  StaffActivityRoute: StaffActivityRoute,
   StaffAnnouncementsRoute: StaffAnnouncementsRoute,
   StaffAppointmentsRoute: StaffAppointmentsRoute,
   StaffDashboardRoute: StaffDashboardRoute,

@@ -3,8 +3,9 @@ import mongoose from 'mongoose';
 import { randomBytes } from 'node:crypto';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
-import { AuditLog } from '../models/audit-log.model.js';
 import { Service } from '../models/service.model.js';
+import { diffChanges, logActivity } from '../services/activity.js';
+import { removeAppointmentFromCalendar, syncAppointmentToCalendar } from '../services/google-calendar.js';
 import { User } from '../models/user.model.js';
 import { hashPassword } from '../utils/password.js';
 import { isValidServiceDay, todayYMD } from '../utils/service-schedule.js';
@@ -56,16 +57,33 @@ function present(a) {
     prescription: obj.prescription ?? '',
     visitNotes: obj.visitNotes ?? '',
     createdAt: obj.createdAt,
+    updatedAt: obj.updatedAt,
+    updatedByName:
+      obj.updatedBy && typeof obj.updatedBy === 'object' ? obj.updatedBy.fullName ?? '' : '',
   };
 }
 
-async function log(actor, action, appointment, detail = '') {
-  await AuditLog.create({
-    actor,
+/** Human label stored on the entry so it still reads correctly later. */
+function appointmentLabel(appt) {
+  const service = appt.service && typeof appt.service === 'object' ? appt.service.name : '';
+  const patient = appt.patient && typeof appt.patient === 'object' ? appt.patient.fullName : '';
+  const subject = service || 'Appointment';
+  return patient ? `${patient} — ${subject} on ${appt.day}` : `${subject} on ${appt.day}`;
+}
+
+function patientIdOf(appt) {
+  return appt.patient && typeof appt.patient === 'object' ? appt.patient._id : appt.patient;
+}
+
+async function logAppointment(req, action, appt, { changes = [], detail = '' } = {}) {
+  await logActivity({
+    req,
     action,
-    appointment: appointment._id,
-    patient: appointment.patient,
+    target: { type: 'appointment', id: appt._id, label: appointmentLabel(appt) },
+    changes,
     detail,
+    appointment: appt._id,
+    patient: patientIdOf(appt),
   });
 }
 
@@ -87,6 +105,7 @@ export const queueAppointments = asyncHandler(async (req, res) => {
   const appointments = await Appointment.find(filter)
     .populate('patient', 'fullName email')
     .populate('service', 'name')
+    .populate('updatedBy', 'fullName')
     .sort({ day: 1, createdAt: 1 })
     .lean();
   res.json({ success: true, appointments: appointments.map(present) });
@@ -100,9 +119,17 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Only pending appointments can be confirmed.' });
   }
   appt.status = 'confirmed';
+  appt.updatedBy = req.user.id;
   await appt.save();
-  await log(req.user.id, 'appointment.confirm', appt);
-  await appt.populate([{ path: 'patient', select: 'fullName email' }, { path: 'service', select: 'name' }]);
+  await appt.populate([
+    { path: 'patient', select: 'fullName email' },
+    { path: 'service', select: 'name' },
+    { path: 'updatedBy', select: 'fullName' },
+  ]);
+  await logAppointment(req, 'appointment.confirm', appt, {
+    changes: [['status', 'pending', 'confirmed']],
+    detail: 'Staff confirmed the request.',
+  });
   await notifyUser(appt.patient._id, {
     type: 'appointment-confirmed',
     title: `Confirmed: ${appt.service.name} on ${appt.day}`,
@@ -114,6 +141,8 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
     `E-Kalinga: appointment confirmed (${appt.service.name}, ${appt.day})`,
     `Good news — your ${appt.service.name} appointment on ${appt.day} is confirmed.\n\nPlease arrive on time and bring a valid ID.\n\n— E-Kalinga Barangay Health Center`,
   ).catch(() => {});
+  // Additive side effect: never blocks the response and never throws.
+  void syncAppointmentToCalendar(appt).catch(() => {});
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -132,9 +161,20 @@ export const declineAppointment = asyncHandler(async (req, res) => {
   }
   appt.status = 'declined';
   appt.declineReason = parsed.data.reason;
+  appt.updatedBy = req.user.id;
   await appt.save();
-  await log(req.user.id, 'appointment.decline', appt, parsed.data.reason);
-  await appt.populate([{ path: 'patient', select: 'fullName email' }, { path: 'service', select: 'name' }]);
+  await appt.populate([
+    { path: 'patient', select: 'fullName email' },
+    { path: 'service', select: 'name' },
+    { path: 'updatedBy', select: 'fullName' },
+  ]);
+  await logAppointment(req, 'appointment.decline', appt, {
+    changes: [
+      ['status', 'pending', 'declined'],
+      ['declineReason', '', parsed.data.reason],
+    ],
+    detail: 'Staff declined the request.',
+  });
   await notifyUser(appt.patient._id, {
     type: 'appointment-declined',
     title: `Declined: ${appt.service.name} on ${appt.day}`,
@@ -146,6 +186,8 @@ export const declineAppointment = asyncHandler(async (req, res) => {
     `E-Kalinga: appointment update (${appt.service.name}, ${appt.day})`,
     `Your ${appt.service.name} appointment on ${appt.day} could not be confirmed.\n\nReason: ${parsed.data.reason}\n\nPlease book another date.\n\n— E-Kalinga Barangay Health Center`,
   ).catch(() => {});
+  // Pending requests normally have no event; this also clears a stale one.
+  void removeAppointmentFromCalendar(appt).catch(() => {});
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -162,16 +204,36 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   if (appt.status !== 'confirmed') {
     return res.status(400).json({ success: false, message: 'Only confirmed appointments can be completed.' });
   }
+  const clinicalChanges = diffChanges([
+    ['status', appt.status, 'completed'],
+    ['diagnosis', appt.diagnosis ?? '', parsed.data.diagnosis],
+    ['prescription', appt.prescription ?? '', parsed.data.prescription],
+    ['visitNotes', appt.visitNotes ?? '', parsed.data.visitNotes],
+  ]);
+
   appt.status = 'completed';
   appt.diagnosis = parsed.data.diagnosis;
   appt.prescription = parsed.data.prescription;
   appt.visitNotes = parsed.data.visitNotes;
+  appt.updatedBy = req.user.id;
   await appt.save();
-  await log(req.user.id, 'appointment.complete', appt);
+  await appt.populate([
+    { path: 'patient', select: 'fullName email' },
+    { path: 'service', select: 'name' },
+    { path: 'updatedBy', select: 'fullName' },
+  ]);
+  await logAppointment(req, 'appointment.complete', appt, {
+    changes: clinicalChanges,
+    detail: 'Visit marked completed.',
+  });
   if (parsed.data.diagnosis || parsed.data.prescription || parsed.data.visitNotes) {
-    await log(req.user.id, 'record.update', appt, 'Clinical visit record written on completion.');
+    await logAppointment(req, 'record.update', appt, {
+      changes: clinicalChanges.filter((c) => c.field !== 'status'),
+      detail: 'Clinical visit record written on completion.',
+    });
   }
-  await appt.populate([{ path: 'patient', select: 'fullName email' }, { path: 'service', select: 'name' }]);
+  // Keep the calendar title/description in step with the completed status.
+  void syncAppointmentToCalendar(appt).catch(() => {});
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -308,12 +370,33 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
     notes,
     status: 'confirmed',
     createdBy: req.user.id,
+    updatedBy: req.user.id,
   });
   await appt.populate([
     { path: 'patient', select: 'fullName email' },
     { path: 'service', select: 'name' },
+    { path: 'updatedBy', select: 'fullName' },
   ]);
-  await log(req.user.id, 'appointment.walkin', appt, `Walk-in confirmed for ${day}.`);
+  await logAppointment(req, 'appointment.walkin', appt, {
+    changes: [
+      ['status', '', 'confirmed'],
+      ['service', '', service.name],
+      ['day', '', day],
+      ['timePreference', '', timePreference],
+    ],
+    detail: newPatient ? 'Walk-in booked for a newly created patient.' : 'Walk-in booked for an existing patient.',
+  });
+  if (newPatient) {
+    await logActivity({
+      req,
+      action: 'patient.create',
+      target: { type: 'patient', id: patient._id, label: patient.fullName },
+      detail: 'Patient account created at the front desk.',
+      patient: patient._id,
+    });
+  }
+  // Walk-ins are already confirmed, so mirror them immediately.
+  void syncAppointmentToCalendar(appt).catch(() => {});
 
   res.status(201).json({
     success: true,

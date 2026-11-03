@@ -5,6 +5,7 @@ import { ClipboardList, FileText, Info, Pill } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { patientNav } from '../../components/patient-nav';
 import { CardHeading, EmptyNote, InlineNotice, cardPadding } from '../../components/app-ui';
+import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
 import { myAppointments, type Appointment } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -113,6 +114,7 @@ function MyRecords() {
                     {serviceName(v)}
                   </h3>
                   <p className="mt-0.5 text-[12.5px] text-slate-500">{formatDay(v.day)}</p>
+                  <RecordMeta createdAt={v.createdAt} updatedAt={v.updatedAt} className="mt-1" />
                 </div>
               </div>
 
