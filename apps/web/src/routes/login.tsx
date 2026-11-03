@@ -152,7 +152,7 @@ function LoginComponent() {
             </div>
 
             {/* Heading */}
-            <div className="mt-4 text-center">
+            <div className="mt-5 border-t border-slate-200/70 pt-5 text-center">
               <h1 id="login-heading" className="text-2xl font-bold tracking-tight text-slate-900">
                 Log in
               </h1>
@@ -161,133 +161,138 @@ function LoginComponent() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} noValidate className="mt-4 space-y-3">
-              <div>
-                <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-800">
-                  Email
-                </label>
-                <input
-                  id="login-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-                  aria-invalid={emailInvalid}
-                  aria-describedby={emailInvalid ? 'login-email-error' : undefined}
-                  className={inputClass}
-                />
-                {emailInvalid && (
-                  <p id="login-email-error" role="alert" className="mt-1.5 text-sm text-destructive">
-                    Enter a valid email address.
-                  </p>
-                )}
-              </div>
+            {/* Form */}
+            <div className="mt-5 border-t border-slate-200/70 pt-5">
+              <div className="flex flex-col gap-4">
+                <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+                  <div>
+                    <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-800">
+                      Email
+                    </label>
+                    <input
+                      id="login-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+                      aria-invalid={emailInvalid}
+                      aria-describedby={emailInvalid ? 'login-email-error' : undefined}
+                      className={inputClass}
+                    />
+                    {emailInvalid && (
+                      <p id="login-email-error" role="alert" className="mt-1.5 text-sm text-destructive">
+                        Enter a valid email address.
+                      </p>
+                    )}
+                  </div>
 
-              <div>
-                <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-slate-800">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    id="login-password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-                    onKeyUp={(e: KeyboardEvent<HTMLInputElement>) => {
-                      setCapsOn(e.getModifierState ? e.getModifierState('CapsLock') : false);
-                    }}
-                    aria-invalid={passwordInvalid}
-                    aria-describedby={passwordInvalid ? 'login-password-error' : undefined}
-                    className={cn(inputClass, 'pr-11')}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    aria-pressed={showPassword}
-                    className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 transition-colors hover:text-slate-800"
+                  <div>
+                    <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-slate-800">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+                        onKeyUp={(e: KeyboardEvent<HTMLInputElement>) => {
+                          setCapsOn(e.getModifierState ? e.getModifierState('CapsLock') : false);
+                        }}
+                        aria-invalid={passwordInvalid}
+                        aria-describedby={passwordInvalid ? 'login-password-error' : undefined}
+                        className={cn(inputClass, 'pr-11')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showPassword}
+                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-500 transition-colors hover:text-slate-800"
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    <div className="mt-1.5 flex justify-end">
+                      <button
+                        type="button"
+                        disabled
+                        title="Ask the front desk for a password reset — self-service reset is not in v1"
+                        className="cursor-not-allowed text-sm text-slate-400"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    {capsOn && password.length > 0 && (
+                      <p className="mt-1.5 text-sm text-amber-700">Caps Lock is on.</p>
+                    )}
+                    {passwordInvalid && (
+                      <p id="login-password-error" role="alert" className="mt-1.5 text-sm text-destructive">
+                        Enter your password.
+                      </p>
+                    )}
+                  </div>
+
+                  {RECAPTCHA_SITE_KEY && (
+                    <div className="login-captcha flex w-full justify-center">
+                      <ReCAPTCHA
+                        ref={recaptchaRef}
+                        sitekey={RECAPTCHA_SITE_KEY}
+                        onChange={(token) => setCaptchaToken(token)}
+                        onExpired={() => setCaptchaToken(null)}
+                        onErrored={() => setCaptchaToken(null)}
+                      />
+                    </div>
+                  )}
+
+                  {error && (
+                    <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
+                    className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97] disabled:from-slate-200 disabled:to-slate-300 disabled:text-slate-500 disabled:opacity-100"
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {capsOn && password.length > 0 && (
-                  <p className="mt-1.5 text-sm text-amber-700">Caps Lock is on.</p>
-                )}
-                {passwordInvalid && (
-                  <p id="login-password-error" role="alert" className="mt-1.5 text-sm text-destructive">
-                    Enter your password.
-                  </p>
+                    {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
+                    {pending ? 'Logging in…' : 'Log in'}
+                  </Button>
+                </form>
+
+                {googleEnabled && (
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-slate-400">
+                      <span className="h-px flex-1 bg-slate-200" />
+                      or
+                      <span className="h-px flex-1 bg-slate-200" />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleGoogle}
+                      disabled={pending}
+                      className="flex h-10 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <GoogleIcon className="size-5" />
+                      Continue with Google
+                    </button>
+                  </div>
                 )}
               </div>
+            </div>
 
-              {RECAPTCHA_SITE_KEY && (
-                <div className="flex justify-center">
-                  <ReCAPTCHA
-                    ref={recaptchaRef}
-                    sitekey={RECAPTCHA_SITE_KEY}
-                    onChange={(token) => setCaptchaToken(token)}
-                    onExpired={() => setCaptchaToken(null)}
-                    onErrored={() => setCaptchaToken(null)}
-                  />
-                </div>
-              )}
-
-              {error && (
-                <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-
-              <Button
-                type="submit"
-                disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
-                className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
-              >
-                {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
-                {pending ? 'Logging in…' : 'Log in'}
-              </Button>
-            </form>
-
-            {googleEnabled && (
-              <>
-                <div className="my-3.5 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  <span className="h-px flex-1 bg-slate-200" />
-                  or
-                  <span className="h-px flex-1 bg-slate-200" />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleGoogle}
-                  disabled={pending}
-                  className="flex h-10 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white text-base font-medium text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <GoogleIcon className="size-5" />
-                  Continue with Google
-                </button>
-              </>
-            )}
-
-            <div className="mt-4 space-y-1.5 text-center text-sm">
+            <div className="mt-8 flex flex-col gap-2 text-center text-sm">
               <p className="text-slate-600">
                 New patient?{' '}
                 <Link to="/register" className="font-medium text-teal-700 underline-offset-4 hover:underline">
                   Create an account
                 </Link>
-              </p>
-              <p>
-                <button
-                  type="button"
-                  disabled
-                  title="Ask the front desk for a password reset — self-service reset is not in v1"
-                  className="cursor-not-allowed text-slate-400"
-                >
-                  Forgot password?
-                </button>
               </p>
               <p>
                 <Link to="/" className="text-slate-500 underline-offset-4 hover:underline">
