@@ -2,6 +2,9 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 const SESSION_KEY = 'healthcentria.session';
 const PATIENT_REGISTRY_KEY = 'healthcentria.patients';
 
+export const PASSWORD_ERROR_MESSAGE =
+  'Password must be at least 8 characters and include at least two of: letters, numbers, special characters.';
+
 export type Role = 'patient' | 'staff' | 'admin';
 
 export interface AuthSession {
@@ -66,6 +69,16 @@ function apiMessage(data: unknown): string {
 
 export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+export function isValidPassword(password: string): boolean {
+  if ([...password].length < 8) return false;
+  const types = [
+    /\p{L}/u.test(password),
+    /\p{N}/u.test(password),
+    /[^\p{L}\p{N}]/u.test(password),
+  ];
+  return types.filter(Boolean).length >= 2;
 }
 
 /** Demo-only role inference for local fallback (backend has no /api/auth yet). */

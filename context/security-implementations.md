@@ -157,7 +157,7 @@ These rules are not only workflow rules; they also prevent invalid or abusive st
 - Only a confirmed appointment can be completed.
 - Clinical fields (diagnosis, prescription, visit notes) are written by staff on completion and are read-only for patients.
 - A patient with an incomplete Google-created profile is blocked from booking until the profile is completed. Reading and cancelling appointments remain available.
-- Passwords must be at least 8 characters.
+- Passwords must be at least 8 characters and contain at least two of: letters, numbers, and special characters.
 - Birthdates must be valid and in the past for profile completion.
 - Contact numbers must match the accepted Philippine formats in the profile flow.
 - Free-text fields have server-side maximum lengths.
@@ -323,10 +323,10 @@ The UI exposes the same filters through the admin, staff, and patient activity p
 - The derived key is 64 bytes.
 - Verification uses `timingSafeEqual` to avoid timing leaks.
 - The stored format is versioned: `scrypt$<salt>$<hash>`. This leaves room to change parameters later.
-- Password minimum length is 8 characters on registration, staff creation, and staff password reset.
+- Passwords must be at least 8 characters and contain at least two of: letters, numbers, and special characters on registration, staff creation, staff password reset, and operator seeding. Passwords are validated without trimming or alteration; whitespace counts as a special character.
 - Passwords are never returned by the API and never written to the activity log.
 - There is no self-service “forgot password” flow in v1. The login page tells users to ask the front desk. An admin can reset a staff password from Staff Accounts, and a server operator can use the seed script with `--force`.
-- There is no password history, complexity rule beyond minimum length, or forced-password-change policy.
+- There is no password history or forced-password-change policy.
 
 ### 3.2 Session and token security
 

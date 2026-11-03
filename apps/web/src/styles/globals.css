@@ -299,46 +299,13 @@ body {
 }
 
 /**
- * Login reCAPTCHA. Google's v2 checkbox is a fixed 304×78 box. Container
- * queries let us scale it down instead of letting it overflow a narrow card,
- * and flexbox keeps the scaled widget centered in the form column.
+ * Google's v2 checkbox is fixed at 304x78. Scale it to the form column so it
+ * lines up with the inputs, including on narrow screens.
  */
-.login-captcha {
+.auth-captcha {
   container-type: inline-size;
 }
 
-@container (max-width: 303px) {
-  .login-captcha > div {
-    zoom: 0.93;
-  }
-}
-
-@container (max-width: 285px) {
-  .login-captcha > div {
-    zoom: 0.87;
-  }
-}
-
-@container (max-width: 265px) {
-  .login-captcha > div {
-    zoom: 0.8;
-  }
-}
-
-@container (max-width: 245px) {
-  .login-captcha > div {
-    zoom: 0.73;
-  }
-}
-
-@container (max-width: 225px) {
-  .login-captcha > div {
-    zoom: 0.66;
-  }
-}
-
-@container (max-width: 205px) {
-  .login-captcha > div {
-    zoom: 0.6;
-  }
+.auth-captcha > div {
+  zoom: calc(100cqw / 304px);
 }

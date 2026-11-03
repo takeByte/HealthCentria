@@ -7,7 +7,7 @@ import { Service } from '../models/service.model.js';
 import { diffChanges, logActivity } from '../services/activity.js';
 import { removeAppointmentFromCalendar, syncAppointmentToCalendar } from '../services/google-calendar.js';
 import { User } from '../models/user.model.js';
-import { hashPassword } from '../utils/password.js';
+import { hashPassword, isValidPassword } from '../utils/password.js';
 import { isValidServiceDay, todayYMD } from '../utils/service-schedule.js';
 import { notifyEmail, notifyUser } from '../utils/notifications.js';
 
@@ -106,7 +106,7 @@ export const queueAppointments = asyncHandler(async (req, res) => {
     .populate('patient', 'fullName email')
     .populate('service', 'name')
     .populate('updatedBy', 'fullName')
-    .sort({ day: 1, createdAt: 1 })
+    .sort({ createdAt: -1, _id: -1 })
     .lean();
   res.json({ success: true, appointments: appointments.map(present) });
 });
@@ -327,7 +327,9 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
     if (existing) {
       return res.status(409).json({ success: false, message: 'Email is already registered. Use existing patient instead.' });
     }
-    tempPassword = randomBytes(6).toString('hex');
+    do {
+      tempPassword = randomBytes(6).toString('hex');
+    } while (!isValidPassword(tempPassword));
     patient = await User.create({
       email: newPatient.email,
       passwordHash: await hashPassword(tempPassword),

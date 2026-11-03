@@ -9,6 +9,8 @@ import {
   AuthError,
   DuplicateEmailError,
   isValidEmail,
+  isValidPassword,
+  PASSWORD_ERROR_MESSAGE,
   registerPatient,
   type RegisterData,
 } from '../lib/auth';
@@ -96,7 +98,7 @@ function validate(f: FormState): Errors {
   if (!f.address.trim()) e.address = 'Enter your address.';
   if (!phoneOk(f.contactNumber)) e.contactNumber = 'Enter a valid contact number.';
   if (!isValidEmail(f.email)) e.email = 'Enter a valid email address.';
-  if (f.password.length < 8) e.password = 'Password must be at least 8 characters.';
+  if (!isValidPassword(f.password)) e.password = PASSWORD_ERROR_MESSAGE;
   if (!f.confirmPassword || f.confirmPassword !== f.password) e.confirmPassword = 'Passwords do not match.';
   if (!f.consent) e.consent = 'Consent is required to register.';
   return e;
@@ -147,7 +149,14 @@ function RegisterComponent() {
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
-    setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+    if (key === 'password' && typeof value === 'string') {
+      setErrors((prev) => ({
+        ...prev,
+        password: isValidPassword(value) ? undefined : PASSWORD_ERROR_MESSAGE,
+      }));
+    } else {
+      setErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
+    }
     if (key === 'email') {
       setDuplicate(false);
       setSubmitError(null);
@@ -249,7 +258,7 @@ function RegisterComponent() {
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
             aria-labelledby="register-heading"
-            className="relative z-10 my-2 w-full max-w-[400px] rounded-2xl border border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] backdrop-blur-md sm:p-6"
+            className="relative z-10 my-2 w-full max-w-[470px] rounded-2xl border border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] backdrop-blur-md sm:p-6"
           >
             {/* Branding — identical to the login card. */}
             <div className="flex flex-col items-center text-center">
@@ -525,7 +534,7 @@ function RegisterComponent() {
                     </div>
 
                     {RECAPTCHA_SITE_KEY && (
-                      <div className="flex justify-center">
+                      <div className="auth-captcha flex w-full justify-center">
                         <ReCAPTCHA
                           ref={recaptchaRef}
                           sitekey={RECAPTCHA_SITE_KEY}

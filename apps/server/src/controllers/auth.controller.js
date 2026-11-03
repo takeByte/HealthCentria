@@ -7,7 +7,7 @@ import { User } from '../models/user.model.js';
 import { isGoogleSignInEnabled } from '../models/app-settings.model.js';
 import { buildGoogleAuthUrl, exchangeCodeForTokens, verifyGoogleIdToken } from '../utils/google.js';
 import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-credentials.js';
-import { hashPassword, verifyPassword } from '../utils/password.js';
+import { hashPassword, isValidPassword, PASSWORD_ERROR_MESSAGE, verifyPassword } from '../utils/password.js';
 import { presentUser } from '../utils/present-user.js';
 import { signSession } from '../utils/tokens.js';
 import { logActivity } from '../services/activity.js';
@@ -35,7 +35,7 @@ const registerSchema = z.object({
   emergencyName: z.string().trim().optional().default(''),
   emergencyNumber: z.string().trim().optional().default(''),
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
+  password: z.string().refine(isValidPassword, PASSWORD_ERROR_MESSAGE),
   consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required to register.' }) }),
   // Verified and stripped by verifyCaptcha before this schema runs; listed
   // here so the field is part of the documented request shape.

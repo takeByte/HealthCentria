@@ -19,7 +19,7 @@ import {
   selectClass,
 } from '../../components/app-ui';
 import { RecordMeta } from '../../components/record-meta';
-import { getSession } from '../../lib/auth';
+import { getSession, isValidPassword, PASSWORD_ERROR_MESSAGE } from '../../lib/auth';
 import {
   ApiError,
   createStaffAccount,
@@ -49,6 +49,7 @@ function StaffAccounts() {
   const [cShow, setCShow] = useState(false);
   const [cBusy, setCBusy] = useState(false);
   const [cError, setCError] = useState<string | null>(null);
+  const [cPasswordError, setCPasswordError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -57,6 +58,7 @@ function StaffAccounts() {
   const [ePassword, setEPassword] = useState('');
   const [eBusy, setEBusy] = useState(false);
   const [eError, setEError] = useState<string | null>(null);
+  const [ePasswordError, setEPasswordError] = useState<string | null>(null);
 
   async function reload() {
     try {
@@ -74,6 +76,11 @@ function StaffAccounts() {
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
     setCError(null);
+    if (!isValidPassword(cPassword)) {
+      setCPasswordError(PASSWORD_ERROR_MESSAGE);
+      return;
+    }
+    setCPasswordError(null);
     setCBusy(true);
     try {
       await createStaffAccount({
@@ -101,11 +108,17 @@ function StaffAccounts() {
     setERole(a.role);
     setEPassword('');
     setEError(null);
+    setEPasswordError(null);
   }
 
   async function handleUpdate(e: FormEvent, id: string) {
     e.preventDefault();
     setEError(null);
+    if (ePassword && !isValidPassword(ePassword)) {
+      setEPasswordError(PASSWORD_ERROR_MESSAGE);
+      return;
+    }
+    setEPasswordError(null);
     setEBusy(true);
     try {
       await updateStaffAccount(id, {
@@ -246,14 +259,20 @@ function StaffAccounts() {
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label htmlFor="sa-password" className={fieldLabel}>Temporary password * (min 8 characters)</label>
+            <label htmlFor="sa-password" className={fieldLabel}>Temporary password *</label>
             <div className="relative">
               <input
                 id="sa-password"
                 type={cShow ? 'text' : 'password'}
                 autoComplete="new-password"
                 value={cPassword}
-                onChange={(e) => setCPassword(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCPassword(value);
+                  if (cPasswordError) setCPasswordError(isValidPassword(value) ? null : PASSWORD_ERROR_MESSAGE);
+                }}
+                aria-invalid={Boolean(cPasswordError)}
+                aria-describedby={cPasswordError ? 'sa-password-error' : undefined}
                 className={cn(inputClass, 'pr-11')}
               />
               <button
@@ -265,6 +284,8 @@ function StaffAccounts() {
                 {cShow ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {cPasswordError && <p id="sa-password-error" role="alert" className="mt-1.5 text-sm text-destructive">{cPasswordError}</p>}
+            <p className="mt-1.5 text-xs text-slate-500">At least 8 characters and at least two of: letters, numbers, special characters.</p>
           </div>
           {cError && <InlineNotice className="sm:col-span-2">{cError}</InlineNotice>}
           <button type="submit" disabled={cBusy} className={`${primaryButton} sm:col-span-2`}>
@@ -312,7 +333,23 @@ function StaffAccounts() {
                 </div>
                 <div className="sm:col-span-2">
                   <label htmlFor={`edit-pw-${a.id}`} className={fieldLabel}>Reset password (leave blank to keep)</label>
-                  <input id={`edit-pw-${a.id}`} type="password" autoComplete="new-password" value={ePassword} onChange={(e) => setEPassword(e.target.value)} placeholder="Min 8 characters" className={inputClass} />
+                  <input
+                    id={`edit-pw-${a.id}`}
+                    type="password"
+                    autoComplete="new-password"
+                    value={ePassword}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setEPassword(value);
+                      if (ePasswordError) setEPasswordError(value && !isValidPassword(value) ? PASSWORD_ERROR_MESSAGE : null);
+                    }}
+                    aria-invalid={Boolean(ePasswordError)}
+                    aria-describedby={ePasswordError ? `edit-pw-error-${a.id}` : undefined}
+                    placeholder="Leave blank to keep current password"
+                    className={inputClass}
+                  />
+                  {ePasswordError && <p id={`edit-pw-error-${a.id}`} role="alert" className="mt-1.5 text-sm text-destructive">{ePasswordError}</p>}
+                  <p className="mt-1.5 text-xs text-slate-500">If setting a password: at least 8 characters and at least two of letters, numbers, special characters.</p>
                 </div>
                 {eError && <InlineNotice className="sm:col-span-2">{eError}</InlineNotice>}
                 <div className="flex gap-2 sm:col-span-2">

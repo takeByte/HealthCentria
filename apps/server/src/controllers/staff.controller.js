@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { User } from '../models/user.model.js';
 import { logActivity } from '../services/activity.js';
-import { hashPassword } from '../utils/password.js';
+import { hashPassword, isValidPassword, PASSWORD_ERROR_MESSAGE } from '../utils/password.js';
 
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
@@ -29,7 +29,7 @@ function present(u) {
 const createSchema = z.object({
   fullName: z.string().trim().min(1, 'Full name is required.'),
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
+  password: z.string().refine(isValidPassword, PASSWORD_ERROR_MESSAGE),
   role: z.enum(['staff', 'admin']).optional().default('staff'),
 });
 
@@ -38,7 +38,7 @@ const updateSchema = z
     fullName: z.string().trim().min(1).optional(),
     role: z.enum(['staff', 'admin']).optional(),
     active: z.boolean().optional(),
-    password: z.string().min(8, 'Password must be at least 8 characters.').optional(),
+    password: z.string().refine(isValidPassword, PASSWORD_ERROR_MESSAGE).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update.' });
 

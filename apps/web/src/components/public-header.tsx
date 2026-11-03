@@ -25,19 +25,28 @@ export function PublicHeader({ inner = 'max-w-6xl' }: { inner?: string }) {
         <nav aria-label="Public" className="ml-auto flex items-center gap-1 text-sm sm:gap-2">
           <Link
             to="/announcements"
-            className="rounded-xl px-3 py-2 font-medium text-slate-600 hover:bg-slate-100"
+            activeOptions={{ exact: true }}
+            activeProps={{ className: 'bg-gradient-to-r from-teal-600 to-blue-600 text-white', 'aria-current': 'page' }}
+            inactiveProps={{ className: 'text-slate-600' }}
+            className="rounded-xl px-3 py-2 font-medium transition-colors hover:bg-slate-100 active:scale-[0.97]"
           >
             Announcements
           </Link>
           <Link
             to="/login"
-            className="rounded-xl px-3 py-2 font-medium text-slate-600 hover:bg-slate-100"
+            activeOptions={{ exact: true }}
+            activeProps={{ className: 'bg-gradient-to-r from-teal-600 to-blue-600 text-white', 'aria-current': 'page' }}
+            inactiveProps={{ className: 'text-slate-600' }}
+            className="rounded-xl px-3 py-2 font-medium transition-colors hover:bg-slate-100 active:scale-[0.97]"
           >
             Log in
           </Link>
           <Link
             to="/register"
-            className="rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 px-4 py-2 font-medium text-white active:scale-[0.97]"
+            activeOptions={{ exact: true }}
+            activeProps={{ className: 'bg-gradient-to-r from-teal-600 to-blue-600 text-white', 'aria-current': 'page' }}
+            inactiveProps={{ className: 'text-slate-600' }}
+            className="rounded-xl px-3 py-2 font-medium transition-colors hover:bg-slate-100 active:scale-[0.97]"
           >
             Register
           </Link>

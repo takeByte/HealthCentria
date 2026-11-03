@@ -138,7 +138,7 @@ function LoginComponent() {
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
             aria-labelledby="login-heading"
-            className="relative z-10 w-full max-w-[400px] rounded-2xl border border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] backdrop-blur-md sm:p-6"
+            className="relative z-10 my-2 w-full max-w-[470px] rounded-2xl border border-white/70 bg-white/95 p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] backdrop-blur-md sm:p-6"
           >
             {/* Branding */}
             <div className="flex flex-col items-center text-center">
@@ -152,7 +152,7 @@ function LoginComponent() {
             </div>
 
             {/* Heading */}
-            <div className="mt-5 border-t border-slate-200/70 pt-5 text-center">
+            <div className="mt-4 pt-6 text-center">
               <h1 id="login-heading" className="text-2xl font-bold tracking-tight text-slate-900">
                 Log in
               </h1>
@@ -162,11 +162,11 @@ function LoginComponent() {
             </div>
 
             {/* Form */}
-            <div className="mt-5 border-t border-slate-200/70 pt-5">
+            <div className="mt-4 pt-6">
               <div className="flex flex-col gap-4">
                 <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
                   <div>
-                    <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-800">
+                    <label htmlFor="login-email" className="mb-1 block text-sm font-medium text-slate-800">
                       Email
                     </label>
                     <input
@@ -189,7 +189,7 @@ function LoginComponent() {
                   </div>
 
                   <div>
-                    <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-slate-800">
+                    <label htmlFor="login-password" className="mb-1 block text-sm font-medium text-slate-800">
                       Password
                     </label>
                     <div className="relative">
@@ -238,7 +238,7 @@ function LoginComponent() {
                   </div>
 
                   {RECAPTCHA_SITE_KEY && (
-                    <div className="login-captcha flex w-full justify-center">
+                    <div className="auth-captcha flex w-full justify-center">
                       <ReCAPTCHA
                         ref={recaptchaRef}
                         sitekey={RECAPTCHA_SITE_KEY}
@@ -258,7 +258,7 @@ function LoginComponent() {
                   <Button
                     type="submit"
                     disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
-                    className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97] disabled:from-slate-200 disabled:to-slate-300 disabled:text-slate-500 disabled:opacity-100"
+                    className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
                   >
                     {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
                     {pending ? 'Logging in…' : 'Log in'}
@@ -287,7 +287,7 @@ function LoginComponent() {
               </div>
             </div>
 
-            <div className="mt-8 flex flex-col gap-2 text-center text-sm">
+            <div className="mt-4 space-y-1.5 pt-1 text-center text-sm">
               <p className="text-slate-600">
                 New patient?{' '}
                 <Link to="/register" className="font-medium text-teal-700 underline-offset-4 hover:underline">

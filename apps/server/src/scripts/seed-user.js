@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { z } from 'zod';
 import { connectDB, disconnectDB } from '../config/db.js';
 import { User } from '../models/user.model.js';
-import { hashPassword } from '../utils/password.js';
+import { hashPassword, isValidPassword, PASSWORD_ERROR_MESSAGE } from '../utils/password.js';
 
 // One-time bootstrap for privileged accounts (admin/staff).
 // Public registration only creates patients, so the very first admin — and
@@ -18,7 +18,7 @@ import { hashPassword } from '../utils/password.js';
 
 const argsSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid --email.'),
-  password: z.string().min(8, 'Password must be at least 8 characters (--password).'),
+  password: z.string().refine(isValidPassword, PASSWORD_ERROR_MESSAGE),
   role: z.enum(['admin', 'staff']).default('admin'),
   name: z.string().trim().min(1).default('Clinic Admin'),
   force: z.boolean().default(false),

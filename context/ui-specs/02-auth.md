@@ -18,7 +18,7 @@ Login: email → password (show/hide) → [Log in] primary → links (Register a
 Register groups:
 1. Personal: full name, birthdate (date picker, no future), sex (segmented M/F + Other/Prefer not — confirm options), address.
 2. Household: household number, contact number (PH format hint), PhilHealth optional, emergency name + number.
-3. Account: email, password (strength hint, min rule text), confirm, DPA checkbox required (short text + version). Submit disabled until consent.
+3. Account: email, password (at least 8 characters and at least two of letters, numbers, and special characters), confirm, DPA checkbox required (short text + version). Submit disabled until consent.
 
 Inline validation on blur + submit (mirror Zod); success → toast + auto-login → dashboard. Never clear password on error except mismatch.
 
