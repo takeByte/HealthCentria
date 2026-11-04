@@ -11,6 +11,15 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM: z.string().default('HealthCentria <onboarding@resend.dev>'),
 
+  // SMTP delivery (e.g. Brevo relay). Used instead of Resend when all three of
+  // SMTP_HOST/SMTP_USER/SMTP_PASS are set. MAIL_FROM is the visible sender and
+  // falls back to RESEND_FROM.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
+
   // reCAPTCHA v2 (secret half). Optional in development — the auth routes skip
   // verification when it is absent — but production refuses unverified logins.
   // The site key is public and lives in the web app env as

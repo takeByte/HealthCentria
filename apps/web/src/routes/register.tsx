@@ -15,6 +15,7 @@ import {
   type RegisterData,
 } from '../lib/auth';
 import { cn } from '../lib/utils';
+import { getPublicSettings } from '../lib/api';
 import appLogo from '../assets/E-Kalinga_Logo.png';
 import loginImage1 from '../assets/login-image1.jpg';
 import loginImage2 from '../assets/login-image2.jpg';
@@ -125,9 +126,24 @@ function RegisterComponent() {
   const [step, setStep] = useState<Step>(1);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const headingRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublicSettings()
+      .then((settings) => {
+        if (!cancelled) setRecaptchaEnabled(settings.recaptchaEnabled);
+      })
+      .catch(() => {
+        // Keep the default-on behavior if the public settings endpoint is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Move focus to the step title so keyboard and screen-reader users land at
   // the start of the new step instead of on a removed form.
@@ -186,7 +202,7 @@ function RegisterComponent() {
       if (STEP_ONE_FIELDS.some((key) => errs[key])) goToStep(1, -1);
       return;
     }
-    if (RECAPTCHA_SITE_KEY && !captchaToken) {
+    if (RECAPTCHA_SITE_KEY && recaptchaEnabled && !captchaToken) {
       setSubmitError('Please complete the CAPTCHA.');
       return;
     }
@@ -533,7 +549,7 @@ function RegisterComponent() {
                       <FieldError id="reg-consent-error" message={errors.consent} />
                     </div>
 
-                    {RECAPTCHA_SITE_KEY && (
+                    {RECAPTCHA_SITE_KEY && recaptchaEnabled && (
                       <div className="auth-captcha flex w-full justify-center">
                         <ReCAPTCHA
                           ref={recaptchaRef}
@@ -563,7 +579,11 @@ function RegisterComponent() {
                       </Button>
                       <Button
                         type="submit"
-                        disabled={pending || !form.consent || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
+                        disabled={
+                          pending ||
+                          !form.consent ||
+                          (Boolean(RECAPTCHA_SITE_KEY) && recaptchaEnabled && !captchaToken)
+                        }
                         className="h-10 flex-1 bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
                       >
                         {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}

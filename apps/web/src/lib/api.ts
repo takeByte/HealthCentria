@@ -424,6 +424,7 @@ export function updateStaffAccount(
 
 export interface AuthSettings {
   googleSignInEnabled: boolean;
+  recaptchaEnabled: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -448,6 +449,46 @@ export function updateGoogleIntegrationSettings(input: {
 
 export function resetGoogleIntegrationSettings(): Promise<{ success: true } & GoogleIntegrationSettings> {
   return apiFetch('/api/admin/settings/google', { method: 'DELETE' });
+}
+
+export interface EmailIntegrationSettings {
+  host: string;
+  port: number;
+  userMasked: string;
+  passwordSet: boolean;
+  fromAddress: string;
+  source: 'custom' | 'default';
+  /** False when neither the database nor .env has usable SMTP values. */
+  configured: boolean;
+  lastTestedAt: string | null;
+  lastTestOk: boolean | null;
+  lastTestError: string;
+}
+
+export function getEmailIntegrationSettings(): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email');
+}
+
+export function updateEmailIntegrationSettings(input: {
+  host?: string;
+  port?: number;
+  user?: string;
+  password?: string;
+  fromAddress?: string;
+}): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email', { method: 'PUT', body: input });
+}
+
+export function resetEmailIntegrationSettings(): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email', { method: 'DELETE' });
+}
+
+export function testEmailDelivery(input: { to?: string } = {}): Promise<{
+  success: true;
+  to: string;
+  message: string;
+}> {
+  return apiFetch('/api/admin/settings/email/test', { method: 'POST', body: input });
 }
 
 export interface GoogleCalendarSettings {
@@ -510,17 +551,22 @@ export async function getGoogleAuthConfig(): Promise<{ clientId: string }> {
  * Public, unauthenticated: the login page uses it to hide the Google button
  * while an admin has Google sign-in switched off.
  */
-export async function getPublicSettings(): Promise<{ googleSignInEnabled: boolean }> {
-  const res = await fetch(`${API_URL}/api/settings/public`);
+export async function getPublicSettings(): Promise<{
+  googleSignInEnabled: boolean;
+  recaptchaEnabled: boolean;
+}> {
+  const res = await fetch(`${API_URL}/api/settings/public`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Request failed (${res.status}).`);
-  return res.json() as Promise<{ googleSignInEnabled: boolean }>;
+  return res.json() as Promise<{ googleSignInEnabled: boolean; recaptchaEnabled: boolean }>;
 }
 
 export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
   return apiFetch('/api/settings');
 }
 
-export function updateAuthSettings(input: { googleSignInEnabled: boolean }): Promise<{ settings: AuthSettings }> {
+export function updateAuthSettings(
+  input: Partial<Pick<AuthSettings, 'googleSignInEnabled' | 'recaptchaEnabled'>>,
+): Promise<{ settings: AuthSettings }> {
   return apiFetch('/api/settings', { method: 'PATCH', body: input });
 }
 

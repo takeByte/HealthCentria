@@ -329,3 +329,86 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
   setSession(session);
   return session;
 }
+
+/** First field error the API described, so the form can point at the input. */
+function firstFieldError(data: unknown): string {
+  const errors = (data as { errors?: Record<string, string[]> } | null)?.errors;
+  if (!errors) return '';
+  for (const list of Object.values(errors)) {
+    const message = Array.isArray(list) ? list.find((m) => typeof m === 'string' && m.trim()) : '';
+    if (message) return message;
+  }
+  return '';
+}
+
+/**
+ * Step 1 of a patient password reset — ask the API to email a 6-digit code.
+ * The response is deliberately generic, so it does not reveal whether the
+ * address is registered.
+ */
+export async function requestPasswordReset(input: {
+  email: string;
+  captchaToken?: string;
+}): Promise<{ message: string; resendAfter: number }> {
+  const { status, data } = await postJson('/api/auth/password/forgot', {
+    email: input.email.trim(),
+    ...(input.captchaToken ? { captchaToken: input.captchaToken } : {}),
+  });
+  const body = (data ?? {}) as { message?: string; resendAfter?: number };
+  if (status === 200) {
+    return {
+      message: body.message || 'If that email belongs to a patient account, we sent a 6-digit code.',
+      resendAfter: typeof body.resendAfter === 'number' ? body.resendAfter : 60,
+    };
+  }
+  throw new AuthError(apiMessage(data) || 'Could not send the code. Try again.');
+}
+
+/** Step 2 — submit the emailed code together with the new password. */
+export async function resetPasswordWithCode(input: {
+  email: string;
+  code: string;
+  password: string;
+}): Promise<string> {
+  const { status, data } = await postJson('/api/auth/password/reset', {
+    email: input.email.trim(),
+    code: input.code.trim(),
+    password: input.password,
+  });
+  if (status === 200) return apiMessage(data) || 'Your password has been reset.';
+  throw new AuthError(
+    firstFieldError(data) || apiMessage(data) || 'Could not reset your password. Try again.',
+  );
+}
+
+/**
+ * Change the signed-in account's password. The API returns a fresh token so
+ * this device stays signed in while every other session is revoked.
+ */
+export async function changePassword(input: {
+  currentPassword?: string;
+  newPassword: string;
+}): Promise<AuthSession> {
+  const session = getSession();
+  if (!session?.token) throw new AuthError('You need to be signed in to change your password.');
+
+  const res = await fetch(`${API_URL}/api/auth/password`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.token}`,
+    },
+    body: JSON.stringify({
+      currentPassword: input.currentPassword ?? '',
+      newPassword: input.newPassword,
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (res.ok) {
+    const token = (data as { token?: string } | null)?.token || session.token;
+    const next: AuthSession = { ...session, token };
+    setSession(next);
+    return next;
+  }
+  throw new AuthError(firstFieldError(data) || apiMessage(data) || 'Could not update your password.');
+}

@@ -8,6 +8,12 @@ import {
   updateGoogleCalendarSettings,
   updateGoogleSettings,
 } from '../controllers/admin-settings.controller.js';
+import {
+  deleteEmailSettings,
+  getEmailSettings,
+  testEmailSettings,
+  updateEmailSettings,
+} from '../controllers/email-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 
 export const adminSettingsRouter = Router();
@@ -23,6 +29,13 @@ adminSettingsRouter.use((req, res, next) => {
 adminSettingsRouter.get('/google', getGoogleSettings);
 adminSettingsRouter.put('/google', updateGoogleSettings);
 adminSettingsRouter.delete('/google', deleteGoogleSettings);
+
+// Email delivery (SMTP). Password reset codes and announcements use it, so an
+// admin can fix mail delivery without editing .env and restarting the API.
+adminSettingsRouter.get('/email', getEmailSettings);
+adminSettingsRouter.put('/email', updateEmailSettings);
+adminSettingsRouter.delete('/email', deleteEmailSettings);
+adminSettingsRouter.post('/email/test', testEmailSettings);
 
 // Google Calendar sync is additive: the existing appointment flow continues to
 // work when these env vars are absent or the admin switches sync off.

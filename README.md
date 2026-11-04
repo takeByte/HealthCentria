@@ -57,6 +57,26 @@ the API directly. In development a missing secret skips the check, while
 production refuses unverified auth requests. Behind a reverse proxy also set
 `TRUST_PROXY=1` so rate limiting sees real client IPs.
 
+## Email delivery (SMTP)
+
+Password reset codes and announcements are sent through SMTP. Configure it in
+**Admin → Settings → Email delivery** (saved encrypted in MongoDB, applied
+immediately) or with the `SMTP_*` values in `apps/server/.env`; the database
+settings win when both exist.
+
+| Variable | Example |
+| --- | --- |
+| `SMTP_HOST` | `smtp-relay.brevo.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USER` | SMTP login |
+| `SMTP_PASS` | SMTP password or API key |
+| `MAIL_FROM` | `E-Kalinga <clinic@your-domain.com>` |
+
+Saving from the admin UI requires `SETTINGS_ENCRYPTION_KEY` (64 hex characters)
+in `apps/server/.env`. Use **Send test email** to verify the connection; the
+provider's error message is shown when it fails. Resend stays available as a
+fallback when `RESEND_API_KEY` is set and SMTP is not configured.
+
 ## Demo data
 
 Seed accounts, services, appointments/visit records, announcements and notifications

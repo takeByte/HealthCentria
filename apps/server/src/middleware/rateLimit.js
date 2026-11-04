@@ -29,6 +29,17 @@ export const loginLimiter = rateLimit({
   validate: { xForwardedForHeader: false },
 });
 
+// Covers both the "email me a code" and "submit the code" steps. Successful
+// requests count too: every send is an outgoing email.
+export const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many password reset attempts. Try again in 15 minutes.'),
+  validate: { xForwardedForHeader: false },
+});
+
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 10,

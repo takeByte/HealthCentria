@@ -1,11 +1,12 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type ComponentType } from 'react';
-import { CalendarCheck, ChevronDown, LogOut, Menu, UserRound, X } from 'lucide-react';
-import { clearSession } from '../lib/auth';
+import { CalendarCheck, ChevronDown, KeyRound, LogOut, Menu, UserRound, X } from 'lucide-react';
+import { clearSession, getSession } from '../lib/auth';
 import { listNotifications, logoutRequest, type NotificationItem } from '../lib/api';
 import { AppBackdrop } from './app-backdrop';
 import { BellDot, NotificationCenter } from './notifications';
+import { ChangePasswordDialog } from './change-password-dialog';
 import { cn } from '../lib/utils';
 import appLogo from '../assets/E-Kalinga_Logo.png';
 
@@ -139,10 +140,14 @@ export function DashboardShell({
   const [drawer, setDrawer] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [bellItems, setBellItems] = useState<NotificationItem[] | null>(null);
   const initial = userName?.trim()?.charAt(0) ?? userEmail.trim().charAt(0).toUpperCase();
   const profileTo = nav.find((item) => item.to === '/app/profile')?.to;
+  // Google-created accounts have no password yet, so the dialog skips the
+  // current-password field for them.
+  const hasPassword = getSession()?.authProvider !== 'google';
 
   useEffect(() => {
     let cancelled = false;
@@ -376,6 +381,17 @@ export function DashboardShell({
                             role="menuitem"
                             onClick={() => {
                               setProfileOpen(false);
+                              setPasswordOpen(true);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            <KeyRound size={16} aria-hidden /> Change password
+                          </button>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setProfileOpen(false);
                               void logout();
                             }}
                             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
@@ -402,6 +418,14 @@ export function DashboardShell({
                   </div>
                   <button
                     type="button"
+                    onClick={() => setPasswordOpen(true)}
+                    className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-white/80 active:scale-[0.97]"
+                  >
+                    <KeyRound size={17} aria-hidden />
+                    <span className="hidden sm:inline">Password</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={logout}
                     className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-white/80 active:scale-[0.97]"
                   >
@@ -418,6 +442,12 @@ export function DashboardShell({
           {children}
         </main>
       </div>
+
+      <ChangePasswordDialog
+        open={passwordOpen}
+        hasPassword={hasPassword}
+        onClose={() => setPasswordOpen(false)}
+      />
     </div>
   );
 }

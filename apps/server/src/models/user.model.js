@@ -22,6 +22,9 @@ const userSchema = new mongoose.Schema(
     // Staff/admin accounts are created by an admin (see future staff management).
     role: { type: String, enum: ['patient', 'staff', 'admin'], default: 'patient' },
     active: { type: Boolean, default: true },
+    // Incremented whenever the password changes or an admin forces a reset.
+    // The value is embedded in every JWT, so bumping it revokes all sessions.
+    tokenVersion: { type: Number, default: 0 },
     fullName: { type: String, required: true, trim: true },
     // Optional Google avatar. Kept separate from the patient's profile fields.
     avatarUrl: { type: String, default: '', trim: true },

@@ -18,3 +18,16 @@ export function maskClientSecret(value) {
   const visible = Math.min(CLIENT_SECRET_VISIBLE_CHARS, Math.max(0, text.length - 1));
   return `${MASK_CHARACTER.repeat(text.length - visible)}${text.slice(text.length - visible)}`;
 }
+
+// Email addresses: keep the first couple of characters of the local part and
+// the whole domain, so an admin can recognise the account without exposing it.
+export const EMAIL_VISIBLE_CHARS = 2;
+
+export function maskEmail(value) {
+  const text = typeof value === 'string' ? value : '';
+  const at = text.lastIndexOf('@');
+  if (at <= 0) return text ? MASK_CHARACTER.repeat(text.length) : '';
+  const local = text.slice(0, at);
+  const visible = Math.min(EMAIL_VISIBLE_CHARS, Math.max(0, local.length - 1));
+  return `${local.slice(0, visible)}${MASK_CHARACTER.repeat(Math.max(1, local.length - visible))}${text.slice(at)}`;
+}

@@ -8,6 +8,8 @@ const appSettingsSchema = new mongoose.Schema(
     key: { type: String, required: true, unique: true },
     // Google sign-in is on by default; an admin can turn it off from Settings.
     googleSignInEnabled: { type: Boolean, default: true },
+    // CAPTCHA is on by default; an admin can disable it from Settings.
+    recaptchaEnabled: { type: Boolean, default: true },
     // Mirrors confirmed appointments to the clinic Google Calendar when the
     // service account is configured. The toggle only stops automatic writes;
     // cancelling an appointment still removes any event already on the calendar.
@@ -32,6 +34,13 @@ export async function isGoogleSignInEnabled() {
   if (mongoose.connection.readyState !== 1) return true;
   const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
   return doc?.googleSignInEnabled !== false;
+}
+
+/** True unless an admin has switched reCAPTCHA off. */
+export async function isRecaptchaEnabled() {
+  if (mongoose.connection.readyState !== 1) return true;
+  const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
+  return doc?.recaptchaEnabled !== false;
 }
 
 /**

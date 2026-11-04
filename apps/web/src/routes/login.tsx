@@ -37,6 +37,7 @@ function LoginComponent() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
   // Hidden until the server confirms Google sign-in is on, so a disabled
   // provider never shows a button that would bounce the user through Google.
   const [googleEnabled, setGoogleEnabled] = useState(false);
@@ -51,6 +52,7 @@ function LoginComponent() {
         if (cancelled) return;
         // The client ID comes from the API at runtime — never a build-time constant.
         setGoogleEnabled(settings.googleSignInEnabled && Boolean(config.clientId));
+        setRecaptchaEnabled(settings.recaptchaEnabled);
       })
       .catch(() => {
         // API unreachable: leave the button hidden rather than offer a dead end.
@@ -67,7 +69,7 @@ function LoginComponent() {
     setTouched({ email: true, password: true });
     setError(null);
     if (!isValidEmail(email) || password.length === 0) return;
-    if (RECAPTCHA_SITE_KEY && !captchaToken) {
+    if (RECAPTCHA_SITE_KEY && recaptchaEnabled && !captchaToken) {
       setError('Please complete the CAPTCHA.');
       return;
     }
@@ -218,14 +220,12 @@ function LoginComponent() {
                       </button>
                     </div>
                     <div className="mt-1.5 flex justify-end">
-                      <button
-                        type="button"
-                        disabled
-                        title="Ask the front desk for a password reset — self-service reset is not in v1"
-                        className="cursor-not-allowed text-sm text-slate-400"
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
                       >
                         Forgot password?
-                      </button>
+                      </Link>
                     </div>
                     {capsOn && password.length > 0 && (
                       <p className="mt-1.5 text-sm text-amber-700">Caps Lock is on.</p>
@@ -237,7 +237,7 @@ function LoginComponent() {
                     )}
                   </div>
 
-                  {RECAPTCHA_SITE_KEY && (
+                  {RECAPTCHA_SITE_KEY && recaptchaEnabled && (
                     <div className="auth-captcha flex w-full justify-center">
                       <ReCAPTCHA
                         ref={recaptchaRef}
@@ -257,7 +257,7 @@ function LoginComponent() {
 
                   <Button
                     type="submit"
-                    disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
+                    disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && recaptchaEnabled && !captchaToken)}
                     className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
                   >
                     {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}

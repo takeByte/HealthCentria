@@ -1,4 +1,5 @@
 import { env } from '../config/env.js';
+import { isRecaptchaEnabled } from '../models/app-settings.model.js';
 import { logActivity } from '../services/activity.js';
 
 const VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
@@ -12,9 +13,12 @@ function attemptedEmail(value) {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : '';
 }
 
-/** "sign-in" vs "registration" — used only for the activity-log detail. */
+/** Which auth step the challenge belongs to — used only for the log detail. */
 function attemptKind(req) {
-  return String(req.path ?? '').toLowerCase().includes('register') ? 'registration' : 'sign-in';
+  const path = String(req.path ?? '').toLowerCase();
+  if (path.includes('register')) return 'registration';
+  if (path.includes('password')) return 'password reset';
+  return 'sign-in';
 }
 
 /**
@@ -42,6 +46,8 @@ async function recordFailure(req, detail) {
  * the widget.
  */
 export async function verifyCaptcha(req, res, next) {
+  if (!(await isRecaptchaEnabled())) return next();
+
   const secret = env.RECAPTCHA_SECRET_KEY;
 
   if (!secret) {
