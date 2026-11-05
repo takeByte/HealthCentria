@@ -14,6 +14,11 @@ import {
   testEmailSettings,
   updateEmailSettings,
 } from '../controllers/email-settings.controller.js';
+import {
+  deleteRecaptchaSettings,
+  getRecaptchaSettings,
+  updateRecaptchaSettings,
+} from '../controllers/recaptcha-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 
 export const adminSettingsRouter = Router();
@@ -29,6 +34,12 @@ adminSettingsRouter.use((req, res, next) => {
 adminSettingsRouter.get('/google', getGoogleSettings);
 adminSettingsRouter.put('/google', updateGoogleSettings);
 adminSettingsRouter.delete('/google', deleteGoogleSettings);
+
+// reCAPTCHA keys. The site key is public; the secret key is encrypted at rest.
+// Both can be overridden here without editing .env and restarting the API.
+adminSettingsRouter.get('/recaptcha', getRecaptchaSettings);
+adminSettingsRouter.put('/recaptcha', updateRecaptchaSettings);
+adminSettingsRouter.delete('/recaptcha', deleteRecaptchaSettings);
 
 // Email delivery (SMTP). Password reset codes and announcements use it, so an
 // admin can fix mail delivery without editing .env and restarting the API.

@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { AppSettings, SETTINGS_KEY, isGoogleSignInEnabled } from '../models/app-settings.model.js';
 import { logActivity } from '../services/activity.js';
 import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-credentials.js';
+import { resolveRecaptchaCredentials } from '../utils/recaptcha-credentials.js';
 
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
@@ -31,10 +32,13 @@ async function present(doc) {
 export const getPublicSettings = asyncHandler(async (req, res) => {
   const doc =
     mongoose.connection.readyState === 1 ? await AppSettings.findOne({ key: SETTINGS_KEY }).lean() : null;
+  const recaptcha = await resolveRecaptchaCredentials();
   res.json({
     success: true,
     googleSignInEnabled: doc?.googleSignInEnabled !== false,
     recaptchaEnabled: doc?.recaptchaEnabled !== false,
+    // Public by design: the browser needs it to render the widget.
+    recaptchaSiteKey: recaptcha.siteKey,
   });
 });
 

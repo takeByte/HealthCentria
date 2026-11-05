@@ -85,6 +85,8 @@ const ACTION_LABELS: Record<string, string> = {
   'settings.email.update': 'Email delivery settings updated',
   'settings.email.reset': 'Email delivery reset to default',
   'settings.email.test': 'Test email sent',
+  'settings.recaptcha.update': 'reCAPTCHA settings updated',
+  'settings.recaptcha.reset': 'reCAPTCHA reset to default',
   'settings.signin.update': 'Sign-in setting changed',
   'integration.update': 'Integration updated',
   'activity.purge': 'Activity log purged',

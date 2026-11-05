@@ -17,14 +17,8 @@ function requireDB(res) {
   return true;
 }
 
-// Visits per service over the last N days (completed appointments only, v1).
-export const visitsPerService = asyncHandler(async (req, res) => {
-  if (!requireDB(res)) return;
-  const parsed = querySchema.safeParse(req.query);
-  if (!parsed.success) {
-    return res.status(400).json({ success: false, message: 'Invalid range.' });
-  }
-  const { days } = parsed.data;
+// Shared by the JSON chart endpoint and the CSV export so both always agree.
+async function loadVisitsPerService(days) {
   const today = todayYMD();
   const from = addDaysYMD(today, -(days - 1));
   const rows = await Appointment.aggregate([
@@ -50,7 +44,58 @@ export const visitsPerService = asyncHandler(async (req, res) => {
     { $sort: { count: -1 } },
   ]);
   const total = rows.reduce((sum, r) => sum + r.count, 0);
-  res.json({ success: true, from, to: today, days, total, rows });
+  return { from, to: today, days, total, rows };
+}
+
+// Visits per service over the last N days (completed appointments only, v1).
+export const visitsPerService = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid range.' });
+  }
+  const data = await loadVisitsPerService(parsed.data.days);
+  res.json({ success: true, ...data });
+});
+
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+/**
+ * GET /api/reports/visits-per-service/export — the same report as a CSV file.
+ * Staff and admins only, matching the chart endpoint.
+ */
+export const exportVisitsPerServiceCsv = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid range.' });
+  }
+  const data = await loadVisitsPerService(parsed.data.days);
+
+  const lines = [
+    ['E-Kalinga — Visits per service'],
+    ['Period', `${data.from} to ${data.to}`],
+    ['Days', data.days],
+    [],
+    ['Service', 'Completed visits'],
+    ...data.rows.map((row) => [row.serviceName, row.count]),
+    ['Total', data.total],
+  ];
+  const csv = lines.map((columns) => columns.map(csvCell).join(',')).join('\r\n');
+
+  res.set('Cache-Control', 'no-store');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  // The web app reads this header to keep the server-generated filename even
+  // when the API is on a different origin (local dev).
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="e-kalinga-visits-per-service-${data.from}-to-${data.to}.csv"`,
+  );
+  // BOM so Excel opens UTF-8 correctly.
+  res.send(`\uFEFF${csv}`);
 });
 
 // Daily-ops + system counts for the admin dashboard (staff see shared counts;

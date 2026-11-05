@@ -1,0 +1,16 @@
+import{L as t,C as e,B as o,R as n}from"./schedule-Bu1MiALS.js";import{c as a}from"./E-Kalinga_Logo-CbkQSa2c.js";import{a as s,C as i}from"./clipboard-list-C1Imp-L8.js";import{M as c}from"./megaphone-CRIhidhV.js";import{F as l}from"./file-text-BSZi89h8.js";/**
+ * @license lucide-react v1.68.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const f={name:"settings",size:24,node:[["path",{d:"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",key:"1i5ecw"}],["circle",{cx:"12",cy:"12",r:"3",key:"1v7zrd"}]]};f.node;const y=a(f);/**
+ * @license lucide-react v1.68.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const r={name:"user-cog",size:24,node:[["path",{d:"M10 15H6a4 4 0 0 0-4 4v2",key:"1nfge6"}],["path",{d:"m14.305 16.53.923-.382",key:"1itpsq"}],["path",{d:"m15.228 13.852-.923-.383",key:"eplpkm"}],["path",{d:"m16.852 12.228-.383-.923",key:"13v3q0"}],["path",{d:"m16.852 17.772-.383.924",key:"1i8mnm"}],["path",{d:"m19.148 12.228.383-.923",key:"1q8j1v"}],["path",{d:"m19.53 18.696-.382-.924",key:"vk1qj3"}],["path",{d:"m20.772 13.852.924-.383",key:"n880s0"}],["path",{d:"m20.772 16.148.924.383",key:"1g6xey"}],["circle",{cx:"18",cy:"15",r:"3",key:"gjjjvw"}],["circle",{cx:"9",cy:"7",r:"4",key:"nufk8"}]]};r.node;const k=a(r);/**
+ * @license lucide-react v1.68.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const p={name:"users",size:24,node:[["path",{d:"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2",key:"1yyitq"}],["path",{d:"M16 3.128a4 4 0 0 1 0 7.744",key:"16gr8j"}],["path",{d:"M22 21v-2a4 4 0 0 0-3-3.87",key:"kshegd"}],["circle",{cx:"9",cy:"7",r:"4",key:"nufk8"}]]};p.node;const d=a(p),b=[{label:"Dashboard",to:"/staff/dashboard",icon:t},{label:"Appointments",to:"/staff/appointments",icon:e},{label:"Patients",to:"/staff/patients",icon:d},{label:"Walk-in",to:"/staff/walk-in",icon:s},{label:"Services",to:"/staff/services",icon:i},{label:"Announcements",to:"/staff/announcements",icon:c},{label:"Notifications",to:"/staff/notifications",icon:o},{label:"Activity",to:"/staff/activity",icon:n},{label:"Reports",to:"/staff/reports",icon:l}],h=[{label:"Dashboard",to:"/admin/dashboard",icon:t},{label:"Appointments",to:"/staff/appointments",icon:e},{label:"Patients",to:"/staff/patients",icon:d},{label:"Walk-in",to:"/staff/walk-in",icon:s},{label:"Services",to:"/staff/services",icon:i},{label:"Announcements",to:"/staff/announcements",icon:c},{label:"Notifications",to:"/staff/notifications",icon:o},{label:"Activity log",to:"/admin/activity",icon:n},{label:"Reports",to:"/staff/reports",icon:l},{label:"Staff Accounts",to:"/admin/staff-accounts",icon:k},{label:"Settings",to:"/admin/settings",icon:y}];function x(m){return m==="admin"?h:b}export{y as S,d as U,k as a,h as b,x as o};

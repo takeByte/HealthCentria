@@ -383,6 +383,35 @@ export function visitsPerService(days = 30): Promise<{
   return apiFetch(`/api/reports/visits-per-service?days=${days}`);
 }
 
+/** Downloads the visits-per-service report as CSV through the authenticated API. */
+export async function downloadVisitsCsv(days = 30): Promise<void> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}/api/reports/visits-per-service/export?days=${days}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // keep the status-based message
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  link.href = url;
+  link.download = match?.[1] ?? `e-kalinga-visits-${days}-days.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function overview(): Promise<{
   today: number;
   pending: number;
@@ -449,6 +478,29 @@ export function updateGoogleIntegrationSettings(input: {
 
 export function resetGoogleIntegrationSettings(): Promise<{ success: true } & GoogleIntegrationSettings> {
   return apiFetch('/api/admin/settings/google', { method: 'DELETE' });
+}
+
+export interface RecaptchaIntegrationSettings {
+  siteKeyMasked: string;
+  secretKeyMasked: string;
+  source: 'custom' | 'default';
+  /** False when neither the database nor .env has both keys. */
+  configured: boolean;
+}
+
+export function getRecaptchaIntegrationSettings(): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha');
+}
+
+export function updateRecaptchaIntegrationSettings(input: {
+  siteKey?: string;
+  secretKey?: string;
+}): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha', { method: 'PUT', body: input });
+}
+
+export function resetRecaptchaIntegrationSettings(): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE' });
 }
 
 export interface EmailIntegrationSettings {
@@ -554,6 +606,8 @@ export async function getGoogleAuthConfig(): Promise<{ clientId: string }> {
 export async function getPublicSettings(): Promise<{
   googleSignInEnabled: boolean;
   recaptchaEnabled: boolean;
+  /** Public site key; empty when the server has none configured. */
+  recaptchaSiteKey: string;
 }> {
   const res = await fetch(`${API_URL}/api/settings/public`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Request failed (${res.status}).`);

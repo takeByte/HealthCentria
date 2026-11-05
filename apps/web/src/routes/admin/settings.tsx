@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  CalendarDays,
+  Download,
   KeyRound,
   LoaderCircle,
   Mail,
@@ -20,6 +20,7 @@ import {
   CardHeading,
   InlineNotice,
   PageHero,
+  Segmented,
   StatusPill,
   SuccessNote,
   fieldLabel,
@@ -31,12 +32,15 @@ import {
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
+  downloadVisitsCsv,
   getAuthSettings,
   getEmailIntegrationSettings,
   getGoogleCalendarSettings,
   getGoogleIntegrationSettings,
+  getRecaptchaIntegrationSettings,
   resetEmailIntegrationSettings,
   resetGoogleIntegrationSettings,
+  resetRecaptchaIntegrationSettings,
   syncGoogleCalendar,
   testEmailDelivery,
   testGoogleCalendarConnection,
@@ -44,10 +48,12 @@ import {
   updateEmailIntegrationSettings,
   updateGoogleCalendarSettings,
   updateGoogleIntegrationSettings,
+  updateRecaptchaIntegrationSettings,
   type AuthSettings,
   type EmailIntegrationSettings,
   type GoogleCalendarSettings,
   type GoogleIntegrationSettings,
+  type RecaptchaIntegrationSettings,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 import { cn } from '../../lib/utils';
@@ -191,6 +197,16 @@ function AdminSettings() {
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [emailResetOpen, setEmailResetOpen] = useState(false);
 
+  const [recaptcha, setRecaptcha] = useState<RecaptchaIntegrationSettings | null>(null);
+  const [recaptchaLoadError, setRecaptchaLoadError] = useState<string | null>(null);
+  const [recaptchaSiteKey, setRecaptchaSiteKey] = useState('');
+  const [recaptchaSecretKey, setRecaptchaSecretKey] = useState('');
+  const [recaptchaSaving, setRecaptchaSaving] = useState(false);
+  const [recaptchaResetting, setRecaptchaResetting] = useState(false);
+  const [recaptchaError, setRecaptchaError] = useState<string | null>(null);
+  const [recaptchaMessage, setRecaptchaMessage] = useState<string | null>(null);
+  const [recaptchaResetOpen, setRecaptchaResetOpen] = useState(false);
+
   const [calendar, setCalendar] = useState<GoogleCalendarSettings | null>(null);
   const [calendarLoadError, setCalendarLoadError] = useState<string | null>(null);
   const [calendarSaving, setCalendarSaving] = useState(false);
@@ -198,6 +214,11 @@ function AdminSettings() {
   const [calendarSyncing, setCalendarSyncing] = useState(false);
   const [calendarActionError, setCalendarActionError] = useState<string | null>(null);
   const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
+
+  const [reportRange, setReportRange] = useState<'30' | '90'>('30');
+  const [reportExporting, setReportExporting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportMessage, setReportMessage] = useState<string | null>(null);
 
   const dismissToast = useCallback(() => setToast(null), []);
 
@@ -286,6 +307,34 @@ function AdminSettings() {
         if (!cancelled) {
           setEmailLoadError(
             err instanceof ApiError ? err.message : 'Could not load email settings. Reload the page to try again.',
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getRecaptchaIntegrationSettings()
+      .then((r) => {
+        if (!cancelled) {
+          setRecaptcha({
+            siteKeyMasked: r.siteKeyMasked,
+            secretKeyMasked: r.secretKeyMasked,
+            source: r.source,
+            configured: r.configured,
+          });
+          setRecaptchaLoadError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setRecaptchaLoadError(
+            err instanceof ApiError
+              ? err.message
+              : 'Could not load reCAPTCHA keys. Reload the page to try again.',
           );
         }
       });
@@ -484,6 +533,57 @@ function AdminSettings() {
     }
   }
 
+  async function saveRecaptchaKeys(e: FormEvent) {
+    e.preventDefault();
+    if (recaptchaSaving) return;
+    setRecaptchaSaving(true);
+    setRecaptchaError(null);
+    setRecaptchaMessage(null);
+    try {
+      const r = await updateRecaptchaIntegrationSettings({
+        siteKey: recaptchaSiteKey.trim() || undefined,
+        secretKey: recaptchaSecretKey.trim() || undefined,
+      });
+      setRecaptcha({
+        siteKeyMasked: r.siteKeyMasked,
+        secretKeyMasked: r.secretKeyMasked,
+        source: r.source,
+        configured: r.configured,
+      });
+      setRecaptchaSiteKey('');
+      setRecaptchaSecretKey('');
+      setRecaptchaMessage('reCAPTCHA keys saved. New challenges use them immediately.');
+    } catch (err) {
+      setRecaptchaError(err instanceof ApiError ? err.message : 'Could not save the reCAPTCHA keys. Try again.');
+    } finally {
+      setRecaptchaSaving(false);
+    }
+  }
+
+  async function resetRecaptchaKeys() {
+    if (recaptchaResetting) return;
+    setRecaptchaResetting(true);
+    setRecaptchaError(null);
+    setRecaptchaMessage(null);
+    try {
+      const r = await resetRecaptchaIntegrationSettings();
+      setRecaptcha({
+        siteKeyMasked: r.siteKeyMasked,
+        secretKeyMasked: r.secretKeyMasked,
+        source: r.source,
+        configured: r.configured,
+      });
+      setRecaptchaSiteKey('');
+      setRecaptchaSecretKey('');
+      setRecaptchaResetOpen(false);
+      setRecaptchaMessage('reCAPTCHA keys reset to the server defaults.');
+    } catch (err) {
+      setRecaptchaError(err instanceof ApiError ? err.message : 'Could not reset the reCAPTCHA keys. Try again.');
+    } finally {
+      setRecaptchaResetting(false);
+    }
+  }
+
   async function setCalendarSync(next: boolean) {
     if (!calendar || calendarSaving) return;
     const previous = calendar;
@@ -550,11 +650,27 @@ function AdminSettings() {
     }
   }
 
+  async function exportReportCsv() {
+    if (reportExporting) return;
+    setReportExporting(true);
+    setReportError(null);
+    setReportMessage(null);
+    try {
+      await downloadVisitsCsv(Number(reportRange));
+      setReportMessage(`Visits report for the last ${reportRange} days downloaded.`);
+    } catch (err) {
+      setReportError(err instanceof ApiError ? err.message : 'Could not generate the report. Try again.');
+    } finally {
+      setReportExporting(false);
+    }
+  }
+
   const googleOn = settings?.googleSignInEnabled ?? false;
   const hasNewGoogleValue = Boolean(googleClientId.trim() || googleClientSecret.trim());
   const hasNewEmailValue = Boolean(
     emailHost.trim() || emailPort.trim() || emailUser.trim() || emailPassword || emailFrom.trim(),
   );
+  const hasNewRecaptchaValue = Boolean(recaptchaSiteKey.trim() || recaptchaSecretKey.trim());
 
   return (
     <>
@@ -1034,57 +1150,17 @@ function AdminSettings() {
               />
             </div>
 
-            {calendar === null ? (
-              <StatusPill tone={calendarLoadError ? 'red' : 'slate'}>
-                {calendarLoadError ? 'Unavailable' : 'Loading…'}
-              </StatusPill>
-            ) : !calendar.configured ? (
-              <StatusPill tone="amber">Not configured</StatusPill>
-            ) : (
-              <StatusPill tone={calendar.enabled ? 'teal' : 'slate'}>
-                {calendar.enabled ? 'On' : 'Off'}
-              </StatusPill>
-            )}
-          </div>
-
-          {calendarLoadError && <InlineNotice className="mt-4">{calendarLoadError}</InlineNotice>}
-          {calendarActionError && <InlineNotice className="mt-4">{calendarActionError}</InlineNotice>}
-          {calendarMessage && <SuccessNote className="mt-4">{calendarMessage}</SuccessNote>}
-
-          {calendar && !calendar.configured && (
-            <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3.5 text-[12.5px] leading-6 text-slate-600 ring-1 ring-inset ring-slate-200">
-              <div className="flex items-center gap-2 font-semibold text-slate-800">
-                <CalendarDays size={16} className="text-slate-500" aria-hidden />
-                Clinic calendar is not connected
-              </div>
-              <p className="mt-2">
-                Add <code className="font-mono text-[11.5px]">GOOGLE_CALENDAR_ID</code>,{' '}
-                <code className="font-mono text-[11.5px]">GOOGLE_SERVICE_ACCOUNT_EMAIL</code>, and{' '}
-                <code className="font-mono text-[11.5px]">GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY</code> to{' '}
-                <code className="font-mono text-[11.5px]">apps/server/.env</code>, then restart the API. Use the
-                clinic calendar's ID from its settings (not “primary”), share it with the service account, and give
-                it “Make changes to events”.
-              </p>
-              <p className="mt-2">
-                No patient or staff screen changes. Until it is configured, appointments behave exactly as they do
-                now.
-              </p>
-            </div>
-          )}
-
-          {calendar && calendar.configured && (
-            <div className="mt-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+            <div className="flex items-center gap-3">
+              {calendarSaving && <LoaderCircle size={17} className="animate-spin text-slate-400" aria-hidden />}
+              {calendar === null ? (
+                <StatusPill tone={calendarLoadError ? 'red' : 'slate'}>
+                  {calendarLoadError ? 'Unavailable' : 'Loading…'}
+                </StatusPill>
+              ) : (
                 <div className="flex items-center gap-2.5">
                   <StatusPill tone={calendar.enabled ? 'teal' : 'slate'}>
                     {calendar.enabled ? 'On' : 'Off'}
                   </StatusPill>
-                  <span className="text-[13px] font-medium text-slate-700">
-                    Sync confirmed appointments automatically
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  {calendarSaving && <LoaderCircle size={16} className="animate-spin text-slate-400" aria-hidden />}
                   <Toggle
                     checked={calendar.enabled}
                     disabled={calendarSaving || calendarTesting || calendarSyncing}
@@ -1092,8 +1168,16 @@ function AdminSettings() {
                     onChange={setCalendarSync}
                   />
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
 
+          {calendarLoadError && <InlineNotice className="mt-4">{calendarLoadError}</InlineNotice>}
+          {calendarActionError && <InlineNotice className="mt-4">{calendarActionError}</InlineNotice>}
+          {calendarMessage && <SuccessNote className="mt-4">{calendarMessage}</SuccessNote>}
+
+          {calendar && calendar.configured && (
+            <div className="mt-5 space-y-4">
               <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2">
                 <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
                   <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Calendar ID</dt>
@@ -1160,6 +1244,60 @@ function AdminSettings() {
               </p>
             </div>
           )}
+        </motion.section>
+
+        <motion.section
+          id="reports-export"
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+          transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.14 }}
+          className={panel}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-xl">
+              <CardHeading
+                title="Reports export"
+                description="Download the visits-per-service report as a CSV file. The same report staff see under Reports — date range, each service, completed visits, and the total."
+              />
+            </div>
+            <StatusPill tone="teal">CSV</StatusPill>
+          </div>
+
+          {reportError && <InlineNotice className="mt-4">{reportError}</InlineNotice>}
+          {reportMessage && <SuccessNote className="mt-4">{reportMessage}</SuccessNote>}
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[13px] font-medium text-slate-700">Report window</span>
+              <Segmented
+                ariaLabel="Report window"
+                value={reportRange}
+                onChange={setReportRange}
+                options={[
+                  { key: '30', label: '30 days' },
+                  { key: '90', label: '90 days' },
+                ]}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={exportReportCsv}
+              disabled={reportExporting}
+              className={primaryButton}
+            >
+              {reportExporting ? (
+                <LoaderCircle size={16} className="animate-spin" aria-hidden />
+              ) : (
+                <Download size={16} aria-hidden />
+              )}
+              {reportExporting ? 'Generating…' : 'Generate CSV'}
+            </button>
+          </div>
+
+          <p className="mt-3 text-[12px] leading-5 text-slate-500">
+            Only completed appointments are counted. The CSV opens in Excel or Google Sheets and includes a UTF-8
+            BOM so service names render correctly.
+          </p>
         </motion.section>
       </DashboardShell>
 

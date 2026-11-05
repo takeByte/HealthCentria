@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { CalendarCheck, FileText, TrendingUp } from 'lucide-react';
+import { CalendarCheck, Download, FileText, LoaderCircle, TrendingUp } from 'lucide-react';
 import { BarChart } from '../../components/charts/bar-chart';
 import { Bar } from '../../components/charts/bar';
 import { BarXAxis } from '../../components/charts/bar-x-axis';
@@ -9,9 +9,22 @@ import { Grid } from '../../components/charts/grid';
 import { ChartTooltip } from '../../components/charts/tooltip/chart-tooltip';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
-import { CardHeading, EmptyNote, InlineNotice, Segmented, StatTile, panel } from '../../components/app-ui';
+import {
+  CardHeading,
+  EmptyNote,
+  InlineNotice,
+  Segmented,
+  StatTile,
+  panel,
+  secondaryButton,
+} from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
-import { visitsPerService, type VisitsPerServiceRow } from '../../lib/api';
+import {
+  ApiError,
+  downloadVisitsCsv,
+  visitsPerService,
+  type VisitsPerServiceRow,
+} from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 
 export const Route = createFileRoute('/staff/reports')({
@@ -28,6 +41,8 @@ function Reports() {
   const [rows, setRows] = useState<VisitsPerServiceRow[] | null>(null);
   const [meta, setMeta] = useState<{ from: string; to: string; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +62,19 @@ function Reports() {
       cancelled = true;
     };
   }, [range]);
+
+  async function handleExport() {
+    if (exporting) return;
+    setExportError(null);
+    setExporting(true);
+    try {
+      await downloadVisitsCsv(Number(range));
+    } catch (err) {
+      setExportError(err instanceof ApiError ? err.message : 'Could not generate the report. Try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const data = (rows ?? []).map((r) => ({ service: r.serviceName, visits: r.count }));
   const rise = reduceMotion
@@ -69,16 +97,33 @@ function Reports() {
         <p className="text-[13px] leading-5 text-slate-600">
           Completed visits only. Change the window to compare recent activity.
         </p>
-        <Segmented
-          ariaLabel="Report range"
-          value={range}
-          onChange={setRange}
-          options={[
-            { key: '30', label: '30 days' },
-            { key: '90', label: '90 days' },
-          ]}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting || rows === null}
+            className={secondaryButton}
+          >
+            {exporting ? (
+              <LoaderCircle size={16} className="animate-spin" aria-hidden />
+            ) : (
+              <Download size={16} aria-hidden />
+            )}
+            {exporting ? 'Generating…' : 'Export CSV'}
+          </button>
+          <Segmented
+            ariaLabel="Report range"
+            value={range}
+            onChange={setRange}
+            options={[
+              { key: '30', label: '30 days' },
+              { key: '90', label: '90 days' },
+            ]}
+          />
+        </div>
       </motion.div>
+
+      {exportError && <InlineNotice>{exportError}</InlineNotice>}
 
       <motion.div
         {...rise}

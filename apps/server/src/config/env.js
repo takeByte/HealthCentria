@@ -22,8 +22,9 @@ const envSchema = z.object({
 
   // reCAPTCHA v2 (secret half). Optional in development — the auth routes skip
   // verification when it is absent — but production refuses unverified logins.
-  // The site key is public and lives in the web app env as
-  // VITE_RECAPTCHA_SITE_KEY.
+  // Admins can override both keys at runtime from Settings; these values are
+  // the fallback when no custom row exists.
+  RECAPTCHA_SITE_KEY: z.string().optional(),
   RECAPTCHA_SECRET_KEY: z.string().optional(),
 
   // Number of reverse-proxy hops in front of the API. Leave 0 locally; set to 1

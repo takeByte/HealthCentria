@@ -1,6 +1,7 @@
 import { env } from '../config/env.js';
 import { isRecaptchaEnabled } from '../models/app-settings.model.js';
 import { logActivity } from '../services/activity.js';
+import { resolveRecaptchaCredentials } from '../utils/recaptcha-credentials.js';
 
 const VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
 // Google tokens are long but bounded. Anything larger is not a real token.
@@ -48,7 +49,7 @@ async function recordFailure(req, detail) {
 export async function verifyCaptcha(req, res, next) {
   if (!(await isRecaptchaEnabled())) return next();
 
-  const secret = env.RECAPTCHA_SECRET_KEY;
+  const { secretKey: secret } = await resolveRecaptchaCredentials();
 
   if (!secret) {
     if (env.NODE_ENV === 'production') {

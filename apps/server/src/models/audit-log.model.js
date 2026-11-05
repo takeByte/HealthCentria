@@ -55,6 +55,8 @@ export const ACTIVITY_ACTIONS = [
   'settings.email.update',
   'settings.email.reset',
   'settings.email.test',
+  'settings.recaptcha.update',
+  'settings.recaptcha.reset',
   'settings.signin.update',
   'integration.update',
   // System
@@ -95,6 +97,8 @@ export const ACTION_CATEGORY = {
   'settings.email.update': 'configuration',
   'settings.email.reset': 'configuration',
   'settings.email.test': 'configuration',
+  'settings.recaptcha.update': 'configuration',
+  'settings.recaptcha.reset': 'configuration',
   'settings.signin.update': 'configuration',
   'integration.update': 'configuration',
   'activity.purge': 'system',

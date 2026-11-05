@@ -1,10 +1,2 @@
-node_modules/
-dist/
-dist-ssr/
-*.local
-.env
-!.env.example
-.DS_Store
-*.tsbuildinfo
-.tanstack/
-screenshots/
+
+node_modules
