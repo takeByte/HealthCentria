@@ -5,8 +5,13 @@ import mongoose from 'mongoose';
 const verificationCodeSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, lowercase: true, trim: true, index: true },
-    // Scoped so a reset code can never be replayed as a future login OTP.
-    purpose: { type: String, required: true, enum: ['password_reset'], default: 'password_reset' },
+    // Scoped so a reset code can never be replayed as a login/verification code.
+    purpose: {
+      type: String,
+      required: true,
+      enum: ['password_reset', 'email_verification'],
+      default: 'password_reset',
+    },
     codeHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },
     attempts: { type: Number, default: 0 },

@@ -22,6 +22,12 @@ const userSchema = new mongoose.Schema(
     // Staff/admin accounts are created by an admin (see future staff management).
     role: { type: String, enum: ['patient', 'staff', 'admin'], default: 'patient' },
     active: { type: Boolean, default: true },
+    // Email ownership. Self-registered patients start unverified and see a
+    // reminder until they enter the code; staff/admin accounts, Google
+    // sign-ins, and seeded demo data are trusted by default. Rows created
+    // before this field existed have no value and are treated as verified.
+    emailVerified: { type: Boolean, default: true },
+    emailVerifiedAt: { type: Date, default: null },
     // Incremented whenever the password changes or an admin forces a reset.
     // The value is embedded in every JWT, so bumping it revokes all sessions.
     tokenVersion: { type: Number, default: 0 },

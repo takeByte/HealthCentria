@@ -14,6 +14,8 @@ export interface AuthSession {
   authProvider?: 'local' | 'google';
   /** False only for patients who still need to fill in their profile. */
   profileCompleted?: boolean;
+  /** False for self-registered patients who have not confirmed their email yet. */
+  emailVerified?: boolean;
   avatarUrl?: string;
   createdAt: string;
   /** JWT from the API. Absent only for pre-backend local fallback sessions. */
@@ -161,6 +163,7 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
     const authProvider = user.authProvider === 'google' ? 'google' : user.authProvider === 'local' ? 'local' : undefined;
     const profileCompleted =
       typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined;
+    const emailVerified = typeof user.emailVerified === 'boolean' ? user.emailVerified : undefined;
     const avatarUrl = typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined;
     return {
       email,
@@ -168,6 +171,7 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
       name,
       authProvider,
       profileCompleted,
+      emailVerified,
       avatarUrl,
       token,
       createdAt: new Date().toISOString(),
@@ -239,7 +243,7 @@ export async function registerPatient(data: RegisterData): Promise<AuthSession> 
       email,
       password: data.password,
       consent: data.consent,
-      captchaToken: data.captchaToken,
+      ...(data.captchaToken ? { captchaToken: data.captchaToken } : {}),
     });
     if (status === 200 || status === 201) {
       const session = sessionFromApi(resData, email);
@@ -248,7 +252,7 @@ export async function registerPatient(data: RegisterData): Promise<AuthSession> 
     }
     if (status === 409) throw new DuplicateEmailError();
     if (status !== 404) {
-      throw new AuthError(apiMessage(resData) || 'Registration failed. Try again.');
+      throw new AuthError(firstFieldError(resData) || apiMessage(resData) || 'Registration failed. Try again.');
     }
     // 404 = backend has no auth routes yet → local fallback below.
   } catch (err) {
@@ -309,6 +313,7 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
       role?: string;
       authProvider?: string;
       profileCompleted?: boolean;
+      emailVerified?: boolean;
       avatarUrl?: string;
     };
   };
@@ -322,6 +327,7 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
     name: typeof user.name === 'string' ? user.name : undefined,
     authProvider: user.authProvider === 'google' ? 'google' : user.authProvider === 'local' ? 'local' : undefined,
     profileCompleted: typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined,
+    emailVerified: typeof user.emailVerified === 'boolean' ? user.emailVerified : undefined,
     avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined,
     token,
     createdAt: new Date().toISOString(),
@@ -411,4 +417,57 @@ export async function changePassword(input: {
     return next;
   }
   throw new AuthError(firstFieldError(data) || apiMessage(data) || 'Could not update your password.');
+}
+
+/**
+ * Ask the API to email a 6-digit verification code to the signed-in account's
+ * own address. Never targets an arbitrary address, so the public registration
+ * form cannot be used to mail strangers.
+ */
+export async function requestEmailVerification(): Promise<{ message: string; resendAfter: number }> {
+  const session = getSession();
+  if (!session?.token) throw new AuthError('You need to be signed in to verify your email.');
+
+  const res = await fetch(`${API_URL}/api/auth/email/verify/request`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.token}`,
+    },
+  });
+  const data = await res.json().catch(() => null);
+  const body = (data ?? {}) as { message?: string; resendAfter?: number; alreadyVerified?: boolean };
+
+  if (res.ok) {
+    return {
+      message: body.message || 'We sent a 6-digit code to your email.',
+      resendAfter: typeof body.resendAfter === 'number' ? body.resendAfter : 60,
+    };
+  }
+  throw new AuthError(firstFieldError(data) || apiMessage(data) || 'Could not send the code. Try again.');
+}
+
+/** Submit the emailed code and mark this session's email as verified. */
+export async function confirmEmailVerification(code: string): Promise<AuthSession> {
+  const session = getSession();
+  if (!session?.token) throw new AuthError('You need to be signed in to verify your email.');
+
+  const res = await fetch(`${API_URL}/api/auth/email/verify/confirm`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.token}`,
+    },
+    body: JSON.stringify({ code }),
+  });
+  const data = await res.json().catch(() => null);
+
+  if (res.ok) {
+    const next: AuthSession = { ...session, emailVerified: true };
+    setSession(next);
+    return next;
+  }
+  throw new AuthError(
+    firstFieldError(data) || apiMessage(data) || 'That code is not valid. Try again.',
+  );
 }

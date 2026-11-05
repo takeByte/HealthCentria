@@ -9,8 +9,17 @@ import {
   register,
 } from '../controllers/auth.controller.js';
 import { changePassword, requestPasswordReset, resetPassword } from '../controllers/password.controller.js';
+import {
+  confirmEmailVerification,
+  requestEmailVerification,
+} from '../controllers/email-verification.controller.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { loginLimiter, passwordResetLimiter, registerLimiter } from '../middleware/rateLimit.js';
+import {
+  emailVerificationLimiter,
+  loginLimiter,
+  passwordResetLimiter,
+  registerLimiter,
+} from '../middleware/rateLimit.js';
 import { verifyCaptcha } from '../middleware/verifyCaptcha.js';
 
 export const authRouter = Router();
@@ -24,6 +33,11 @@ authRouter.post('/login', loginLimiter, verifyCaptcha, login);
 authRouter.post('/password/forgot', passwordResetLimiter, verifyCaptcha, requestPasswordReset);
 authRouter.post('/password/reset', passwordResetLimiter, resetPassword);
 authRouter.put('/password', requireAuth, changePassword);
+
+// Email verification. Authenticated: a code only ever goes to the account's own
+// address, so the public registration form cannot be used to mail strangers.
+authRouter.post('/email/verify/request', requireAuth, emailVerificationLimiter, requestEmailVerification);
+authRouter.post('/email/verify/confirm', requireAuth, emailVerificationLimiter, confirmEmailVerification);
 
 authRouter.post('/logout', requireAuth, logout);
 authRouter.get('/me', requireAuth, me);

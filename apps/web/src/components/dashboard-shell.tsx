@@ -7,6 +7,7 @@ import { listNotifications, logoutRequest, type NotificationItem } from '../lib/
 import { AppBackdrop } from './app-backdrop';
 import { BellDot, NotificationCenter } from './notifications';
 import { ChangePasswordDialog } from './change-password-dialog';
+import { EmailVerificationBanner } from './email-verification-banner';
 import { cn } from '../lib/utils';
 import appLogo from '../assets/E-Kalinga_Logo.png';
 
@@ -439,6 +440,7 @@ export function DashboardShell({
         </header>
 
         <main className={cn('mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-7 sm:py-8', mainClassName)}>
+          <EmailVerificationBanner />
           {children}
         </main>
       </div>

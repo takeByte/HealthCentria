@@ -48,3 +48,14 @@ export const registerLimiter = rateLimit({
   message: limitResponse('Too many registration attempts. Try again later.'),
   validate: { xForwardedForHeader: false },
 });
+
+// Verification codes are only sent to the signed-in account's own address, so
+// this is a guard against hammering the mail provider, not a public endpoint.
+export const emailVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many verification attempts. Try again in 15 minutes.'),
+  validate: { xForwardedForHeader: false },
+});
