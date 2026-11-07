@@ -431,6 +431,28 @@ export function updateStaffAccount(
   return apiFetch(`/api/staff-accounts/${id}`, { method: 'PATCH', body: input });
 }
 
+/** The signed-in staff/admin account, as returned by the self-service endpoints. */
+export interface MyAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: 'staff' | 'admin';
+  authProvider: 'local' | 'google';
+  permissions: string[];
+  avatarUrl?: string;
+}
+
+export function updateMyAccount(input: { fullName: string }): Promise<{ user: MyAccount }> {
+  return apiFetch('/api/auth/me', { method: 'PATCH', body: input });
+}
+
+export function changeMyPassword(input: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ success: boolean }> {
+  return apiFetch('/api/auth/change-password', { method: 'POST', body: input });
+}
+
 export interface AuthSettings {
   googleSignInEnabled: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */

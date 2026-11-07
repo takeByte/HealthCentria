@@ -68,6 +68,8 @@ const ACTION_LABELS: Record<string, string> = {
   'patient.create': 'Patient account created',
   'staff.create': 'Staff account created',
   'staff.update': 'Staff account updated',
+  'profile.update': 'Profile updated',
+  'auth.password_change': 'Password changed',
   'announcement.create': 'Announcement published',
   'announcement.update': 'Announcement edited',
   'announcement.delete': 'Announcement deleted',

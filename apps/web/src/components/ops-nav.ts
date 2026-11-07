@@ -9,6 +9,7 @@ import {
   Megaphone,
   Settings,
   UserCog,
+  UserRound,
   Users,
 } from 'lucide-react';
 import type { ShellNavItem } from './dashboard-shell';
@@ -27,6 +28,7 @@ export const staffNav: ShellNavItem[] = [
   { label: 'Notifications', to: '/staff/notifications', icon: Bell },
   { label: 'Activity', to: '/staff/activity', icon: History },
   { label: 'Reports', to: '/staff/reports', icon: FileText },
+  { label: 'My Profile', to: '/staff/profile', icon: UserRound },
 ];
 
 export const adminNav: ShellNavItem[] = [
@@ -41,6 +43,7 @@ export const adminNav: ShellNavItem[] = [
   { label: 'Reports', to: '/staff/reports', icon: FileText },
   { label: 'Staff Accounts', to: '/admin/staff-accounts', icon: UserCog },
   { label: 'Settings', to: '/admin/settings', icon: Settings },
+  { label: 'My Profile', to: '/staff/profile', icon: UserRound },
 ];
 
 /** Which capability unlocks each staff screen. Unlisted screens are always on. */

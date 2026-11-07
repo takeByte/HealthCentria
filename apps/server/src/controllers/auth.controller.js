@@ -194,6 +194,95 @@ export const me = asyncHandler(async (req, res) => {
   res.json({ success: true, user: presentUser(user) });
 });
 
+const updateMeSchema = z.object({
+  fullName: z.string().trim().min(1, 'Full name is required.').max(120, 'Name is too long.'),
+});
+
+/**
+ * PATCH /api/auth/me — let staff and admin edit their own display name.
+ *
+ * Role, permissions and active state remain admin-managed in Staff Accounts;
+ * this endpoint deliberately accepts only the name so a staff account can never
+ * escalate its own access.
+ */
+export const updateMe = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  if (req.user.role === 'patient') {
+    return res
+      .status(403)
+      .json({ success: false, message: 'Use the patient profile page to update your details.' });
+  }
+  const parsed = updateMeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+  }
+  const user = await User.findById(req.user.id);
+  if (!user || !user.active) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  const before = user.fullName;
+  user.fullName = parsed.data.fullName;
+  await user.save();
+  await logActivity({
+    req,
+    action: 'profile.update',
+    target: { type: 'staff', id: user._id, label: user.fullName, role: user.role },
+    changes: [['fullName', before, user.fullName]],
+    detail: 'Updated their own profile.',
+  });
+  res.json({ success: true, user: presentUser(user) });
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Enter your current password.'),
+  newPassword: z.string().refine(isValidPassword, PASSWORD_ERROR_MESSAGE),
+});
+
+/** POST /api/auth/change-password — self-service password change for staff/admin. */
+export const changePassword = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  if (req.user.role === 'patient') {
+    return res
+      .status(403)
+      .json({ success: false, message: 'Use the patient profile page to manage your password.' });
+  }
+  const parsed = changePasswordSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+  }
+  const user = await User.findById(req.user.id);
+  if (!user || !user.active) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  if (!user.passwordHash) {
+    return res.status(400).json({
+      success: false,
+      message: 'This account signs in with Google. Ask an admin to set a password for it.',
+    });
+  }
+  const currentOk = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
+  if (!currentOk) {
+    return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+  }
+  const sameAsCurrent = await verifyPassword(parsed.data.newPassword, user.passwordHash);
+  if (sameAsCurrent) {
+    return res.status(400).json({ success: false, message: 'Choose a password different from your current one.' });
+  }
+  user.passwordHash = await hashPassword(parsed.data.newPassword);
+  await user.save();
+  await logActivity({
+    req,
+    action: 'auth.password_change',
+    target: { type: 'staff', id: user._id, label: user.fullName, role: user.role },
+    detail: 'Changed their own password.',
+  });
+  res.json({ success: true });
+});
+
 /** Redirect back to the SPA with either a session token or an error code. */
 function redirectToApp(res, params) {
   const url = new URL('/auth/callback', env.CLIENT_URL);

@@ -33,6 +33,7 @@ import { Route as StaffAppointmentsRouteImport } from './routes/staff/appointmen
 import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
 import { Route as StaffNotificationsRouteImport } from './routes/staff/notifications'
 import { Route as StaffPatientsRouteImport } from './routes/staff/patients'
+import { Route as StaffProfileRouteImport } from './routes/staff/profile'
 import { Route as StaffReportsRouteImport } from './routes/staff/reports'
 import { Route as StaffServicesRouteImport } from './routes/staff/services'
 import { Route as StaffWalkInRouteImport } from './routes/staff/walk-in'
@@ -163,6 +164,11 @@ const StaffPatientsRoute = StaffPatientsRouteImport.update({
   path: '/patients',
   getParentRoute: () => StaffRouteRoute,
 } as any)
+const StaffProfileRoute = StaffProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
 const StaffReportsRoute = StaffReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -234,6 +240,7 @@ export interface FileRoutesByFullPath {
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
   '/staff/patients': typeof StaffPatientsRouteWithChildren
+  '/staff/profile': typeof StaffProfileRoute
   '/staff/reports': typeof StaffReportsRoute
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
+  '/staff/profile': typeof StaffProfileRoute
   '/staff/reports': typeof StaffReportsRoute
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
@@ -304,6 +312,7 @@ export interface FileRoutesById {
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
   '/staff/patients': typeof StaffPatientsRouteWithChildren
+  '/staff/profile': typeof StaffProfileRoute
   '/staff/reports': typeof StaffReportsRoute
   '/staff/services': typeof StaffServicesRoute
   '/staff/walk-in': typeof StaffWalkInRoute
@@ -341,6 +350,7 @@ export interface FileRouteTypes {
     | '/staff/dashboard'
     | '/staff/notifications'
     | '/staff/patients'
+    | '/staff/profile'
     | '/staff/reports'
     | '/staff/services'
     | '/staff/walk-in'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/staff/appointments'
     | '/staff/dashboard'
     | '/staff/notifications'
+    | '/staff/profile'
     | '/staff/reports'
     | '/staff/services'
     | '/staff/walk-in'
@@ -410,6 +421,7 @@ export interface FileRouteTypes {
     | '/staff/dashboard'
     | '/staff/notifications'
     | '/staff/patients'
+    | '/staff/profile'
     | '/staff/reports'
     | '/staff/services'
     | '/staff/walk-in'
@@ -602,6 +614,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffPatientsRouteImport
       parentRoute: typeof StaffRouteRoute
     }
+    '/staff/profile': {
+      id: '/staff/profile'
+      path: '/profile'
+      fullPath: '/staff/profile'
+      preLoaderRoute: typeof StaffProfileRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
     '/staff/reports': {
       id: '/staff/reports'
       path: '/reports'
@@ -737,6 +756,7 @@ interface StaffRouteRouteChildren {
   StaffDashboardRoute: typeof StaffDashboardRoute
   StaffNotificationsRoute: typeof StaffNotificationsRoute
   StaffPatientsRoute: typeof StaffPatientsRouteWithChildren
+  StaffProfileRoute: typeof StaffProfileRoute
   StaffReportsRoute: typeof StaffReportsRoute
   StaffServicesRoute: typeof StaffServicesRoute
   StaffWalkInRoute: typeof StaffWalkInRoute
@@ -749,6 +769,7 @@ const StaffRouteRouteChildren: StaffRouteRouteChildren = {
   StaffDashboardRoute: StaffDashboardRoute,
   StaffNotificationsRoute: StaffNotificationsRoute,
   StaffPatientsRoute: StaffPatientsRouteWithChildren,
+  StaffProfileRoute: StaffProfileRoute,
   StaffReportsRoute: StaffReportsRoute,
   StaffServicesRoute: StaffServicesRoute,
   StaffWalkInRoute: StaffWalkInRoute,

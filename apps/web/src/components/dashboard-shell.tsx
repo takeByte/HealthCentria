@@ -142,7 +142,7 @@ export function DashboardShell({
   const [unread, setUnread] = useState(0);
   const [bellItems, setBellItems] = useState<NotificationItem[] | null>(null);
   const initial = userName?.trim()?.charAt(0) ?? userEmail.trim().charAt(0).toUpperCase();
-  const profileTo = nav.find((item) => item.to === '/app/profile')?.to;
+  const profileTo = nav.find((item) => item.label === 'My Profile')?.to;
 
   useEffect(() => {
     let cancelled = false;
