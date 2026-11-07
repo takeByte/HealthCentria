@@ -13,7 +13,7 @@ export function AppBackdrop() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#f5faff]"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-[#f5faff] print:hidden"
     >
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#f4faff_0%,#eef7fe_28%,#f8fcff_54%,#eef6fd_80%,#f3f9ff_100%)]" />
       <div className="absolute -left-40 -top-36 size-[34rem] rounded-full bg-sky-300/20 blur-3xl" />

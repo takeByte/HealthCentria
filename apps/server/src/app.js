@@ -31,7 +31,7 @@ export function createApp() {
   // Required behind Nginx/Render/Railway: without it rate limits and activity
   // logs see the proxy's IP instead of the client's.
   if (env.TRUST_PROXY > 0) app.set('trust proxy', env.TRUST_PROXY);
-  app.use(cors({ origin: env.CLIENT_URL }));
+  app.use(cors({ origin: env.CLIENT_URL, exposedHeaders: ['Content-Disposition'] }));
   app.use(express.json());
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   // Client IP + user agent for every activity entry written downstream.

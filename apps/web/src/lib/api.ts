@@ -367,20 +367,98 @@ export function updatePatientRecord(
   return apiFetch(`/api/patients/${id}`, { method: 'PATCH', body: input });
 }
 
+export type ReportRange = 'today' | 'week' | 'month';
+export type ReportKind = 'visits' | 'status' | 'patients';
+
+export interface ReportRangeMeta {
+  /** Preset the server resolved; null when a legacy `days` window was used. */
+  range: ReportRange | null;
+  days: number;
+  from: string;
+  to: string;
+}
+
 export interface VisitsPerServiceRow {
   serviceId: string;
   serviceName: string;
   count: number;
 }
 
-export function visitsPerService(days = 30): Promise<{
-  from: string;
-  to: string;
-  days: number;
+export function visitsPerService(
+  range: ReportRange = 'month',
+): Promise<ReportRangeMeta & { total: number; rows: VisitsPerServiceRow[] }> {
+  return apiFetch(`/api/reports/visits-per-service?range=${range}`);
+}
+
+export interface AppointmentsByStatusTotals {
+  pending: number;
+  confirmed: number;
+  declined: number;
+  completed: number;
+  cancelled: number;
   total: number;
-  rows: VisitsPerServiceRow[];
-}> {
-  return apiFetch(`/api/reports/visits-per-service?days=${days}`);
+}
+
+export interface AppointmentsByStatusRow extends AppointmentsByStatusTotals {
+  serviceId: string;
+  serviceName: string;
+}
+
+export function appointmentsByStatus(
+  range: ReportRange = 'month',
+): Promise<ReportRangeMeta & { totals: AppointmentsByStatusTotals; rows: AppointmentsByStatusRow[] }> {
+  return apiFetch(`/api/reports/appointments-by-status?range=${range}`);
+}
+
+export interface PatientReportRow {
+  id: string;
+  name: string;
+  age: number | null;
+  sex: string;
+  address: string;
+  barangay: string;
+  contactNumber: string;
+  householdNumber: string;
+  lastVisit: string | null;
+  registeredAt: string | null;
+}
+
+export function patientReport(
+  range: ReportRange = 'month',
+): Promise<
+  ReportRangeMeta & { total: number; newInPeriod: number; seenInPeriod: number; rows: PatientReportRow[] }
+> {
+  return apiFetch(`/api/reports/patients?range=${range}`);
+}
+
+/** Downloads a report as a real PDF through the authenticated API. */
+export async function downloadReportPdf(report: ReportKind, range: ReportRange): Promise<void> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}/api/reports/export.pdf?report=${report}&range=${range}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data.message) message = data.message;
+    } catch {
+      // The error body was not JSON; keep the status message.
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `healthcentria-${report}-${range}.pdf`;
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function overview(): Promise<{

@@ -289,7 +289,7 @@ export function DashboardShell({
         )}
       </AnimatePresence>
 
-      <div className="lg:pl-[17rem]">
+      <div className="app-main lg:pl-[17rem]">
         <header className="app-chrome sticky top-0 z-20 border-b border-white/60">
           <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-7">
             <button
@@ -414,7 +414,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className={cn('mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-7 sm:py-8', mainClassName)}>
+        <main className={cn('app-content mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-7 sm:py-8', mainClassName)}>
           {children}
         </main>
       </div>

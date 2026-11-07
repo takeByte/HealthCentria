@@ -13,6 +13,8 @@ export interface BarXAxisProps {
   showAllLabels?: boolean;
   /** Maximum number of labels to show. Default: 12 */
   maxLabels?: number;
+  /** Truncate labels wider than this many pixels with an ellipsis. Default: none */
+  maxLabelWidth?: number;
 }
 
 interface BarXAxisLabelProps {
@@ -21,6 +23,7 @@ interface BarXAxisLabelProps {
   crosshairX: number | null;
   isHovering: boolean;
   tickerHalfWidth: number;
+  maxLabelWidth?: number;
 }
 
 function BarXAxisLabel({
@@ -29,6 +32,7 @@ function BarXAxisLabel({
   crosshairX,
   isHovering,
   tickerHalfWidth,
+  maxLabelWidth,
 }: BarXAxisLabelProps) {
   const fadeBuffer = 20;
   const fadeRadius = tickerHalfWidth + fadeBuffer;
@@ -57,8 +61,11 @@ function BarXAxisLabel({
     >
       <motion.span
         animate={{ opacity }}
-        className={cn("whitespace-nowrap text-chart-label text-xs")}
+        className={cn(
+          "block truncate whitespace-nowrap text-chart-label text-xs",
+        )}
         initial={{ opacity: 1 }}
+        style={maxLabelWidth ? { maxWidth: maxLabelWidth } : undefined}
         transition={{ duration: 0.4, ease: "easeInOut" }}
       >
         {label}
@@ -91,6 +98,7 @@ const BarXAxisInner = memo(function BarXAxisInner({
   tickerHalfWidth = 50,
   showAllLabels = false,
   maxLabels = 12,
+  maxLabelWidth,
   container,
 }: BarXAxisProps & { container: HTMLDivElement }) {
   const { margin, tooltipData, barScale, bandWidth, barXAccessor, data } =
@@ -110,13 +118,23 @@ const BarXAxisInner = memo(function BarXAxisInner({
       return { label, x };
     });
 
-    // If showAllLabels is true or we have fewer than maxLabels, show all
-    if (showAllLabels || allLabels.length <= maxLabels) {
+    // Keep labels from colliding: a truncated label still needs horizontal
+    // room, so cap the count by the chart's actual width before falling back
+    // to the fixed `maxLabels`.
+    const availableWidth = container.clientWidth - margin.left - margin.right;
+    const widthLimited =
+      maxLabelWidth && maxLabelWidth > 0
+        ? Math.max(1, Math.floor(availableWidth / (maxLabelWidth + 8)))
+        : maxLabels;
+    const labelLimit = Math.max(1, Math.min(maxLabels, widthLimited));
+
+    // If showAllLabels is true or we have fewer than the limit, show all
+    if (showAllLabels || allLabels.length <= labelLimit) {
       return allLabels;
     }
 
     // Otherwise, skip some labels to avoid crowding
-    const step = Math.ceil(allLabels.length / maxLabels);
+    const step = Math.ceil(allLabels.length / labelLimit);
     return allLabels.filter((_, i) => i % step === 0);
   }, [
     barScale,
@@ -124,8 +142,11 @@ const BarXAxisInner = memo(function BarXAxisInner({
     barXAccessor,
     data,
     margin.left,
+    margin.right,
+    container.clientWidth,
     showAllLabels,
     maxLabels,
+    maxLabelWidth,
   ]);
 
   const isHovering = tooltipData !== null;
@@ -139,6 +160,7 @@ const BarXAxisInner = memo(function BarXAxisInner({
           isHovering={isHovering}
           key={`${item.label}-${item.x}`}
           label={item.label}
+          maxLabelWidth={maxLabelWidth}
           tickerHalfWidth={tickerHalfWidth}
           x={item.x}
         />

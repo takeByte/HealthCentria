@@ -309,3 +309,57 @@ body {
 .auth-captcha > div {
   zoom: calc(100cqw / 304px);
 }
+
+/* ------------------------------------------------------------- print --- */
+
+/* Print-only blocks stay in the DOM so the report letterhead is available to
+ * the browser's print dialog without duplicating markup. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .app-sidebar,
+  .app-chrome,
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .app-main {
+    padding-left: 0 !important;
+  }
+
+  .app-content {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  .app-card,
+  .app-card-quiet {
+    border: 1px solid #d7dee6 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+}
