@@ -57,7 +57,9 @@ const userSchema = new mongoose.Schema(
     // profile leave it null). Shown as "Updated by" on the patient record.
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
-  { timestamps: true },
+  // Admin edits and self-service profile/password changes can race. A stale
+  // save raises Mongoose's VersionError, which the API reports as HTTP 409.
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 // Patient profile fields are optional while a Google-created account is still

@@ -130,14 +130,30 @@ export const myAppointments = asyncHandler(async (req, res) => {
 
 export const cancelAppointment = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
-  const appt = await Appointment.findOne({ _id: req.params.id, patient: req.user.id });
-  if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found.' });
-  if (appt.status !== 'pending' && appt.status !== 'confirmed') {
-    return res.status(400).json({ success: false, message: 'Only pending or confirmed appointments can be cancelled.' });
+  const before = await Appointment.findOne({ _id: req.params.id, patient: req.user.id }).lean();
+  if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
+  if (before.status !== 'pending' && before.status !== 'confirmed') {
+    return res.status(409).json({
+      success: false,
+      code: 'APPOINTMENT_CONFLICT',
+      message: 'Only pending or confirmed appointments can be cancelled. Reload to see its current status.',
+    });
   }
-  const previousStatus = appt.status;
-  appt.status = 'cancelled';
-  await appt.save();
+  // Guard on the status just read so a staff action in between cannot be
+  // silently overwritten by the cancel.
+  const appt = await Appointment.findOneAndUpdate(
+    { _id: req.params.id, patient: req.user.id, status: before.status },
+    { $set: { status: 'cancelled' }, $inc: { __v: 1 } },
+    { new: true },
+  );
+  if (!appt) {
+    return res.status(409).json({
+      success: false,
+      code: 'APPOINTMENT_CONFLICT',
+      message: 'This appointment changed while you were cancelling it. Reload and try again.',
+    });
+  }
+  const previousStatus = before.status;
   await appt.populate('service', 'name');
   await logActivity({
     req,

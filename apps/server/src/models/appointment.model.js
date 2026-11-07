@@ -26,7 +26,10 @@ const appointmentSchema = new mongoose.Schema(
     // Stable marker for idempotent demo seeding (never exposed by the API).
     seedKey: { type: String, index: true, sparse: true },
   },
-  { timestamps: true },
+  // Two staff acting on one request must not silently overwrite each other.
+  // Status transitions below also guard on the expected status; this covers
+  // any remaining read-then-save path (Mongoose VersionError → HTTP 409).
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 export const Appointment = mongoose.models.Appointment ?? mongoose.model('Appointment', appointmentSchema);
