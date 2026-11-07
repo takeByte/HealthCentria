@@ -22,6 +22,7 @@ import {
   secondaryButton,
 } from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
+import { sessionCan } from '../../lib/permissions';
 import { listAnnouncements, queueAppointments, type Announcement } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 
@@ -52,11 +53,19 @@ function StaffDashboard() {
   const session = getSession();
   const service = getTodayService();
   const firstName = displayFirstName(session?.name);
+  const canAppointments = sessionCan(session, 'appointments.manage');
+  const canWalkIn = sessionCan(session, 'walkin.manage');
+  const canReports = sessionCan(session, 'reports.view');
+  const canAnnouncements = sessionCan(session, 'announcements.manage');
   const [counts, setCounts] = useState<{ today: number; pending: number } | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [announcementsError, setAnnouncementsError] = useState(false);
 
   useEffect(() => {
+    if (!canAppointments) {
+      setCounts({ today: 0, pending: 0 });
+      return;
+    }
     let cancelled = false;
     const now = new Date();
     const t = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -70,6 +79,13 @@ function StaffDashboard() {
         pending: pendings.appointments.length,
       });
     });
+    return () => {
+      cancelled = true;
+    };
+  }, [canAppointments]);
+
+  useEffect(() => {
+    let cancelled = false;
     listAnnouncements()
       .then((r) => {
         if (!cancelled) setAnnouncements(r.announcements);
@@ -95,7 +111,7 @@ function StaffDashboard() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${service.name} — ${service.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div {...rise} transition={riseTransition}>
@@ -103,16 +119,24 @@ function StaffDashboard() {
           eyebrow={`${service.name} today`}
           title={`${greeting()}, ${firstName}`}
           description={
-            counts === null
-              ? 'Loading today’s queue…'
-              : counts.pending > 0
-                ? `${counts.pending} request${counts.pending === 1 ? '' : 's'} waiting for review. Confirm or decline before the clinic fills up.`
-                : 'The queue is clear. Review today’s confirmed visits and keep the patient records up to date.'
+            !canAppointments
+              ? 'Your admin sets which tools this account can use. Open the menu to see what you can access.'
+              : counts === null
+                ? 'Loading today’s queue…'
+                : counts.pending > 0
+                  ? `${counts.pending} request${counts.pending === 1 ? '' : 's'} waiting for review. Confirm or decline before the clinic fills up.`
+                  : 'The queue is clear. Review today’s confirmed visits and keep the patient records up to date.'
           }
           action={
-            <Link to="/staff/appointments" className={`${primaryButton} shrink-0`}>
-              Open the queue <ArrowRight size={16} aria-hidden />
-            </Link>
+            canAppointments ? (
+              <Link to="/staff/appointments" className={`${primaryButton} shrink-0`}>
+                Open the queue <ArrowRight size={16} aria-hidden />
+              </Link>
+            ) : canWalkIn ? (
+              <Link to="/staff/walk-in" className={`${primaryButton} shrink-0`}>
+                Register a walk-in <ArrowRight size={16} aria-hidden />
+              </Link>
+            ) : undefined
           }
         />
       </motion.div>
@@ -120,21 +144,27 @@ function StaffDashboard() {
       <motion.div
         {...rise}
         transition={{ ...riseTransition, delay: 0.04 }}
-        className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
+        className={`grid gap-3.5 sm:grid-cols-2 ${
+          canAppointments && canReports ? 'xl:grid-cols-4' : canAppointments || canReports ? 'xl:grid-cols-3' : 'xl:grid-cols-1'
+        }`}
       >
-        <StatTile
-          icon={CalendarCheck}
-          label="Today"
-          value={counts === null ? '—' : counts.today}
-          hint="Confirmed + pending visits"
-        />
-        <StatTile
-          icon={Clock3}
-          label="Pending requests"
-          value={counts === null ? '—' : counts.pending}
-          hint={counts?.pending === 0 ? 'Queue is clear' : 'Confirm or decline'}
-          tone="amber"
-        />
+        {canAppointments && (
+          <StatTile
+            icon={CalendarCheck}
+            label="Today"
+            value={counts === null ? '—' : counts.today}
+            hint="Confirmed + pending visits"
+          />
+        )}
+        {canAppointments && (
+          <StatTile
+            icon={Clock3}
+            label="Pending requests"
+            value={counts === null ? '—' : counts.pending}
+            hint={counts?.pending === 0 ? 'Queue is clear' : 'Confirm or decline'}
+            tone="amber"
+          />
+        )}
         <StatTile
           icon={Stethoscope}
           label="Today's service"
@@ -142,48 +172,60 @@ function StaffDashboard() {
           hint={service.detail}
           tone="sky"
         />
-        <StatTile icon={FileText} label="Reports" value="30 days" hint="Visits per service" tone="slate" />
+        {canReports && (
+          <StatTile icon={FileText} label="Reports" value="30 days" hint="Visits per service" tone="slate" />
+        )}
       </motion.div>
 
       <div className="grid items-start gap-5 lg:grid-cols-5">
-        <motion.section
-          {...rise}
-          transition={{ ...riseTransition, delay: 0.08 }}
-          className={`${panel} lg:col-span-2`}
-        >
-          <CardHeading
-            title="Pending approvals"
-            description={
-              counts === null
-                ? 'Loading the queue…'
-                : counts.pending === 0
-                  ? 'Nothing waiting — the queue is clear.'
-                  : `${counts.pending} request${counts.pending === 1 ? '' : 's'} need${counts.pending === 1 ? 's' : ''} review.`
-            }
-          />
-          <Link to="/staff/appointments" className={`${primaryButton} mt-4 h-10 px-4 text-[13px]`}>
-            Review requests <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link to="/staff/walk-in" className={`${secondaryButton} mt-2 h-10 px-4 text-[13px]`}>
-            Register a walk-in
-          </Link>
-        </motion.section>
+        {(canAppointments || canWalkIn) && (
+          <motion.section
+            {...rise}
+            transition={{ ...riseTransition, delay: 0.08 }}
+            className={`${panel} lg:col-span-2`}
+          >
+            <CardHeading
+              title={canAppointments ? 'Pending approvals' : 'Walk-in registration'}
+              description={
+                !canAppointments
+                  ? 'Register a patient who arrives without an appointment.'
+                  : counts === null
+                    ? 'Loading the queue…'
+                    : counts.pending === 0
+                      ? 'Nothing waiting — the queue is clear.'
+                      : `${counts.pending} request${counts.pending === 1 ? '' : 's'} need${counts.pending === 1 ? 's' : ''} review.`
+              }
+            />
+            {canAppointments && (
+              <Link to="/staff/appointments" className={`${primaryButton} mt-4 h-10 px-4 text-[13px]`}>
+                Review requests <ArrowRight size={15} aria-hidden />
+              </Link>
+            )}
+            {canWalkIn && (
+              <Link to="/staff/walk-in" className={`${secondaryButton} mt-2 h-10 px-4 text-[13px]`}>
+                Register a walk-in
+              </Link>
+            )}
+          </motion.section>
+        )}
 
         <motion.section
           {...rise}
           transition={{ ...riseTransition, delay: 0.12 }}
-          className={`${panel} lg:col-span-3`}
+          className={`${panel} ${canAppointments || canWalkIn ? 'lg:col-span-3' : 'lg:col-span-5'}`}
         >
           <CardHeading
             title="From the health center"
             description="The same announcements patients see in their feed."
             action={
-              <Link
-                to="/staff/announcements"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
-              >
-                View all <ArrowRight size={15} aria-hidden />
-              </Link>
+              canAnnouncements ? (
+                <Link
+                  to="/staff/announcements"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
+                >
+                  View all <ArrowRight size={15} aria-hidden />
+                </Link>
+              ) : undefined
             }
           />
           <div className="mt-4">
@@ -214,17 +256,19 @@ function StaffDashboard() {
         </motion.section>
       </div>
 
-      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.16 }} className={panel}>
-        <CardHeading
-          title="Visits per service"
-          description="Completed visits per service for the last 30 days."
-          action={
-            <Link to="/staff/reports" className={`${secondaryButton} h-9 px-3.5 text-[13px]`}>
-              Open reports <ArrowRight size={15} aria-hidden />
-            </Link>
-          }
-        />
-      </motion.section>
+      {canReports && (
+        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.16 }} className={panel}>
+          <CardHeading
+            title="Visits per service"
+            description="Completed visits per service for the last 30 days."
+            action={
+              <Link to="/staff/reports" className={`${secondaryButton} h-9 px-3.5 text-[13px]`}>
+                Open reports <ArrowRight size={15} aria-hidden />
+              </Link>
+            }
+          />
+        </motion.section>
+      )}
     </DashboardShell>
   );
 }

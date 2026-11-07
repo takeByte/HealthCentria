@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { ACTIVITY_CATEGORIES, AuditLog, categoryForAction } from '../models/audit-log.model.js';
+import { User } from '../models/user.model.js';
 import {
   ACTIVITY_RETENTION_DAYS,
   logActivity,
@@ -132,6 +133,39 @@ function buildFilter(user, query) {
   return clauses.length ? { $and: clauses } : {};
 }
 
+/**
+ * Fill in the role of an affected account.
+ *
+ * Entries written before `targetRole` existed only record `targetType: 'staff'`
+ * for both staff and admin accounts. A role change is also dropped from
+ * `changes` when the diff is empty, so the stored change list cannot always be
+ * trusted. Use the recorded role change when present, then fall back to the
+ * account's current role so historical rows still read "Admin" vs "Staff".
+ */
+async function withTargetRoles(entries) {
+  const pending = entries.filter(
+    (e) =>
+      !e.targetRole &&
+      (e.targetType === 'staff' || e.targetType === 'patient') &&
+      e.targetId &&
+      mongoose.isValidObjectId(e.targetId),
+  );
+  if (!pending.length) return entries;
+
+  const ids = [...new Set(pending.map((e) => String(e.targetId)))];
+  const users = await User.find({ _id: { $in: ids } })
+    .select('_id role')
+    .lean();
+  const roleById = new Map(users.map((u) => [String(u._id), u.role]));
+
+  for (const entry of pending) {
+    const roleChange = (entry.changes ?? []).find((c) => c.field === 'role');
+    const recorded = ['patient', 'staff', 'admin'].includes(roleChange?.to) ? roleChange.to : '';
+    entry.targetRole = recorded || roleById.get(String(entry.targetId)) || '';
+  }
+  return entries;
+}
+
 function present(e) {
   return {
     id: String(e._id),
@@ -146,6 +180,7 @@ function present(e) {
       type: e.targetType || '',
       id: e.targetId || '',
       label: e.targetLabel || '',
+      role: e.targetRole || '',
     },
     changes: (e.changes ?? []).map((c) => ({ field: c.field, from: c.from, to: c.to })),
     outcome: e.outcome ?? 'success',
@@ -163,6 +198,7 @@ async function readPage(user, query) {
     AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(query.limit).lean(),
     AuditLog.countDocuments(filter),
   ]);
+  await withTargetRoles(entries);
   return {
     entries: entries.map(present),
     total,
@@ -261,6 +297,7 @@ export const exportActivityCsv = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(10000)
     .lean();
+  await withTargetRoles(entries);
 
   const header = [
     'timestamp',
@@ -270,6 +307,7 @@ export const exportActivityCsv = asyncHandler(async (req, res) => {
     'category',
     'outcome',
     'target_type',
+    'target_role',
     'target',
     'target_id',
     'ip',
@@ -289,6 +327,7 @@ export const exportActivityCsv = asyncHandler(async (req, res) => {
         entry.category,
         entry.outcome,
         entry.target.type,
+        entry.target.role,
         entry.target.label,
         entry.target.id,
         entry.ip,

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createService, listServices, updateService, validDates } from '../controllers/service.controller.js';
-import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { requireAuth, requirePermission, requireRole } from '../middleware/requireAuth.js';
 
 export const serviceRouter = Router();
 
@@ -13,5 +13,17 @@ serviceRouter.get('/', (req, _res, next) => {
 serviceRouter.get('/:id/valid-dates', validDates);
 
 // Staff/admin management.
-serviceRouter.post('/', requireAuth, requireRole('staff', 'admin'), createService);
-serviceRouter.patch('/:id', requireAuth, requireRole('staff', 'admin'), updateService);
+serviceRouter.post(
+  '/',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('services.manage'),
+  createService,
+);
+serviceRouter.patch(
+  '/:id',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('services.manage'),
+  updateService,
+);

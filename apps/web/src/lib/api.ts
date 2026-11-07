@@ -398,6 +398,8 @@ export interface StaffAccount {
   email: string;
   role: 'staff' | 'admin';
   active: boolean;
+  /** Capabilities granted to a staff account. Admins always have all of them. */
+  permissions: string[];
   createdAt: string;
   updatedAt?: string;
 }
@@ -411,13 +413,20 @@ export function createStaffAccount(input: {
   email: string;
   password: string;
   role?: 'staff' | 'admin';
+  permissions?: string[];
 }): Promise<{ account: StaffAccount }> {
   return apiFetch('/api/staff-accounts', { method: 'POST', body: input });
 }
 
 export function updateStaffAccount(
   id: string,
-  input: Partial<{ fullName: string; role: 'staff' | 'admin'; active: boolean; password: string }>,
+  input: Partial<{
+    fullName: string;
+    role: 'staff' | 'admin';
+    active: boolean;
+    permissions: string[];
+    password: string;
+  }>,
 ): Promise<{ account: StaffAccount }> {
   return apiFetch(`/api/staff-accounts/${id}`, { method: 'PATCH', body: input });
 }
@@ -561,7 +570,7 @@ export interface ActivityEntry {
   action: string;
   category: ActivityCategory;
   actor: { id: string | null; name: string; role: '' | 'patient' | 'staff' | 'admin' };
-  target: { type: string; id: string; label: string };
+  target: { type: string; id: string; label: string; role: '' | 'patient' | 'staff' | 'admin' };
   changes: ActivityChange[];
   outcome: 'success' | 'failed';
   ip: string;

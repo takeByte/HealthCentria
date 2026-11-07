@@ -15,6 +15,8 @@ export interface AuthSession {
   /** False only for patients who still need to fill in their profile. */
   profileCompleted?: boolean;
   avatarUrl?: string;
+  /** Staff capabilities granted by an admin. Absent on legacy sessions. */
+  permissions?: string[];
   createdAt: string;
   /** JWT from the API. Absent only for pre-backend local fallback sessions. */
   token?: string;
@@ -162,6 +164,9 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
     const profileCompleted =
       typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined;
     const avatarUrl = typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined;
+    const permissions = Array.isArray(user.permissions)
+      ? user.permissions.filter((p): p is string => typeof p === 'string')
+      : undefined;
     return {
       email,
       role,
@@ -169,6 +174,7 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
       authProvider,
       profileCompleted,
       avatarUrl,
+      permissions,
       token,
       createdAt: new Date().toISOString(),
     };
@@ -310,6 +316,7 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
       authProvider?: string;
       profileCompleted?: boolean;
       avatarUrl?: string;
+      permissions?: string[];
     };
   };
   const user = data.user ?? {};
@@ -323,6 +330,9 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
     authProvider: user.authProvider === 'google' ? 'google' : user.authProvider === 'local' ? 'local' : undefined,
     profileCompleted: typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined,
     avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined,
+    permissions: Array.isArray(user.permissions)
+      ? user.permissions.filter((p): p is string => typeof p === 'string')
+      : undefined,
     token,
     createdAt: new Date().toISOString(),
   };

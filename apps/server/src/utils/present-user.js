@@ -1,3 +1,5 @@
+import { effectivePermissions } from './permissions.js';
+
 /**
  * Public user shape shared by login, /me and the profile-completion endpoint.
  *
@@ -14,5 +16,6 @@ export function presentUser(user) {
     authProvider: user.provider,
     profileCompleted: user.role === 'patient' ? user.profileComplete !== false : true,
     avatarUrl: user.avatarUrl ?? '',
+    permissions: effectivePermissions(user),
   };
 }

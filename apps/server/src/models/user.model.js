@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PERMISSION_KEYS } from '../utils/permissions.js';
 
 const userSchema = new mongoose.Schema(
   {
@@ -21,6 +22,10 @@ const userSchema = new mongoose.Schema(
     // Fixed roles for v1 — public registration always creates "patient".
     // Staff/admin accounts are created by an admin (see future staff management).
     role: { type: String, enum: ['patient', 'staff', 'admin'], default: 'patient' },
+    // Granular staff capabilities. Admins ignore this list and always have
+    // every permission; patients never have any. Undefined on legacy staff
+    // records means "unrestricted" — see utils/permissions.js.
+    permissions: { type: [String], enum: PERMISSION_KEYS, default: undefined },
     active: { type: Boolean, default: true },
     fullName: { type: String, required: true, trim: true },
     // Optional Google avatar. Kept separate from the patient's profile fields.

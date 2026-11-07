@@ -127,6 +127,10 @@ const auditLogSchema = new mongoose.Schema(
     },
     targetId: { type: String, default: '', index: true },
     targetLabel: { type: String, default: '', trim: true },
+    // Role of the affected account when the target is a person. `targetType`
+    // is 'staff' for both staff and admin accounts, so this is what tells them
+    // apart in the log. Empty for non-account targets and older entries.
+    targetRole: { type: String, enum: ['patient', 'staff', 'admin', ''], default: '' },
     changes: { type: [changeSchema], default: [] },
     outcome: { type: String, enum: ['success', 'failed'], default: 'success', index: true },
     ip: { type: String, default: '' },

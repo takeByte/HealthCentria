@@ -80,8 +80,63 @@ const ACTION_LABELS: Record<string, string> = {
   'activity.purge': 'Activity log purged',
 };
 
-function actionLabel(action: string): string {
-  return ACTION_LABELS[action] ?? action.replace(/[._]/g, ' ');
+/**
+ * Plain-language label. `staff.create` / `staff.update` cover both staff and
+ * admin accounts, so name the affected account's real role instead of assuming
+ * every account is a staff one.
+ */
+function actionLabel(entry: ActivityEntry): string {
+  if (entry.action === 'staff.create' || entry.action === 'staff.update') {
+    const verb = entry.action === 'staff.create' ? 'created' : 'updated';
+    if (entry.target.role === 'admin') return `Admin account ${verb}`;
+    if (entry.target.role === 'staff') return `Staff account ${verb}`;
+  }
+  return ACTION_LABELS[entry.action] ?? entry.action.replace(/[._]/g, ' ');
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  staff: 'Staff',
+  patient: 'Patient',
+};
+
+function roleLabel(role: string): string {
+  return ROLE_LABELS[role] ?? '';
+}
+
+/** Names the affected person when the target is an account; otherwise the stored label. */
+function targetText(entry: ActivityEntry): string {
+  const label = entry.target.label?.trim();
+  if (!label || label === entry.actor.name) return '';
+  // Sign-in/out entries point at the actor's own account, so the email just
+  // repeats the name already shown. Keep it on failed attempts, where the email
+  // is the only identifier.
+  if (
+    (entry.action === 'auth.login' || entry.action === 'auth.logout') &&
+    entry.actor.id &&
+    entry.actor.id === entry.target.id
+  ) {
+    return '';
+  }
+  if (entry.target.type === 'staff') return `${roleLabel(entry.target.role) || 'Staff'}: ${label}`;
+  if (entry.target.type === 'patient') return `Patient: ${label}`;
+  return label;
+}
+
+/**
+ * Older staff entries hard-code "Staff account …" in the stored detail text.
+ * Rewrite that prefix to the affected account's real role for display.
+ */
+function detailText(entry: ActivityEntry): string {
+  const detail = entry.detail?.trim() ?? '';
+  if (!detail) return '';
+  if (entry.action === 'staff.create' || entry.action === 'staff.update') {
+    const kind = entry.target.role === 'admin' ? 'Admin' : entry.target.role === 'staff' ? 'Staff' : '';
+    if (kind && /^Staff account /.test(detail)) {
+      return detail.replace(/^Staff account /, `${kind} account `);
+    }
+  }
+  return detail;
 }
 
 function fieldLabelText(field: string): string {
@@ -439,6 +494,7 @@ export function ActivityFeed({
             {entries.map((entry) => {
               const isOpen = expanded === entry.id;
               const hasDetail = entry.changes.length > 0 || Boolean(entry.detail) || Boolean(entry.ip);
+              const target = targetText(entry);
               return (
                 <li key={entry.id} className="px-4 py-3 sm:px-5">
                   <button
@@ -461,7 +517,7 @@ export function ActivityFeed({
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="text-[13.5px] font-semibold leading-snug text-slate-900">
-                          {actionLabel(entry.action)}
+                          {actionLabel(entry)}
                         </span>
                         <CategoryPill category={entry.category} />
                         {entry.outcome === 'failed' && (
@@ -470,12 +526,12 @@ export function ActivityFeed({
                           </span>
                         )}
                       </span>
-                      <span className="mt-0.5 block truncate text-[12.5px] leading-5 text-slate-600">
+                      <span className="mt-0.5 block text-[12.5px] leading-5 text-slate-600">
+                        {entry.actor.role && (
+                          <span className="font-semibold text-slate-700">{roleLabel(entry.actor.role)}: </span>
+                        )}
                         {entry.actor.name || 'Unknown actor'}
-                        {entry.actor.role ? ` · ${entry.actor.role}` : ''}
-                        {entry.target.label && entry.target.label !== entry.actor.name
-                          ? ` → ${entry.target.label}`
-                          : ''}
+                        {target ? ` → ${target}` : ''}
                       </span>
                       <span className="mt-0.5 block text-[11px] text-slate-400">
                         {formatDateTime(entry.createdAt)}
@@ -503,7 +559,7 @@ export function ActivityFeed({
                       >
                         <div className="mt-2.5 rounded-xl bg-slate-50/90 p-3.5">
                           {entry.detail && (
-                            <p className="text-[12.5px] leading-5 text-slate-700">{entry.detail}</p>
+                            <p className="text-[12.5px] leading-5 text-slate-700">{detailText(entry)}</p>
                           )}
 
                           {entry.changes.length > 0 && (

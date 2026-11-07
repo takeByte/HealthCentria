@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, CalendarCheck, ClipboardList, FileText, LoaderCircle, Pencil, Pill } from 'lucide-react';
@@ -29,9 +29,14 @@ import {
   type PatientVisit,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 import { cn } from '../../lib/utils';
 
 export const Route = createFileRoute('/staff/patients/$patientId')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'patients.manage')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: PatientDetailPage,
 });
 
@@ -287,7 +292,7 @@ function PatientDetailPage() {
         userName={session?.name}
         userEmail={session?.email ?? ''}
         todayService={`${today.name} — ${today.detail}`}
-        nav={opsNav(session?.role)}
+        nav={opsNav(session?.role, session?.permissions)}
         notificationsTo="/staff/notifications"
       >
         <motion.div {...rise} transition={riseTransition}>

@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { CalendarCheck, LoaderCircle, ShieldCheck, Users } from 'lucide-react';
@@ -27,8 +27,13 @@ import {
   type StaffAppointment,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 
 export const Route = createFileRoute('/staff/walk-in')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'walkin.manage')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: WalkIn,
 });
 
@@ -125,7 +130,7 @@ function WalkIn() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
       mainClassName="max-w-3xl"
     >
