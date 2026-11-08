@@ -67,9 +67,11 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
   const { email } = parsed.data;
 
   const user = await User.findOne({ email, role: 'patient' }).select('email passwordHash active').lean();
-  // Unknown, deactivated, staff/admin, or Google-only accounts all get the same
-  // answer, and no email is sent.
-  if (!user || !user.active || !user.passwordHash) {
+  // Unknown, deactivated, or staff/admin accounts get the same answer, and no
+  // email is sent. Google-only accounts (no password yet) do get a code: the
+  // code proves inbox ownership, and resetting sets their first password so
+  // they can still log in when Google sign-in is turned off.
+  if (!user || !user.active) {
     return res.json({ success: true, message: GENERIC_SENT_MESSAGE, resendAfter: RESET_RESEND_COOLDOWN_SECONDS });
   }
 
@@ -93,17 +95,29 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
       expiresAt: new Date(Date.now() + RESET_CODE_TTL_MINUTES * 60 * 1000),
     });
 
+    const firstPassword = !user.passwordHash;
     await sendEmail(
       email,
-      'E-Kalinga password reset code',
-      [
-        `Your E-Kalinga password reset code is ${code}.`,
-        '',
-        `Enter it in the app within ${RESET_CODE_TTL_MINUTES} minutes.`,
-        "If you didn't ask to reset your password, you can ignore this email — your password stays the same.",
-        '',
-        '— E-Kalinga Barangay Health Center',
-      ].join('\n'),
+      firstPassword ? 'Set a password for your E-Kalinga account' : 'E-Kalinga password reset code',
+      firstPassword
+        ? [
+            `Your E-Kalinga code is ${code}.`,
+            '',
+            'Your account uses Google sign-in. Enter this code in the app within ' +
+              `${RESET_CODE_TTL_MINUTES} minutes to also set a password.`,
+            'You can keep using "Continue with Google" either way.',
+            "If you didn't ask for this, you can ignore this email — nothing changes.",
+            '',
+            '— E-Kalinga Barangay Health Center',
+          ].join('\n')
+        : [
+            `Your E-Kalinga password reset code is ${code}.`,
+            '',
+            `Enter it in the app within ${RESET_CODE_TTL_MINUTES} minutes.`,
+            "If you didn't ask to reset your password, you can ignore this email — your password stays the same.",
+            '',
+            '— E-Kalinga Barangay Health Center',
+          ].join('\n'),
     );
 
     await logActivity({
@@ -111,7 +125,9 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
       action: 'auth.password_reset_requested',
       actorName: email,
       target: { type: 'auth', label: email },
-      detail: 'Password reset code sent to the account email.',
+      detail: firstPassword
+        ? 'First-password code sent to a Google sign-in account.'
+        : 'Password reset code sent to the account email.',
     });
   }
 

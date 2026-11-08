@@ -1,8 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import {
+  ChevronDown,
   Download,
+  Info,
   KeyRound,
   LoaderCircle,
   Mail,
@@ -37,10 +40,13 @@ import {
   getEmailIntegrationSettings,
   getGoogleCalendarSettings,
   getGoogleIntegrationSettings,
+  getPublicSettings,
   getRecaptchaIntegrationSettings,
   resetEmailIntegrationSettings,
   resetGoogleIntegrationSettings,
   resetRecaptchaIntegrationSettings,
+  updateRecaptchaIntegrationSettings,
+  type RecaptchaIntegrationSettings,
   syncGoogleCalendar,
   testEmailDelivery,
   testGoogleCalendarConnection,
@@ -48,12 +54,10 @@ import {
   updateEmailIntegrationSettings,
   updateGoogleCalendarSettings,
   updateGoogleIntegrationSettings,
-  updateRecaptchaIntegrationSettings,
   type AuthSettings,
   type EmailIntegrationSettings,
   type GoogleCalendarSettings,
   type GoogleIntegrationSettings,
-  type RecaptchaIntegrationSettings,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 import { cn } from '../../lib/utils';
@@ -97,6 +101,78 @@ function Toggle({
         )}
       />
     </button>
+  );
+}
+
+/** Collapse long runs of mask bullets so masked values fit on one line. */
+function compactMask(value: string | null | undefined): string {
+  return (value ?? '').replace(/•{4,}/g, '••••');
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mt-2 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">{children}</h2>
+  );
+}
+
+/**
+ * The "Configure ▾" disclosure at the bottom of an integration card. Advanced
+ * fields stay hidden until the admin asks for them. Drafts live in the parent,
+ * so collapsing never discards half-typed values.
+ */
+function ConfigureSection({
+  id,
+  label,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  id: string;
+  label: string;
+  summary?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const reduceMotion = useReducedMotion();
+  const panelId = `${id}-panel`;
+
+  return (
+    <div className="mt-4 border-t border-slate-200/80 pt-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 text-[13px] font-semibold text-teal-700 transition-colors hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40"
+        >
+          {label}
+          <ChevronDown
+            size={16}
+            aria-hidden
+            className={cn('transition-transform duration-200', open && 'rotate-180')}
+          />
+        </button>
+        {summary && <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-slate-500">{summary}</div>}
+      </div>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="panel"
+            id={panelId}
+            initial={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            animate={reduceMotion ? { opacity: 1 } : { height: 'auto', opacity: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+            className="-mx-1 overflow-hidden px-1"
+          >
+            <div className="pb-1 pt-3">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -197,15 +273,19 @@ function AdminSettings() {
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
   const [emailResetOpen, setEmailResetOpen] = useState(false);
 
-  const [recaptcha, setRecaptcha] = useState<RecaptchaIntegrationSettings | null>(null);
+  const [recaptcha, setRecaptchaKeys] = useState<RecaptchaIntegrationSettings | null>(null);
   const [recaptchaLoadError, setRecaptchaLoadError] = useState<string | null>(null);
+  // The active site key is public; the test challenge needs it when only the
+  // secret is being replaced.
+  const [activeSiteKey, setActiveSiteKey] = useState('');
   const [recaptchaSiteKey, setRecaptchaSiteKey] = useState('');
   const [recaptchaSecretKey, setRecaptchaSecretKey] = useState('');
+  const [recaptchaTestKey, setRecaptchaTestKey] = useState<string | null>(null);
+  const [recaptchaTestToken, setRecaptchaTestToken] = useState<string | null>(null);
   const [recaptchaSaving, setRecaptchaSaving] = useState(false);
   const [recaptchaResetting, setRecaptchaResetting] = useState(false);
-  const [recaptchaError, setRecaptchaError] = useState<string | null>(null);
-  const [recaptchaMessage, setRecaptchaMessage] = useState<string | null>(null);
   const [recaptchaResetOpen, setRecaptchaResetOpen] = useState(false);
+  const [recaptchaError, setRecaptchaError] = useState<string | null>(null);
 
   const [calendar, setCalendar] = useState<GoogleCalendarSettings | null>(null);
   const [calendarLoadError, setCalendarLoadError] = useState<string | null>(null);
@@ -315,12 +395,20 @@ function AdminSettings() {
     };
   }, []);
 
+  const refreshActiveSiteKey = useCallback(() => {
+    getPublicSettings()
+      .then((r) => setActiveSiteKey(r.recaptchaSiteKey ?? ''))
+      .catch(() => {
+        // Only needed for the test challenge; the admin can still type a site key.
+      });
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     getRecaptchaIntegrationSettings()
       .then((r) => {
         if (!cancelled) {
-          setRecaptcha({
+          setRecaptchaKeys({
             siteKeyMasked: r.siteKeyMasked,
             secretKeyMasked: r.secretKeyMasked,
             source: r.source,
@@ -332,16 +420,101 @@ function AdminSettings() {
       .catch((err) => {
         if (!cancelled) {
           setRecaptchaLoadError(
-            err instanceof ApiError
-              ? err.message
-              : 'Could not load reCAPTCHA keys. Reload the page to try again.',
+            err instanceof ApiError ? err.message : 'Could not load reCAPTCHA keys. Reload the page to try again.',
           );
         }
       });
+    refreshActiveSiteKey();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshActiveSiteKey]);
+
+  /** Any edit invalidates a previous test: it was solved against other keys. */
+  function clearRecaptchaTest() {
+    setRecaptchaTestKey(null);
+    setRecaptchaTestToken(null);
+    setRecaptchaError(null);
+  }
+
+  function startRecaptchaTest() {
+    const key = recaptchaSiteKey.trim() || activeSiteKey;
+    if (!key) {
+      setRecaptchaError('Enter a site key first.');
+      return;
+    }
+    setRecaptchaError(null);
+    setRecaptchaTestToken(null);
+    setRecaptchaTestKey(key);
+  }
+
+  async function saveRecaptchaKeys(e: FormEvent) {
+    e.preventDefault();
+    if (recaptchaSaving || !recaptchaTestToken || !recaptchaTestKey) return;
+    const siteKey = recaptchaSiteKey.trim();
+    const secretKey = recaptchaSecretKey.trim();
+    if (!siteKey && !secretKey) return;
+
+    setRecaptchaSaving(true);
+    setRecaptchaError(null);
+    try {
+      const r = await updateRecaptchaIntegrationSettings({
+        ...(siteKey ? { siteKey } : {}),
+        ...(secretKey ? { secretKey } : {}),
+        testToken: recaptchaTestToken,
+      });
+      setRecaptchaKeys({
+        siteKeyMasked: r.siteKeyMasked,
+        secretKeyMasked: r.secretKeyMasked,
+        source: r.source,
+        configured: r.configured,
+      });
+      setActiveSiteKey(recaptchaTestKey);
+      setRecaptchaSiteKey('');
+      setRecaptchaSecretKey('');
+      clearRecaptchaTest();
+      setRecaptchaLoadError(null);
+      setToast({ tone: 'success', message: 'reCAPTCHA keys verified and saved.' });
+    } catch (err) {
+      // A token is single-use: whatever happened, the admin must solve a new one.
+      setRecaptchaTestToken(null);
+      setRecaptchaTestKey(null);
+      setRecaptchaError(
+        err instanceof ApiError
+          ? (err.errors?.testToken?.[0] ?? err.errors?.siteKey?.[0] ?? err.errors?.secretKey?.[0] ?? err.message)
+          : 'Could not save the reCAPTCHA keys. Try again.',
+      );
+    } finally {
+      setRecaptchaSaving(false);
+    }
+  }
+
+  async function resetRecaptchaKeys() {
+    if (recaptchaResetting) return;
+    setRecaptchaResetting(true);
+    try {
+      const r = await resetRecaptchaIntegrationSettings();
+      setRecaptchaKeys({
+        siteKeyMasked: r.siteKeyMasked,
+        secretKeyMasked: r.secretKeyMasked,
+        source: r.source,
+        configured: r.configured,
+      });
+      setRecaptchaSiteKey('');
+      setRecaptchaSecretKey('');
+      clearRecaptchaTest();
+      setRecaptchaResetOpen(false);
+      refreshActiveSiteKey();
+      setToast({ tone: 'success', message: 'reCAPTCHA keys reset to the server defaults.' });
+    } catch (err) {
+      setToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not reset reCAPTCHA keys. Try again.',
+      });
+    } finally {
+      setRecaptchaResetting(false);
+    }
+  }
 
   async function setGoogleSignIn(next: boolean) {
     if (!settings || saving) return;
@@ -377,6 +550,24 @@ function AdminSettings() {
     } catch {
       setSettings(previous);
       setSaveError('Could not save the setting. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setNotificationEmails(next: boolean) {
+    if (!settings || saving) return;
+    const previous = settings;
+    setSaving(true);
+    // Optimistic: the switch flips immediately and rolls back if the API rejects it.
+    setSettings({ ...settings, notificationEmailsEnabled: next });
+    try {
+      const r = await updateAuthSettings({ notificationEmailsEnabled: next });
+      setSettings(r.settings);
+      setToast({ tone: 'success', message: `Notification emails ${next ? 'turned on' : 'turned off'}.` });
+    } catch {
+      setSettings(previous);
+      setToast({ tone: 'error', message: 'Could not save the notification email setting. Try again.' });
     } finally {
       setSaving(false);
     }
@@ -533,57 +724,6 @@ function AdminSettings() {
     }
   }
 
-  async function saveRecaptchaKeys(e: FormEvent) {
-    e.preventDefault();
-    if (recaptchaSaving) return;
-    setRecaptchaSaving(true);
-    setRecaptchaError(null);
-    setRecaptchaMessage(null);
-    try {
-      const r = await updateRecaptchaIntegrationSettings({
-        siteKey: recaptchaSiteKey.trim() || undefined,
-        secretKey: recaptchaSecretKey.trim() || undefined,
-      });
-      setRecaptcha({
-        siteKeyMasked: r.siteKeyMasked,
-        secretKeyMasked: r.secretKeyMasked,
-        source: r.source,
-        configured: r.configured,
-      });
-      setRecaptchaSiteKey('');
-      setRecaptchaSecretKey('');
-      setRecaptchaMessage('reCAPTCHA keys saved. New challenges use them immediately.');
-    } catch (err) {
-      setRecaptchaError(err instanceof ApiError ? err.message : 'Could not save the reCAPTCHA keys. Try again.');
-    } finally {
-      setRecaptchaSaving(false);
-    }
-  }
-
-  async function resetRecaptchaKeys() {
-    if (recaptchaResetting) return;
-    setRecaptchaResetting(true);
-    setRecaptchaError(null);
-    setRecaptchaMessage(null);
-    try {
-      const r = await resetRecaptchaIntegrationSettings();
-      setRecaptcha({
-        siteKeyMasked: r.siteKeyMasked,
-        secretKeyMasked: r.secretKeyMasked,
-        source: r.source,
-        configured: r.configured,
-      });
-      setRecaptchaSiteKey('');
-      setRecaptchaSecretKey('');
-      setRecaptchaResetOpen(false);
-      setRecaptchaMessage('reCAPTCHA keys reset to the server defaults.');
-    } catch (err) {
-      setRecaptchaError(err instanceof ApiError ? err.message : 'Could not reset the reCAPTCHA keys. Try again.');
-    } finally {
-      setRecaptchaResetting(false);
-    }
-  }
-
   async function setCalendarSync(next: boolean) {
     if (!calendar || calendarSaving) return;
     const previous = calendar;
@@ -666,11 +806,19 @@ function AdminSettings() {
   }
 
   const googleOn = settings?.googleSignInEnabled ?? false;
+  // Every on/off switch on the page counts toward the header summary — add
+  // future toggles to this list and the "x of y active" pill follows.
+  const accessToggles = [
+    ...(settings
+      ? [settings.googleSignInEnabled, settings.recaptchaEnabled, settings.notificationEmailsEnabled]
+      : []),
+    ...(calendar ? [calendar.enabled] : []),
+  ];
+  const activeToggles = accessToggles.filter(Boolean).length;
   const hasNewGoogleValue = Boolean(googleClientId.trim() || googleClientSecret.trim());
   const hasNewEmailValue = Boolean(
     emailHost.trim() || emailPort.trim() || emailUser.trim() || emailPassword || emailFrom.trim(),
   );
-  const hasNewRecaptchaValue = Boolean(recaptchaSiteKey.trim() || recaptchaSecretKey.trim());
 
   return (
     <>
@@ -692,21 +840,26 @@ function AdminSettings() {
         >
           <PageHero
             eyebrow="Access & integrations"
-            title="Sign-in & integrations"
-            description="Control how patients sign in and which services the clinic calendar mirrors to. Email and password always stay available for local accounts."
+            title="Access Controls"
+            description="Control the integrations and protections that keep the clinic portal secure and connected. Each card shows its on/off switch and status; open Configure only when you need to change credentials."
             action={
               settings === null ? (
-                <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
+                <StatusPill tone={loadError ? 'red' : 'slate'}>
+                  {loadError ? 'Unavailable' : 'Checking status…'}
+                </StatusPill>
               ) : (
-                <StatusPill tone={googleOn ? 'teal' : 'slate'}>
-                  Google {googleOn ? 'on' : 'off'}
+                <StatusPill tone="teal" className="normal-case">
+                  {activeToggles} of {accessToggles.length} active
                 </StatusPill>
               )
             }
           />
         </motion.div>
 
+        <SectionLabel>Sign-in &amp; security</SectionLabel>
+
         <motion.section
+          id="google-integration"
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
           transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
@@ -715,7 +868,7 @@ function AdminSettings() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-xl">
               <CardHeading
-                title="Sign-in methods"
+                title="Google sign-in"
                 description="Let patients sign in with their Google account. Turning this off hides the Google button on the login page and blocks the Google sign-in route. Email and password login keeps working."
               />
             </div>
@@ -746,7 +899,7 @@ function AdminSettings() {
               <ShieldAlert size={15} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
               <span>
                 Google OAuth credentials are not configured on this server, so Google sign-in cannot work either
-                way.
+                way. Add them under Configure credentials below.
               </span>
             </div>
           )}
@@ -766,9 +919,116 @@ function AdminSettings() {
           )}
 
           {saved && <p className="mt-2.5 text-[12px] font-medium text-slate-500">Saved.</p>}
+
+          {googleLoadError && <InlineNotice className="mt-4">{googleLoadError}</InlineNotice>}
+
+          {google && (
+            <ConfigureSection
+              id="google-credentials"
+              label="Configure credentials"
+              defaultOpen={settings ? !settings.googleConfigured : false}
+              summary={
+                <>
+                  {hasNewGoogleValue && <span className="font-medium text-amber-700">Unsaved changes · </span>}
+                  <StatusPill tone={google.source === 'custom' ? 'teal' : 'slate'}>
+                    {google.source === 'custom' ? 'Custom' : 'Default'}
+                  </StatusPill>
+                </>
+              }
+            >
+              <p className="mb-4 text-[12.5px] leading-5 text-slate-500">
+                Override the server&apos;s default Google OAuth credentials. Patients and staff keep using the
+                normal “Continue with Google” button.
+              </p>
+              <form onSubmit={saveGoogleCredentials} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="google-client-id" className={fieldLabel}>
+                      Client ID
+                    </label>
+                    <input
+                      id="google-client-id"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={googleClientId}
+                      onChange={(e) => setGoogleClientId(e.target.value)}
+                      placeholder={compactMask(google.clientIdMasked) || 'No Client ID configured'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current: <span className="text-slate-700">{compactMask(google.clientIdMasked) || 'Not set'}</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="google-client-secret" className={fieldLabel}>
+                      Client Secret
+                    </label>
+                    <input
+                      id="google-client-secret"
+                      type="password"
+                      autoComplete="new-password"
+                      spellCheck={false}
+                      value={googleClientSecret}
+                      onChange={(e) => setGoogleClientSecret(e.target.value)}
+                      placeholder={compactMask(google.clientSecretMasked) || 'No Client Secret configured'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current:{' '}
+                      <span className="text-slate-700">{compactMask(google.clientSecretMasked) || 'Not set'}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[12px] leading-5 text-slate-500">
+                  Leave a field blank to keep its current value. The secret is encrypted on the server and is
+                  never sent back to this page.
+                  {google.source === 'default' && (
+                    <>
+                      {' '}
+                      Currently using the defaults from{' '}
+                      <code className="font-mono text-[11px]">apps/server/.env</code>.
+                    </>
+                  )}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={googleSaving || !hasNewGoogleValue}
+                    className={primaryButton}
+                  >
+                    {googleSaving ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <KeyRound size={16} aria-hidden />
+                    )}
+                    {googleSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetOpen(true)}
+                    disabled={google.source !== 'custom' || googleSaving || googleResetting}
+                    title={
+                      google.source === 'custom'
+                        ? 'Delete custom credentials and use the .env defaults'
+                        : 'Already using the .env defaults'
+                    }
+                    className={secondaryButton}
+                  >
+                    <RotateCcw size={16} aria-hidden />
+                    Reset to default
+                  </button>
+                </div>
+              </form>
+            </ConfigureSection>
+          )}
         </motion.section>
 
         <motion.section
+          id="recaptcha"
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
           transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.08 }}
@@ -804,128 +1064,185 @@ function AdminSettings() {
             </div>
           </div>
 
-          <p className="mt-4 rounded-xl bg-slate-50 px-3.5 py-2.5 text-[12.5px] leading-5 text-slate-600 ring-1 ring-inset ring-slate-200">
-            The challenge appears on the public login and registration pages when the web app&apos;s reCAPTCHA site
-            key is configured. When enabled, the server verifies submissions using its secret key.
-          </p>
           {loadError && <InlineNotice className="mt-4">{loadError}</InlineNotice>}
           {saveError && <InlineNotice className="mt-4">{saveError}</InlineNotice>}
           {saved && <p className="mt-2.5 text-[12px] font-medium text-slate-500">Saved.</p>}
-        </motion.section>
 
-        <motion.section
-          id="google-integration"
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-          transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.08 }}
-          className={panel}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-xl">
-              <CardHeading
-                title="Google Integration"
-                description="Override the server's default Google OAuth credentials. Only admins can change these; patients and staff keep using the normal “Continue with Google” button."
-              />
+          {settings?.recaptchaEnabled && recaptcha && !recaptcha.configured && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+              <ShieldAlert size={15} className="mt-0.5 shrink-0" aria-hidden />
+              <span>
+                reCAPTCHA is on but no keys are configured, so the challenge cannot appear. Add keys under Configure
+                keys below.
+              </span>
             </div>
+          )}
 
-            {google === null ? (
-              <StatusPill tone={googleLoadError ? 'red' : 'slate'}>
-                {googleLoadError ? 'Unavailable' : 'Loading…'}
-              </StatusPill>
-            ) : (
-              <StatusPill tone={google.source === 'custom' ? 'teal' : 'slate'}>
-                {google.source === 'custom' ? 'Custom' : 'Default'}
-              </StatusPill>
-            )}
-          </div>
+          {recaptchaLoadError && <InlineNotice className="mt-4">{recaptchaLoadError}</InlineNotice>}
 
-          {googleLoadError && <InlineNotice className="mt-4">{googleLoadError}</InlineNotice>}
-
-          {google && (
-            <form onSubmit={saveGoogleCredentials} className="mt-5 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="google-client-id" className={fieldLabel}>
-                    Client ID
-                  </label>
-                  <input
-                    id="google-client-id"
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={googleClientId}
-                    onChange={(e) => setGoogleClientId(e.target.value)}
-                    placeholder={google.clientIdMasked || 'No Client ID configured'}
-                    className={cn(inputClass, 'font-mono text-[12.5px]')}
-                  />
-                  <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
-                    Current: <span className="text-slate-700">{google.clientIdMasked || 'Not set'}</span>
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="google-client-secret" className={fieldLabel}>
-                    Client Secret
-                  </label>
-                  <input
-                    id="google-client-secret"
-                    type="password"
-                    autoComplete="new-password"
-                    spellCheck={false}
-                    value={googleClientSecret}
-                    onChange={(e) => setGoogleClientSecret(e.target.value)}
-                    placeholder={google.clientSecretMasked || 'No Client Secret configured'}
-                    className={cn(inputClass, 'font-mono text-[12.5px]')}
-                  />
-                  <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
-                    Current: <span className="text-slate-700">{google.clientSecretMasked || 'Not set'}</span>
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-[12px] leading-5 text-slate-500">
-                Leave a field blank to keep its current value. The secret is encrypted on the server and is
-                never sent back to this page.
-                {google.source === 'default' && (
-                  <>
-                    {' '}
-                    Currently using the defaults from{' '}
-                    <code className="font-mono text-[11px]">apps/server/.env</code>.
-                  </>
-                )}
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={googleSaving || !hasNewGoogleValue}
-                  className={primaryButton}
-                >
-                  {googleSaving ? (
-                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
-                  ) : (
-                    <KeyRound size={16} aria-hidden />
+          {recaptcha && (
+            <ConfigureSection
+              id="recaptcha-keys"
+              label="Configure keys"
+              defaultOpen={!recaptcha.configured}
+              summary={
+                <>
+                  {(recaptchaSiteKey.trim() || recaptchaSecretKey.trim()) && (
+                    <span className="font-medium text-amber-700">Unsaved changes · </span>
                   )}
-                  {googleSaving ? 'Saving…' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResetOpen(true)}
-                  disabled={google.source !== 'custom' || googleSaving || googleResetting}
-                  title={
-                    google.source === 'custom'
-                      ? 'Delete custom credentials and use the .env defaults'
-                      : 'Already using the .env defaults'
-                  }
-                  className={secondaryButton}
+                  <StatusPill tone={recaptcha.source === 'custom' ? 'teal' : 'slate'}>
+                    {recaptcha.source === 'custom' ? 'Custom' : 'Default'}
+                  </StatusPill>
+                </>
+              }
+            >
+              <p className="mb-4 text-[12.5px] leading-5 text-slate-500">
+                Use a reCAPTCHA v2 &ldquo;I&apos;m not a robot&rdquo; checkbox key pair from{' '}
+                <a
+                  href="https://www.google.com/recaptcha/admin"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-teal-700 underline-offset-2 hover:underline"
                 >
-                  <RotateCcw size={16} aria-hidden />
-                  Reset to default
-                </button>
-              </div>
-            </form>
+                  google.com/recaptcha/admin
+                </a>
+                , with this site&apos;s domain added to the key.
+              </p>
+              <form onSubmit={saveRecaptchaKeys} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="recaptcha-site-key" className={fieldLabel}>
+                      Site key
+                    </label>
+                    <input
+                      id="recaptcha-site-key"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={recaptchaSiteKey}
+                      onChange={(e) => {
+                        setRecaptchaSiteKey(e.target.value);
+                        clearRecaptchaTest();
+                      }}
+                      placeholder={compactMask(recaptcha.siteKeyMasked) || 'No site key configured'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current: <span className="text-slate-700">{compactMask(recaptcha.siteKeyMasked) || 'Not set'}</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="recaptcha-secret-key" className={fieldLabel}>
+                      Secret key
+                    </label>
+                    <input
+                      id="recaptcha-secret-key"
+                      type="password"
+                      autoComplete="new-password"
+                      spellCheck={false}
+                      value={recaptchaSecretKey}
+                      onChange={(e) => {
+                        setRecaptchaSecretKey(e.target.value);
+                        clearRecaptchaTest();
+                      }}
+                      placeholder={compactMask(recaptcha.secretKeyMasked) || 'No secret key configured'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current:{' '}
+                      <span className="text-slate-700">{compactMask(recaptcha.secretKeyMasked) || 'Not set'}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[12px] leading-5 text-slate-500">
+                  Leave a field blank to keep its current value. The secret is encrypted on the server and is never
+                  sent back to this page.
+                  {recaptcha.source === 'default' && (
+                    <>
+                      {' '}
+                      Currently using the defaults from{' '}
+                      <code className="font-mono text-[11px]">apps/server/.env</code>.
+                    </>
+                  )}
+                </p>
+
+                {/* Safety check: everyone (admins too) logs in through this challenge, so a
+                    mismatched pair would lock the clinic out. The server only saves keys
+                    after verifying a challenge solved with the new site key. */}
+                {(recaptchaSiteKey.trim() || recaptchaSecretKey.trim()) && (
+                  <div className="rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                    <p className="flex items-start gap-1.5 text-[12.5px] leading-5 text-slate-600">
+                      <Info size={14} className="mt-0.5 shrink-0 text-slate-400" aria-hidden />
+                      <span>
+                        Before saving, solve one challenge with the new keys. This makes sure they work, so a wrong
+                        key can never lock staff and patients out of login.
+                      </span>
+                    </p>
+                    {recaptchaTestKey ? (
+                      <div className="mt-3 space-y-2">
+                        <ReCAPTCHA
+                          key={recaptchaTestKey}
+                          sitekey={recaptchaTestKey}
+                          onChange={(token) => setRecaptchaTestToken(token)}
+                          onExpired={() => setRecaptchaTestToken(null)}
+                        />
+                        {recaptchaTestToken ? (
+                          <p className="text-[12px] font-medium text-teal-700">Challenge solved. You can save now.</p>
+                        ) : (
+                          <p className="text-[12px] leading-5 text-slate-500">
+                            If the box says &ldquo;Invalid domain for site key&rdquo; or &ldquo;Invalid key
+                            type&rdquo;, fix the key in the reCAPTCHA admin console first.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <button type="button" onClick={startRecaptchaTest} className={cn(secondaryButton, 'mt-3')}>
+                        <ShieldCheck size={16} aria-hidden />
+                        Test the new keys
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {recaptchaError && <InlineNotice>{recaptchaError}</InlineNotice>}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={recaptchaSaving || !recaptchaTestToken}
+                    title={recaptchaTestToken ? undefined : 'Test the new keys first'}
+                    className={primaryButton}
+                  >
+                    {recaptchaSaving ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <KeyRound size={16} aria-hidden />
+                    )}
+                    {recaptchaSaving ? 'Verifying…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecaptchaResetOpen(true)}
+                    disabled={recaptcha.source !== 'custom' || recaptchaSaving || recaptchaResetting}
+                    title={
+                      recaptcha.source === 'custom'
+                        ? 'Delete custom keys and use the .env defaults'
+                        : 'Already using the .env defaults'
+                    }
+                    className={secondaryButton}
+                  >
+                    <RotateCcw size={16} aria-hidden />
+                    Reset to default
+                  </button>
+                </div>
+              </form>
+            </ConfigureSection>
           )}
         </motion.section>
+
+        <SectionLabel>Connected services</SectionLabel>
 
         <motion.section
           id="email-delivery"
@@ -938,22 +1255,36 @@ function AdminSettings() {
             <div className="max-w-xl">
               <CardHeading
                 title="Email delivery"
-                description="The SMTP account used for password reset codes and announcements. Changes apply immediately — no server restart needed."
+                description="This switch controls notification emails only: announcements, appointment confirmations and updates, and reminders. Password reset and email verification codes are always sent, even when it is off."
               />
             </div>
 
-            {email === null ? (
-              <StatusPill tone={emailLoadError ? 'red' : 'slate'}>
-                {emailLoadError ? 'Unavailable' : 'Loading…'}
-              </StatusPill>
-            ) : !email.configured ? (
-              <StatusPill tone="amber">Not configured</StatusPill>
-            ) : (
-              <StatusPill tone={email.source === 'custom' ? 'teal' : 'slate'}>
-                {email.source === 'custom' ? 'Custom' : 'Default'}
-              </StatusPill>
-            )}
+            <div className="flex items-center gap-3">
+              {saving && <LoaderCircle size={17} className="animate-spin text-slate-400" aria-hidden />}
+              {settings === null ? (
+                <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <StatusPill tone={settings.notificationEmailsEnabled ? 'teal' : 'slate'}>
+                    {settings.notificationEmailsEnabled ? 'On' : 'Off'}
+                  </StatusPill>
+                  <Toggle
+                    checked={settings.notificationEmailsEnabled}
+                    disabled={saving}
+                    label="Send notification emails"
+                    onChange={setNotificationEmails}
+                  />
+                </div>
+              )}
+            </div>
           </div>
+
+          {settings && !settings.notificationEmailsEnabled && (
+            <p className="mt-4 rounded-xl bg-amber-50 px-3.5 py-2.5 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+              Notification emails are off. Announcements, appointment updates, and reminders still appear in the app,
+              but patients are not emailed. Password reset and verification codes are still sent.
+            </p>
+          )}
 
           {emailLoadError && <InlineNotice className="mt-4">{emailLoadError}</InlineNotice>}
           {emailError && <InlineNotice className="mt-4">{emailError}</InlineNotice>}
@@ -969,169 +1300,194 @@ function AdminSettings() {
             </div>
           )}
 
+          {email?.lastTestOk === false && email.lastTestError && (
+            <InlineNotice className="mt-4">Last test failed: {email.lastTestError}</InlineNotice>
+          )}
+
           {email && (
-            <form onSubmit={saveEmailSettings} className="mt-5 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+            <ConfigureSection
+              id="email-settings"
+              label="Configure SMTP"
+              defaultOpen={!email.configured}
+              summary={
+                <>
+                  {hasNewEmailValue && <span className="font-medium text-amber-700">Unsaved changes · </span>}
+                  {!email.configured ? (
+                    <StatusPill tone="amber">Not configured</StatusPill>
+                  ) : email.lastTestOk === false ? (
+                    <StatusPill tone="red">Last test failed</StatusPill>
+                  ) : (
+                    <StatusPill tone="teal">Working</StatusPill>
+                  )}{' '}
+                  {email.host && (
+                    <span className="font-mono text-[11.5px]">
+                      {email.host}:{email.port}
+                    </span>
+                  )}{' '}
+                  <StatusPill tone={email.source === 'custom' ? 'teal' : 'slate'}>
+                    {email.source === 'custom' ? 'Custom' : 'Default'}
+                  </StatusPill>
+                </>
+              }
+            >
+              <form onSubmit={saveEmailSettings} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="email-host" className={fieldLabel}>
+                      SMTP host
+                    </label>
+                    <input
+                      id="email-host"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={emailHost}
+                      onChange={(e) => setEmailHost(e.target.value)}
+                      placeholder={email.host || 'smtp-relay.brevo.com'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current: <span className="text-slate-700">{email.host || 'Not set'}</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="email-port" className={fieldLabel}>
+                      Port
+                    </label>
+                    <input
+                      id="email-port"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={emailPort}
+                      onChange={(e) => setEmailPort(e.target.value)}
+                      placeholder={String(email.port || 587)}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current: <span className="text-slate-700">{email.port || 'Not set'}</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="email-user" className={fieldLabel}>
+                      Username
+                    </label>
+                    <input
+                      id="email-user"
+                      type="text"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={emailUser}
+                      onChange={(e) => setEmailUser(e.target.value)}
+                      placeholder={compactMask(email.userMasked) || 'No username configured'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current: <span className="text-slate-700">{compactMask(email.userMasked) || 'Not set'}</span>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label htmlFor="email-password" className={fieldLabel}>
+                      Password or API key
+                    </label>
+                    <input
+                      id="email-password"
+                      type="password"
+                      autoComplete="new-password"
+                      spellCheck={false}
+                      value={emailPassword}
+                      onChange={(e) => setEmailPassword(e.target.value)}
+                      placeholder={email.passwordSet ? 'Stored — leave blank to keep' : 'No password configured'}
+                      className={cn(inputClass, 'font-mono text-[12.5px]')}
+                    />
+                    <p className="mt-1.5 font-mono text-[11.5px] leading-5 text-slate-500">
+                      Current: <span className="text-slate-700">{email.passwordSet ? 'Stored' : 'Not set'}</span>
+                    </p>
+                  </div>
+                </div>
+
                 <div>
-                  <label htmlFor="email-host" className={fieldLabel}>
-                    SMTP host
+                  <label htmlFor="email-from" className={fieldLabel}>
+                    From address
                   </label>
                   <input
-                    id="email-host"
+                    id="email-from"
                     type="text"
                     autoComplete="off"
                     spellCheck={false}
-                    value={emailHost}
-                    onChange={(e) => setEmailHost(e.target.value)}
-                    placeholder={email.host || 'smtp-relay.brevo.com'}
+                    value={emailFrom}
+                    onChange={(e) => setEmailFrom(e.target.value)}
+                    placeholder={email.fromAddress || 'E-Kalinga <clinic@your-domain.com>'}
                     className={cn(inputClass, 'font-mono text-[12.5px]')}
                   />
                   <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
-                    Current: <span className="text-slate-700">{email.host || 'Not set'}</span>
+                    Current: <span className="text-slate-700">{email.fromAddress || 'Not set'}</span>
                   </p>
                 </div>
 
-                <div>
-                  <label htmlFor="email-port" className={fieldLabel}>
-                    Port
-                  </label>
-                  <input
-                    id="email-port"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={emailPort}
-                    onChange={(e) => setEmailPort(e.target.value)}
-                    placeholder={String(email.port || 587)}
-                    className={cn(inputClass, 'font-mono text-[12.5px]')}
-                  />
-                  <p className="mt-1.5 font-mono text-[11.5px] leading-5 text-slate-500">
-                    Current: <span className="text-slate-700">{email.port || 'Not set'}</span>
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="email-user" className={fieldLabel}>
-                    Username
-                  </label>
-                  <input
-                    id="email-user"
-                    type="text"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={emailUser}
-                    onChange={(e) => setEmailUser(e.target.value)}
-                    placeholder={email.userMasked || 'No username configured'}
-                    className={cn(inputClass, 'font-mono text-[12.5px]')}
-                  />
-                  <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
-                    Current: <span className="text-slate-700">{email.userMasked || 'Not set'}</span>
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="email-password" className={fieldLabel}>
-                    Password or API key
-                  </label>
-                  <input
-                    id="email-password"
-                    type="password"
-                    autoComplete="new-password"
-                    spellCheck={false}
-                    value={emailPassword}
-                    onChange={(e) => setEmailPassword(e.target.value)}
-                    placeholder={email.passwordSet ? 'Stored — leave blank to keep' : 'No password configured'}
-                    className={cn(inputClass, 'font-mono text-[12.5px]')}
-                  />
-                  <p className="mt-1.5 font-mono text-[11.5px] leading-5 text-slate-500">
-                    Current: <span className="text-slate-700">{email.passwordSet ? 'Stored' : 'Not set'}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="email-from" className={fieldLabel}>
-                  From address
-                </label>
-                <input
-                  id="email-from"
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={emailFrom}
-                  onChange={(e) => setEmailFrom(e.target.value)}
-                  placeholder={email.fromAddress || 'E-Kalinga <clinic@your-domain.com>'}
-                  className={cn(inputClass, 'font-mono text-[12.5px]')}
-                />
-                <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
-                  Current: <span className="text-slate-700">{email.fromAddress || 'Not set'}</span>
+                <p className="text-[12px] leading-5 text-slate-500">
+                  Leave a field blank to keep its current value. The password is encrypted on the server and is
+                  never sent back to this page.
+                  {email.source === 'default' && (
+                    <>
+                      {' '}
+                      Currently using the defaults from{' '}
+                      <code className="font-mono text-[11px]">apps/server/.env</code>.
+                    </>
+                  )}
                 </p>
-              </div>
 
-              <p className="text-[12px] leading-5 text-slate-500">
-                Leave a field blank to keep its current value. The password is encrypted on the server and is
-                never sent back to this page.
-                {email.source === 'default' && (
-                  <>
-                    {' '}
-                    Currently using the defaults from{' '}
-                    <code className="font-mono text-[11px]">apps/server/.env</code>.
-                  </>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="submit" disabled={emailSaving || !hasNewEmailValue} className={primaryButton}>
+                    {emailSaving ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <Mail size={16} aria-hidden />
+                    )}
+                    {emailSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={testEmailSettings}
+                    disabled={emailTesting || emailSaving || !email.configured}
+                    className={secondaryButton}
+                  >
+                    {emailTesting ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <Send size={16} aria-hidden />
+                    )}
+                    {emailTesting ? 'Sending…' : 'Send test email'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailResetOpen(true)}
+                    disabled={email.source !== 'custom' || emailSaving || emailResetting}
+                    title={
+                      email.source === 'custom'
+                        ? 'Delete custom SMTP settings and use the .env defaults'
+                        : 'Already using the .env defaults'
+                    }
+                    className={secondaryButton}
+                  >
+                    <RotateCcw size={16} aria-hidden />
+                    Reset to default
+                  </button>
+                </div>
+
+                <p className="text-[12px] leading-5 text-slate-500">
+                  The test email is sent to your own admin address. If it fails, the mail provider&apos;s error
+                  appears at the top of this card.
+                </p>
+
+                {email.lastTestOk === true && (
+                  <SuccessNote>Last test succeeded {formatDateTime(email.lastTestedAt)}.</SuccessNote>
                 )}
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="submit" disabled={emailSaving || !hasNewEmailValue} className={primaryButton}>
-                  {emailSaving ? (
-                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
-                  ) : (
-                    <Mail size={16} aria-hidden />
-                  )}
-                  {emailSaving ? 'Saving…' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={testEmailSettings}
-                  disabled={emailTesting || emailSaving || !email.configured}
-                  className={secondaryButton}
-                >
-                  {emailTesting ? (
-                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
-                  ) : (
-                    <Send size={16} aria-hidden />
-                  )}
-                  {emailTesting ? 'Sending…' : 'Send test email'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEmailResetOpen(true)}
-                  disabled={email.source !== 'custom' || emailSaving || emailResetting}
-                  title={
-                    email.source === 'custom'
-                      ? 'Delete custom SMTP settings and use the .env defaults'
-                      : 'Already using the .env defaults'
-                  }
-                  className={secondaryButton}
-                >
-                  <RotateCcw size={16} aria-hidden />
-                  Reset to default
-                </button>
-              </div>
-
-              <p className="text-[12px] leading-5 text-slate-500">
-                The test email is sent to your own admin address. If it fails, the mail provider&apos;s error
-                appears above.
-              </p>
-
-              {email.lastTestOk === false && email.lastTestError && (
-                <InlineNotice>Last test failed: {email.lastTestError}</InlineNotice>
-              )}
-              {email.lastTestOk === true && (
-                <SuccessNote>
-                  Last test succeeded {formatDateTime(email.lastTestedAt)}.
-                </SuccessNote>
-              )}
-            </form>
+              </form>
+            </ConfigureSection>
           )}
         </motion.section>
 
@@ -1175,76 +1531,87 @@ function AdminSettings() {
           {calendarLoadError && <InlineNotice className="mt-4">{calendarLoadError}</InlineNotice>}
           {calendarActionError && <InlineNotice className="mt-4">{calendarActionError}</InlineNotice>}
           {calendarMessage && <SuccessNote className="mt-4">{calendarMessage}</SuccessNote>}
+          {calendar?.configured && calendar.lastError && (
+            <InlineNotice className="mt-4">Last sync error: {calendar.lastError}</InlineNotice>
+          )}
 
           {calendar && calendar.configured && (
-            <div className="mt-5 space-y-4">
-              <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2">
-                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Calendar ID</dt>
-                  <dd className="mt-1 break-all font-mono text-[11.5px] leading-5 text-slate-700">
-                    {calendar.calendarId || 'Not set'}
-                  </dd>
-                </div>
-                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Time zone</dt>
-                  <dd className="mt-1 text-slate-700">{calendar.timezone}</dd>
-                </div>
-                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Last successful sync
-                  </dt>
-                  <dd className="mt-1 text-slate-700">{formatDateTime(calendar.lastSyncedAt)}</dd>
-                </div>
-                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Linked events</dt>
-                  <dd className="mt-1 text-slate-700">
-                    {calendar.synced} synced · {calendar.pending} pending · {calendar.failed} failed
-                  </dd>
-                </div>
-              </dl>
+            <ConfigureSection
+              id="calendar-details"
+              label="Details & sync"
+              summary={
+                <span className={calendar.failed > 0 ? 'font-medium text-red-700' : undefined}>
+                  {calendar.synced} synced · {calendar.failed} failed
+                </span>
+              }
+            >
+              <div className="space-y-4">
+                <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2">
+                  <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Calendar ID</dt>
+                    <dd className="mt-1 break-all font-mono text-[11.5px] leading-5 text-slate-700">
+                      {calendar.calendarId || 'Not set'}
+                    </dd>
+                  </div>
+                  <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Time zone</dt>
+                    <dd className="mt-1 text-slate-700">{calendar.timezone}</dd>
+                  </div>
+                  <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Last successful sync
+                    </dt>
+                    <dd className="mt-1 text-slate-700">{formatDateTime(calendar.lastSyncedAt)}</dd>
+                  </div>
+                  <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Linked events</dt>
+                    <dd className="mt-1 text-slate-700">
+                      {calendar.synced} synced · {calendar.pending} pending · {calendar.failed} failed
+                    </dd>
+                  </div>
+                </dl>
 
-              {calendar.lastError && (
-                <InlineNotice>Last sync error: {calendar.lastError}</InlineNotice>
-              )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={testCalendar}
+                    disabled={calendarTesting || calendarSyncing}
+                    className={secondaryButton}
+                  >
+                    {calendarTesting ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <RefreshCw size={16} aria-hidden />
+                    )}
+                    {calendarTesting ? 'Testing…' : 'Test connection'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={syncCalendarNow}
+                    disabled={calendarTesting || calendarSyncing}
+                    className={primaryButton}
+                  >
+                    {calendarSyncing ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <RefreshCw size={16} aria-hidden />
+                    )}
+                    {calendarSyncing ? 'Syncing…' : 'Sync upcoming'}
+                  </button>
+                </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={testCalendar}
-                  disabled={calendarTesting || calendarSyncing}
-                  className={secondaryButton}
-                >
-                  {calendarTesting ? (
-                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
-                  ) : (
-                    <RefreshCw size={16} aria-hidden />
-                  )}
-                  {calendarTesting ? 'Testing…' : 'Test connection'}
-                </button>
-                <button
-                  type="button"
-                  onClick={syncCalendarNow}
-                  disabled={calendarTesting || calendarSyncing}
-                  className={primaryButton}
-                >
-                  {calendarSyncing ? (
-                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
-                  ) : (
-                    <RefreshCw size={16} aria-hidden />
-                  )}
-                  {calendarSyncing ? 'Syncing…' : 'Sync upcoming'}
-                </button>
+                <p className="text-[12px] leading-5 text-slate-500">
+                  Events are all-day, marked private, and contain only the patient name and service. Keep the
+                  clinic calendar private and shared only with authorized staff. Clinical notes and contact details
+                  are never sent. Cancelling an appointment removes its event. Manual sync still works when automatic
+                  sync is off.
+                </p>
               </div>
-
-              <p className="text-[12px] leading-5 text-slate-500">
-                Events are all-day, marked private, and contain only the patient name and service. Keep the clinic
-                calendar private and shared only with authorized staff. Clinical notes and contact details are never
-                sent. Cancelling an appointment removes its event. Manual sync still works when automatic sync is
-                off.
-              </p>
-            </div>
+            </ConfigureSection>
           )}
         </motion.section>
+
+        <SectionLabel>Tools</SectionLabel>
 
         <motion.section
           id="reports-export"
@@ -1318,6 +1685,22 @@ function AdminSettings() {
           busy={googleResetting}
           onCancel={() => setResetOpen(false)}
           onConfirm={resetGoogleCredentials}
+        />
+      )}
+
+      {recaptchaResetOpen && (
+        <ResetDialog
+          title="Reset reCAPTCHA keys?"
+          description={
+            <>
+              The custom site key and secret key will be deleted. Login, registration, and password reset will
+              immediately use the keys in the server&apos;s <code className="font-mono text-[12px]">.env</code> file,
+              so make sure those are valid for this site&apos;s domain.
+            </>
+          }
+          busy={recaptchaResetting}
+          onCancel={() => setRecaptchaResetOpen(false)}
+          onConfirm={resetRecaptchaKeys}
         />
       )}
 

@@ -61,16 +61,16 @@ production refuses unverified auth requests. Behind a reverse proxy also set
 
 Password reset codes and announcements are sent through SMTP. Configure it in
 **Admin → Settings → Email delivery** (saved encrypted in MongoDB, applied
-immediately) or with the `SMTP_*` values in `apps/server/.env`; the database
+immediately) or with the `DEFAULT_SMTP_*` values in `apps/server/.env`; the database
 settings win when both exist.
 
 | Variable | Example |
 | --- | --- |
-| `SMTP_HOST` | `smtp-relay.brevo.com` |
-| `SMTP_PORT` | `587` |
-| `SMTP_USER` | SMTP login |
-| `SMTP_PASS` | SMTP password or API key |
-| `MAIL_FROM` | `E-Kalinga <clinic@your-domain.com>` |
+| `DEFAULT_SMTP_HOST` | `smtp-relay.brevo.com` |
+| `DEFAULT_SMTP_PORT` | `587` |
+| `DEFAULT_SMTP_USER` | SMTP login |
+| `DEFAULT_SMTP_PASS` | SMTP password or API key |
+| `DEFAULT_MAIL_FROM` | `E-Kalinga <clinic@your-domain.com>` |
 
 Saving from the admin UI requires `SETTINGS_ENCRYPTION_KEY` (64 hex characters)
 in `apps/server/.env`. Use **Send test email** to verify the connection; the

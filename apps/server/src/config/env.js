@@ -58,7 +58,28 @@ const envSchema = z.object({
   GOOGLE_CALENDAR_LOCATION: z.string().optional(),
 });
 
-export const env = envSchema.parse(process.env);
+// Integration defaults that an admin can override from Settings are named
+// DEFAULT_* in .env (custom overrides live encrypted in the database, never in
+// .env). The older names still work; when both are set, DEFAULT_* wins.
+// Internally the app keeps using the old names, so no other code changes.
+const DEFAULT_ALIASES = {
+  GOOGLE_CLIENT_ID: 'DEFAULT_GOOGLE_CLIENT_ID',
+  GOOGLE_CLIENT_SECRET: 'DEFAULT_GOOGLE_CLIENT_SECRET',
+  SMTP_HOST: 'DEFAULT_SMTP_HOST',
+  SMTP_PORT: 'DEFAULT_SMTP_PORT',
+  SMTP_USER: 'DEFAULT_SMTP_USER',
+  SMTP_PASS: 'DEFAULT_SMTP_PASS',
+  MAIL_FROM: 'DEFAULT_MAIL_FROM',
+  RECAPTCHA_SITE_KEY: 'DEFAULT_RECAPTCHA_SITE_KEY',
+  RECAPTCHA_SECRET_KEY: 'DEFAULT_RECAPTCHA_SECRET_KEY',
+};
+
+const source = { ...process.env };
+for (const [legacy, preferred] of Object.entries(DEFAULT_ALIASES)) {
+  if (process.env[preferred]) source[legacy] = process.env[preferred];
+}
+
+export const env = envSchema.parse(source);
 
 export const googleOAuth = {
   enabled: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),

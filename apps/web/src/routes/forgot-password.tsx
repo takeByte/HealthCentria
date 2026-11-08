@@ -26,7 +26,9 @@ export const Route = createFileRoute('/forgot-password')({
 const inputClass =
   'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
 
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+// Fallback only: the active site key comes from the API, so a key an admin
+// saves in Settings takes effect without rebuilding the web app.
+const BUILD_SITE_KEY = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined) ?? '';
 
 type Step = 'email' | 'code' | 'done';
 
@@ -45,6 +47,7 @@ function ForgotPasswordComponent() {
 
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
+  const [siteKey, setSiteKey] = useState(BUILD_SITE_KEY);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -53,13 +56,16 @@ function ForgotPasswordComponent() {
   const emailInvalid = touched.email && email.length > 0 && !isValidEmail(email);
   const passwordInvalid = password.length > 0 && !isValidPassword(password);
   const mismatch = confirmPassword.length > 0 && confirmPassword !== password;
-  const captchaRequired = Boolean(RECAPTCHA_SITE_KEY) && recaptchaEnabled && !captchaToken;
+  const captchaRequired = Boolean(siteKey) && recaptchaEnabled && !captchaToken;
 
   useEffect(() => {
     let cancelled = false;
     getPublicSettings()
       .then((settings) => {
-        if (!cancelled) setRecaptchaEnabled(settings.recaptchaEnabled);
+        if (!cancelled) {
+          setRecaptchaEnabled(settings.recaptchaEnabled);
+          setSiteKey(settings.recaptchaSiteKey || BUILD_SITE_KEY);
+        }
       })
       .catch(() => {
         // API unreachable: keep the widget visible; the server decides.
@@ -225,11 +231,12 @@ function ForgotPasswordComponent() {
                     )}
                   </div>
 
-                  {RECAPTCHA_SITE_KEY && recaptchaEnabled && (
+                  {siteKey && recaptchaEnabled && (
                     <div className="auth-captcha flex w-full justify-center">
                       <ReCAPTCHA
                         ref={recaptchaRef}
-                        sitekey={RECAPTCHA_SITE_KEY}
+                        key={siteKey}
+                        sitekey={siteKey}
                         onChange={(token) => setCaptchaToken(token)}
                         onExpired={() => setCaptchaToken(null)}
                         onErrored={() => setCaptchaToken(null)}
@@ -357,11 +364,12 @@ function ForgotPasswordComponent() {
                     )}
                   </div>
 
-                  {RECAPTCHA_SITE_KEY && recaptchaEnabled && (
+                  {siteKey && recaptchaEnabled && (
                     <div className="auth-captcha flex w-full justify-center">
                       <ReCAPTCHA
                         ref={recaptchaRef}
-                        sitekey={RECAPTCHA_SITE_KEY}
+                        key={siteKey}
+                        sitekey={siteKey}
                         onChange={(token) => setCaptchaToken(token)}
                         onExpired={() => setCaptchaToken(null)}
                         onErrored={() => setCaptchaToken(null)}

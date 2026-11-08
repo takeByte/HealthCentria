@@ -34,7 +34,9 @@ const labelClass = 'mb-1 block text-sm font-medium text-slate-800';
 
 // Public by design. Hidden when apps/web/.env has no site key; the server then
 // skips verification in development and fails closed in production.
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+// Fallback only: the active site key comes from the API, so a key an admin
+// saves in Settings takes effect without rebuilding the web app.
+const BUILD_SITE_KEY = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined) ?? '';
 
 const SEX_OPTIONS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
 
@@ -130,6 +132,7 @@ function RegisterComponent() {
   const [direction, setDirection] = useState<1 | -1>(1);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
+  const [siteKey, setSiteKey] = useState(BUILD_SITE_KEY);
   // Step 3: the code was already emailed during registration, so the user only
   // has to type it here (or resend if it never arrived).
   const [code, setCode] = useState('');
@@ -152,7 +155,10 @@ function RegisterComponent() {
     let cancelled = false;
     getPublicSettings()
       .then((settings) => {
-        if (!cancelled) setRecaptchaEnabled(settings.recaptchaEnabled);
+        if (!cancelled) {
+          setRecaptchaEnabled(settings.recaptchaEnabled);
+          setSiteKey(settings.recaptchaSiteKey || BUILD_SITE_KEY);
+        }
       })
       .catch(() => {
         // Keep the default-on behavior if the public settings endpoint is unavailable.
@@ -219,7 +225,7 @@ function RegisterComponent() {
       if (STEP_ONE_FIELDS.some((key) => errs[key])) goToStep(1, -1);
       return;
     }
-    if (RECAPTCHA_SITE_KEY && recaptchaEnabled && !captchaToken) {
+    if (siteKey && recaptchaEnabled && !captchaToken) {
       setSubmitError('Please complete the CAPTCHA.');
       return;
     }
@@ -614,11 +620,12 @@ function RegisterComponent() {
                       <FieldError id="reg-consent-error" message={errors.consent} />
                     </div>
 
-                    {RECAPTCHA_SITE_KEY && recaptchaEnabled && (
+                    {siteKey && recaptchaEnabled && (
                       <div className="auth-captcha flex w-full justify-center">
                         <ReCAPTCHA
                           ref={recaptchaRef}
-                          sitekey={RECAPTCHA_SITE_KEY}
+                          key={siteKey}
+                          sitekey={siteKey}
                           onChange={(token) => setCaptchaToken(token)}
                           onExpired={() => setCaptchaToken(null)}
                           onErrored={() => setCaptchaToken(null)}
@@ -647,7 +654,7 @@ function RegisterComponent() {
                         disabled={
                           pending ||
                           !form.consent ||
-                          (Boolean(RECAPTCHA_SITE_KEY) && recaptchaEnabled && !captchaToken)
+                          (Boolean(siteKey) && recaptchaEnabled && !captchaToken)
                         }
                         className="h-10 flex-1 bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
                       >

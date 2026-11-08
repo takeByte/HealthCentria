@@ -454,6 +454,8 @@ export function updateStaffAccount(
 export interface AuthSettings {
   googleSignInEnabled: boolean;
   recaptchaEnabled: boolean;
+  /** Announcement, appointment-update and reminder emails. Security codes ignore it. */
+  notificationEmailsEnabled: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -495,6 +497,8 @@ export function getRecaptchaIntegrationSettings(): Promise<{ success: true } & R
 export function updateRecaptchaIntegrationSettings(input: {
   siteKey?: string;
   secretKey?: string;
+  /** A challenge solved with the new site key; the server checks it with the new secret before saving. */
+  testToken: string;
 }): Promise<{ success: true } & RecaptchaIntegrationSettings> {
   return apiFetch('/api/admin/settings/recaptcha', { method: 'PUT', body: input });
 }
@@ -611,7 +615,7 @@ export async function getPublicSettings(): Promise<{
 }> {
   const res = await fetch(`${API_URL}/api/settings/public`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Request failed (${res.status}).`);
-  return res.json() as Promise<{ googleSignInEnabled: boolean; recaptchaEnabled: boolean }>;
+  return res.json();
 }
 
 export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
@@ -619,7 +623,7 @@ export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
 }
 
 export function updateAuthSettings(
-  input: Partial<Pick<AuthSettings, 'googleSignInEnabled' | 'recaptchaEnabled'>>,
+  input: Partial<Pick<AuthSettings, 'googleSignInEnabled' | 'recaptchaEnabled' | 'notificationEmailsEnabled'>>,
 ): Promise<{ settings: AuthSettings }> {
   return apiFetch('/api/settings', { method: 'PATCH', body: input });
 }

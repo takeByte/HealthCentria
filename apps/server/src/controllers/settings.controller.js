@@ -20,6 +20,7 @@ async function present(doc) {
   return {
     googleSignInEnabled: doc?.googleSignInEnabled !== false,
     recaptchaEnabled: doc?.recaptchaEnabled !== false,
+    notificationEmailsEnabled: doc?.notificationEmailsEnabled !== false,
     googleConfigured: isGoogleConfigured(credentials),
     updatedAt: doc?.updatedAt ?? null,
   };
@@ -53,6 +54,7 @@ const updateSchema = z
   .object({
     googleSignInEnabled: z.boolean().optional(),
     recaptchaEnabled: z.boolean().optional(),
+    notificationEmailsEnabled: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0);
 
@@ -97,6 +99,26 @@ export const updateSettings = asyncHandler(async (req, res) => {
       target: { type: 'settings', id: SETTINGS_KEY, label: 'reCAPTCHA protection' },
       changes: [['recaptchaEnabled', previous?.recaptchaEnabled !== false, parsed.data.recaptchaEnabled]],
       detail: `reCAPTCHA ${parsed.data.recaptchaEnabled ? 'enabled' : 'disabled'}.`,
+    });
+  }
+
+  if (
+    parsed.data.notificationEmailsEnabled !== undefined &&
+    (previous?.notificationEmailsEnabled !== false) !== parsed.data.notificationEmailsEnabled
+  ) {
+    await logActivity({
+      req,
+      // Reuses the existing email-settings action so it lands under Configuration.
+      action: 'settings.email.update',
+      target: { type: 'settings', id: SETTINGS_KEY, label: 'Notification emails' },
+      changes: [
+        [
+          'notificationEmailsEnabled',
+          previous?.notificationEmailsEnabled !== false,
+          parsed.data.notificationEmailsEnabled,
+        ],
+      ],
+      detail: `Notification emails ${parsed.data.notificationEmailsEnabled ? 'enabled' : 'disabled'}. Security codes are unaffected.`,
     });
   }
 

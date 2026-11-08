@@ -41,6 +41,29 @@ export async function resolveRecaptchaCredentials() {
   };
 }
 
+/**
+ * Ask Google whether `token` is a valid challenge answer for `secret`. Google
+ * only accepts a token produced by the site key paired with that secret, so a
+ * passing check proves the two keys belong together. Throws when Google is
+ * unreachable; returns { ok: false, codes } when it rejects the token.
+ */
+export async function verifyRecaptchaToken(secret, token, remoteIp) {
+  const params = new URLSearchParams({ secret, response: token });
+  if (remoteIp) params.set('remoteip', remoteIp);
+  const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error(`siteverify responded ${response.status}`);
+  const data = await response.json();
+  return {
+    ok: data?.success === true,
+    codes: Array.isArray(data?.['error-codes']) ? data['error-codes'] : [],
+  };
+}
+
 /** True when both halves are present, so the widget and verification can run. */
 export function isRecaptchaConfigured(credentials) {
   return Boolean(credentials?.siteKey && credentials?.secretKey);

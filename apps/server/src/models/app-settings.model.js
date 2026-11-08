@@ -14,6 +14,10 @@ const appSettingsSchema = new mongoose.Schema(
     // service account is configured. The toggle only stops automatic writes;
     // cancelling an appointment still removes any event already on the calendar.
     googleCalendarSyncEnabled: { type: Boolean, default: true },
+    // Notification emails: announcements, appointment confirmed/declined, and
+    // reminders. Off stops those emails only — they still appear in the app.
+    // Security codes (password reset, email verification) ignore this switch.
+    notificationEmailsEnabled: { type: Boolean, default: true },
   },
   { timestamps: true },
 );
@@ -41,6 +45,16 @@ export async function isRecaptchaEnabled() {
   if (mongoose.connection.readyState !== 1) return true;
   const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
   return doc?.recaptchaEnabled !== false;
+}
+
+/**
+ * True unless an admin has switched notification emails off. Fails open when
+ * the database is unreachable, matching the other switches.
+ */
+export async function isNotificationEmailEnabled() {
+  if (mongoose.connection.readyState !== 1) return true;
+  const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
+  return doc?.notificationEmailsEnabled !== false;
 }
 
 /**

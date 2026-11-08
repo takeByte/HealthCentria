@@ -7,6 +7,7 @@ import { maskClientId, maskClientSecret } from '../utils/masking.js';
 import {
   isRecaptchaConfigured,
   resolveRecaptchaCredentials,
+  verifyRecaptchaToken,
 } from '../utils/recaptcha-credentials.js';
 import { encryptSecret } from '../utils/secret-crypto.js';
 
@@ -40,6 +41,10 @@ export const getRecaptchaSettings = asyncHandler(async (req, res) => {
 const updateSchema = z.object({
   siteKey: z.string().trim().max(200).optional(),
   secretKey: z.string().trim().max(200).optional(),
+  // A challenge the admin solved with the NEW site key. Required whenever the
+  // keys change, so a mismatched pair can never be saved and lock everyone
+  // (admins included) out of login.
+  testToken: z.string().trim().max(4096).optional(),
 });
 
 // Google's v2 keys are URL-safe base64-ish strings (usually 40 characters).
@@ -89,6 +94,29 @@ export const updateRecaptchaSettings = asyncHandler(async (req, res) => {
   if (!nextSecretKey) return validationError(res, 'secretKey', 'Secret key is required.');
   if (!KEY_PATTERN.test(nextSecretKey)) {
     return validationError(res, 'secretKey', 'Enter a valid reCAPTCHA secret key.');
+  }
+
+  const testToken = parsed.data.testToken ?? '';
+  if (!testToken) {
+    return validationError(res, 'testToken', 'Complete the test challenge with the new keys before saving.');
+  }
+  try {
+    const result = await verifyRecaptchaToken(nextSecretKey, testToken, req.ctx?.ip || req.ip);
+    if (!result.ok) {
+      const codes = result.codes.join(', ') || 'unknown';
+      return validationError(
+        res,
+        'testToken',
+        result.codes.includes('invalid-input-secret')
+          ? 'Google rejected the secret key. Check that you copied it correctly.'
+          : `The test challenge did not pass with these keys (${codes}). Make sure the site key and secret key are from the same reCAPTCHA v2 checkbox key, then solve the challenge again.`,
+      );
+    }
+  } catch {
+    return res.status(503).json({
+      success: false,
+      message: 'Could not reach Google to verify the keys. Nothing was saved — try again.',
+    });
   }
 
   let secretKeyEncrypted;
