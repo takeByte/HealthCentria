@@ -19,7 +19,14 @@ import {
   getRecaptchaSettings,
   updateRecaptchaSettings,
 } from '../controllers/recaptcha-settings.controller.js';
+import {
+  getSheetsSettings,
+  resetSheetsSettings,
+  testSheetsSettings,
+  updateSheetsSettings,
+} from '../controllers/sheets-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { requireSuperPin } from '../middleware/requireSuperPin.js';
 
 export const adminSettingsRouter = Router();
 
@@ -32,25 +39,41 @@ adminSettingsRouter.use((req, res, next) => {
 });
 
 adminSettingsRouter.get('/google', getGoogleSettings);
-adminSettingsRouter.put('/google', updateGoogleSettings);
-adminSettingsRouter.delete('/google', deleteGoogleSettings);
+// Every save, reset and switch below needs the superadmin PIN (SU_PIN).
+// Read-only, test and sync endpoints do not: they change no settings.
+adminSettingsRouter.put('/google', requireSuperPin('Google sign-in credentials'), updateGoogleSettings);
+adminSettingsRouter.delete('/google', requireSuperPin('Google sign-in credentials (reset to default)'), deleteGoogleSettings);
 
 // reCAPTCHA keys. The site key is public; the secret key is encrypted at rest.
 // Both can be overridden here without editing .env and restarting the API.
 adminSettingsRouter.get('/recaptcha', getRecaptchaSettings);
-adminSettingsRouter.put('/recaptcha', updateRecaptchaSettings);
-adminSettingsRouter.delete('/recaptcha', deleteRecaptchaSettings);
+adminSettingsRouter.put('/recaptcha', requireSuperPin('reCAPTCHA keys'), updateRecaptchaSettings);
+adminSettingsRouter.delete('/recaptcha', requireSuperPin('reCAPTCHA keys (reset to default)'), deleteRecaptchaSettings);
 
 // Email delivery (SMTP). Password reset codes and announcements use it, so an
 // admin can fix mail delivery without editing .env and restarting the API.
 adminSettingsRouter.get('/email', getEmailSettings);
-adminSettingsRouter.put('/email', updateEmailSettings);
-adminSettingsRouter.delete('/email', deleteEmailSettings);
+adminSettingsRouter.put('/email', requireSuperPin('Email delivery (SMTP) settings'), updateEmailSettings);
+adminSettingsRouter.delete('/email', requireSuperPin('Email delivery (SMTP) settings (reset to default)'), deleteEmailSettings);
 adminSettingsRouter.post('/email/test', testEmailSettings);
 
 // Google Calendar sync is additive: the existing appointment flow continues to
 // work when these env vars are absent or the admin switches sync off.
 adminSettingsRouter.get('/google-calendar', getGoogleCalendarSettings);
-adminSettingsRouter.patch('/google-calendar', updateGoogleCalendarSettings);
+adminSettingsRouter.patch(
+  '/google-calendar',
+  requireSuperPin((req) => `Google Calendar sync switched ${req.body?.enabled ? 'on' : 'off'}`),
+  updateGoogleCalendarSettings,
+);
 adminSettingsRouter.post('/google-calendar/test', testGoogleCalendarSettings);
 adminSettingsRouter.post('/google-calendar/sync', syncGoogleCalendarSettings);
+
+// Google Sheets export spreadsheet. Uses the same service account as Calendar.
+adminSettingsRouter.get('/google-sheets', getSheetsSettings);
+adminSettingsRouter.put('/google-sheets', requireSuperPin('Google Sheets export spreadsheet'), updateSheetsSettings);
+adminSettingsRouter.delete(
+  '/google-sheets',
+  requireSuperPin('Google Sheets export spreadsheet (reset to default)'),
+  resetSheetsSettings,
+);
+adminSettingsRouter.post('/google-sheets/test', testSheetsSettings);

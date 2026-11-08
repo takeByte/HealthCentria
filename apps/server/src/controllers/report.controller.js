@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
 import { User } from '../models/user.model.js';
+import { logActivity } from '../services/activity.js';
+import { exportStamp, exportToSheet } from '../services/google-sheets.js';
 import { addDaysYMD, todayYMD } from '../utils/service-schedule.js';
 
 const querySchema = z.object({
@@ -96,6 +98,45 @@ export const exportVisitsPerServiceCsv = asyncHandler(async (req, res) => {
   );
   // BOM so Excel opens UTF-8 correctly.
   res.send(`\uFEFF${csv}`);
+});
+
+/**
+ * POST /api/reports/visits-per-service/sheets?days= — the same report written
+ * to a new tab in the export spreadsheet. Staff and admins, like the CSV.
+ */
+export const exportVisitsPerServiceSheets = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = querySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid range.' });
+  }
+  const data = await loadVisitsPerService(parsed.data.days);
+  const actor = await User.findById(req.user.id).select('fullName').lean();
+  const stamp = exportStamp();
+
+  let result;
+  try {
+    result = await exportToSheet({
+      tabTitle: `Visits ${stamp}`,
+      title: 'E-Kalinga — Visits per service',
+      details: `Completed visits, ${data.from} to ${data.to} (${data.days} days) · Exported by ${actor?.fullName || 'staff'}`,
+      header: ['Service', 'Completed visits'],
+      rows: [...data.rows.map((row) => [row.serviceName, row.count]), ['Total', data.total]],
+    });
+  } catch (error) {
+    return res.status(502).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Could not export to Google Sheets.',
+    });
+  }
+
+  await logActivity({
+    req,
+    action: 'report.export_sheets',
+    target: { type: 'report', id: 'visits-per-service', label: `Visits per service (${data.days} days)` },
+    detail: `Exported ${data.rows.length} service rows to Google Sheets tab "${result.tab}".`,
+  });
+  res.json({ success: true, url: result.url, tab: result.tab });
 });
 
 // Daily-ops + system counts for the admin dashboard (staff see shared counts;

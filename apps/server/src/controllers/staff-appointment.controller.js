@@ -5,7 +5,12 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
 import { Service } from '../models/service.model.js';
 import { diffChanges, logActivity } from '../services/activity.js';
-import { removeAppointmentFromCalendar, syncAppointmentToCalendar } from '../services/google-calendar.js';
+import { isGoogleCalendarSyncEnabled } from '../models/app-settings.model.js';
+import {
+  getGoogleCalendarViewConfig,
+  removeAppointmentFromCalendar,
+  syncAppointmentToCalendar,
+} from '../services/google-calendar.js';
 import { User } from '../models/user.model.js';
 import { hashPassword, isValidPassword } from '../utils/password.js';
 import { isValidServiceDay, todayYMD } from '../utils/service-schedule.js';
@@ -404,5 +409,23 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
     success: true,
     appointment: present(appt),
     ...(tempPassword ? { tempPassword } : {}),
+  });
+});
+
+/**
+ * GET /api/appointments/calendar-link — staff/admin. The dashboard schedule
+ * shows "Open in Google Calendar" only when the mirror is configured and on.
+ * The calendar ID is not secret, but only people it is shared with can open it.
+ */
+export const calendarLink = asyncHandler(async (req, res) => {
+  const { configured, calendarId, timezone } = getGoogleCalendarViewConfig();
+  const enabled = configured ? await isGoogleCalendarSyncEnabled().catch(() => false) : false;
+  const available = configured && enabled;
+  res.json({
+    success: true,
+    available,
+    url: available
+      ? `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}&ctz=${encodeURIComponent(timezone)}&mode=MONTH`
+      : '',
   });
 });

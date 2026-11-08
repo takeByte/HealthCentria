@@ -56,6 +56,21 @@ const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
   GOOGLE_CALENDAR_TIMEZONE: z.string().default('Asia/Manila'),
   GOOGLE_CALENDAR_LOCATION: z.string().optional(),
+
+  // Superadmin PIN: required (X-Super-Pin header) to save, reset or switch any
+  // integration in admin Settings. When empty, those changes are refused.
+  // SU_EMAIL receives a notice after every approved change.
+  SU_PIN: z.string().optional(),
+  SU_EMAIL: z.string().optional(),
+
+  // Google Sheets export: the spreadsheet (shared with the service account as
+  // Editor) that receives each export as a new tab. Set as
+  // DEFAULT_GOOGLE_SHEETS_SPREADSHEET_ID; an admin can override it in Settings.
+  GOOGLE_SHEETS_SPREADSHEET_ID: z.string().optional(),
+
+  // Clinic name in the header of every export. Optional: falls back to
+  // GOOGLE_CALENDAR_LOCATION, then "Barangay 11 Health Center".
+  CLINIC_NAME: z.string().optional(),
 });
 
 // Integration defaults that an admin can override from Settings are named
@@ -72,6 +87,7 @@ const DEFAULT_ALIASES = {
   MAIL_FROM: 'DEFAULT_MAIL_FROM',
   RECAPTCHA_SITE_KEY: 'DEFAULT_RECAPTCHA_SITE_KEY',
   RECAPTCHA_SECRET_KEY: 'DEFAULT_RECAPTCHA_SECRET_KEY',
+  GOOGLE_SHEETS_SPREADSHEET_ID: 'DEFAULT_GOOGLE_SHEETS_SPREADSHEET_ID',
 };
 
 const source = { ...process.env };

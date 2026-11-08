@@ -18,6 +18,11 @@ const appSettingsSchema = new mongoose.Schema(
     // reminders. Off stops those emails only — they still appear in the app.
     // Security codes (password reset, email verification) ignore this switch.
     notificationEmailsEnabled: { type: Boolean, default: true },
+    // Custom Google Sheets export spreadsheet. Empty = use the .env default.
+    // Not a secret (only people it is shared with can open it), so stored plain.
+    googleSheetsSpreadsheetId: { type: String, default: '' },
+    // Google Sheets export on/off. Off blocks new exports; existing tabs stay.
+    googleSheetsEnabled: { type: Boolean, default: true },
   },
   { timestamps: true },
 );
@@ -55,6 +60,13 @@ export async function isNotificationEmailEnabled() {
   if (mongoose.connection.readyState !== 1) return true;
   const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
   return doc?.notificationEmailsEnabled !== false;
+}
+
+/** True unless an admin has switched Google Sheets export off. */
+export async function isGoogleSheetsEnabled() {
+  if (mongoose.connection.readyState !== 1) return true;
+  const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
+  return doc?.googleSheetsEnabled !== false;
 }
 
 /**

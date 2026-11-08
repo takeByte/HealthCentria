@@ -18,10 +18,12 @@ import {
   panel,
   secondaryButton,
 } from '../../components/app-ui';
+import { SheetsExportButton, SheetsExportNote, useSheetsExport } from '../../components/sheets-export';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
   downloadVisitsCsv,
+  exportVisitsToSheets,
   visitsPerService,
   type VisitsPerServiceRow,
 } from '../../lib/api';
@@ -43,6 +45,7 @@ function Reports() {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const sheets = useSheetsExport(() => exportVisitsToSheets(Number(range)));
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +114,12 @@ function Reports() {
             )}
             {exporting ? 'Generating…' : 'Export CSV'}
           </button>
+          <SheetsExportButton
+            exporting={sheets.exporting}
+            disabled={rows === null}
+            onClick={sheets.start}
+            className={secondaryButton}
+          />
           <Segmented
             ariaLabel="Report range"
             value={range}
@@ -124,6 +133,7 @@ function Reports() {
       </motion.div>
 
       {exportError && <InlineNotice>{exportError}</InlineNotice>}
+      <SheetsExportNote result={sheets.result} error={sheets.error} />
 
       <motion.div
         {...rise}

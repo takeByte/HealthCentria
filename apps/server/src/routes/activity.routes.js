@@ -3,6 +3,7 @@ import {
   activityPolicy,
   activitySummary,
   exportActivityCsv,
+  exportActivitySheets,
   listActivity,
   listMyActivity,
   listOwnActivity,
@@ -19,6 +20,7 @@ activityRouter.use(requireAuth);
 activityRouter.get('/policy', activityPolicy);
 activityRouter.get('/summary', requireRole('admin'), activitySummary);
 activityRouter.get('/export', requireRole('admin'), exportActivityCsv);
+activityRouter.post('/export/sheets', requireRole('admin'), exportActivitySheets);
 activityRouter.get('/mine', requireRole('staff'), listMyActivity);
 activityRouter.get('/me', requireRole('patient'), listOwnActivity);
 activityRouter.post('/purge', requireRole('admin'), purgeActivity);

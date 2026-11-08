@@ -59,6 +59,11 @@ export const ACTIVITY_ACTIONS = [
   'settings.recaptcha.reset',
   'settings.signin.update',
   'integration.update',
+  'settings.pin_failed',
+  'settings.sheets.update',
+  'settings.sheets.reset',
+  'report.export_sheets',
+  'activity.export_sheets',
   // System
   'activity.purge',
 ];
@@ -101,6 +106,11 @@ export const ACTION_CATEGORY = {
   'settings.recaptcha.reset': 'configuration',
   'settings.signin.update': 'configuration',
   'integration.update': 'configuration',
+  'settings.pin_failed': 'configuration',
+  'settings.sheets.update': 'configuration',
+  'settings.sheets.reset': 'configuration',
+  'report.export_sheets': 'system',
+  'activity.export_sheets': 'system',
   'activity.purge': 'system',
 };
 

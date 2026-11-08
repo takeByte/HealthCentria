@@ -21,6 +21,7 @@ async function present(doc) {
     googleSignInEnabled: doc?.googleSignInEnabled !== false,
     recaptchaEnabled: doc?.recaptchaEnabled !== false,
     notificationEmailsEnabled: doc?.notificationEmailsEnabled !== false,
+    googleSheetsEnabled: doc?.googleSheetsEnabled !== false,
     googleConfigured: isGoogleConfigured(credentials),
     updatedAt: doc?.updatedAt ?? null,
   };
@@ -55,6 +56,7 @@ const updateSchema = z
     googleSignInEnabled: z.boolean().optional(),
     recaptchaEnabled: z.boolean().optional(),
     notificationEmailsEnabled: z.boolean().optional(),
+    googleSheetsEnabled: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0);
 
@@ -119,6 +121,19 @@ export const updateSettings = asyncHandler(async (req, res) => {
         ],
       ],
       detail: `Notification emails ${parsed.data.notificationEmailsEnabled ? 'enabled' : 'disabled'}. Security codes are unaffected.`,
+    });
+  }
+
+  if (
+    parsed.data.googleSheetsEnabled !== undefined &&
+    (previous?.googleSheetsEnabled !== false) !== parsed.data.googleSheetsEnabled
+  ) {
+    await logActivity({
+      req,
+      action: 'integration.update',
+      target: { type: 'settings', id: SETTINGS_KEY, label: 'Google Sheets export' },
+      changes: [['googleSheetsEnabled', previous?.googleSheetsEnabled !== false, parsed.data.googleSheetsEnabled]],
+      detail: `Google Sheets export ${parsed.data.googleSheetsEnabled ? 'enabled' : 'disabled'}.`,
     });
   }
 

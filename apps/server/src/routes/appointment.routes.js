@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { bookAppointment, cancelAppointment, myAppointments } from '../controllers/appointment.controller.js';
 import {
+  calendarLink,
   completeAppointment,
   confirmAppointment,
   declineAppointment,
@@ -21,6 +22,7 @@ appointmentRouter.patch('/:id/cancel', requireAuth, requireRole('patient'), canc
 
 // Staff/admin triage queue.
 appointmentRouter.get('/', requireAuth, requireRole('staff', 'admin'), queueAppointments);
+appointmentRouter.get('/calendar-link', requireAuth, requireRole('staff', 'admin'), calendarLink);
 appointmentRouter.get('/lookup-patient', requireAuth, requireRole('staff', 'admin'), lookupPatient);
 appointmentRouter.post('/walk-in', requireAuth, requireRole('staff', 'admin'), walkInAppointment);
 appointmentRouter.patch('/:id/confirm', requireAuth, requireRole('staff', 'admin'), confirmAppointment);

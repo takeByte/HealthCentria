@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { ACTIVITY_CATEGORIES, AuditLog, categoryForAction } from '../models/audit-log.model.js';
+import { User } from '../models/user.model.js';
+import { exportStamp, exportToSheet } from '../services/google-sheets.js';
 import {
   ACTIVITY_RETENTION_DAYS,
   logActivity,
@@ -306,6 +308,85 @@ export const exportActivityCsv = asyncHandler(async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="activity-${stamp}.csv"`);
   // BOM so Excel opens UTF-8 correctly.
   res.send(`\uFEFF${lines.join('\r\n')}`);
+});
+
+/**
+ * POST /api/activity/export/sheets — the current filters written to a new tab
+ * in the export spreadsheet (admin only). Same columns and 10,000-row cap as CSV.
+ */
+export const exportActivitySheets = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const query = parseQuery(req, res);
+  if (!query) return;
+
+  const entries = await AuditLog.find(buildFilter(req.user, query))
+    .sort({ createdAt: -1 })
+    .limit(10000)
+    .lean();
+
+  const rows = entries.map((e) => {
+    const entry = present(e);
+    return [
+      entry.createdAt ? new Date(entry.createdAt).toISOString() : '',
+      entry.actor.name,
+      entry.actor.role,
+      entry.action,
+      entry.category,
+      entry.outcome,
+      entry.target.type,
+      entry.target.label,
+      entry.target.id,
+      entry.ip,
+      entry.detail,
+      entry.changes.map((c) => `${c.field}: ${c.from} → ${c.to}`).join(' | '),
+    ];
+  });
+
+  const filters = ['category', 'action', 'actor', 'outcome', 'q', 'from', 'to']
+    .filter((k) => query[k])
+    .map((k) => `${k}=${query[k]}`)
+    .join(', ');
+  const stamp = exportStamp();
+  const actor = await User.findById(req.user.id).select('fullName').lean();
+
+  let result;
+  try {
+    result = await exportToSheet({
+      tabTitle: `Activity ${stamp}`,
+      title: 'E-Kalinga — Activity log',
+      details: `${rows.length} entries${filters ? ` · Filters: ${filters}` : ' · No filters'}${
+        rows.length === 10000 ? ' · Capped at 10,000 rows' : ''
+      } · Exported by ${actor?.fullName || 'admin'}`,
+      header: [
+        'timestamp',
+        'actor',
+        'role',
+        'action',
+        'category',
+        'outcome',
+        'target_type',
+        'target',
+        'target_id',
+        'ip',
+        'detail',
+        'changes',
+      ],
+      rows,
+    });
+  } catch (error) {
+    return res.status(502).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Could not export to Google Sheets.',
+    });
+  }
+
+  await logActivity({
+    req,
+    action: 'activity.export_sheets',
+    target: { type: 'activity', id: 'export', label: 'Activity log' },
+    detail: `Exported ${rows.length} entries to Google Sheets tab "${result.tab}"${filters ? ` (filters: ${filters})` : ''}.`,
+  });
+  res.json({ success: true, url: result.url, tab: result.tab, rows: rows.length });
 });
 
 const purgeSchema = z.object({ confirm: z.literal(true) });

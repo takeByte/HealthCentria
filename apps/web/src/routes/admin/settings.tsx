@@ -40,6 +40,11 @@ import {
   getEmailIntegrationSettings,
   getGoogleCalendarSettings,
   getGoogleIntegrationSettings,
+  getGoogleSheetsSettings,
+  resetGoogleSheetsSettings,
+  testGoogleSheetsConnection,
+  updateGoogleSheetsSettings,
+  type GoogleSheetsSettings,
   getPublicSettings,
   getRecaptchaIntegrationSettings,
   resetEmailIntegrationSettings,
@@ -240,7 +245,425 @@ function ResetDialog({
   );
 }
 
+/** Thrown when the admin closes the PIN prompt; callers just stop quietly. */
+class PinCancelled extends Error {
+  constructor() {
+    super('PIN entry cancelled.');
+    this.name = 'PinCancelled';
+  }
+}
+
+interface PinRequest {
+  title: string;
+  run: (pin: string) => Promise<unknown>;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
+}
+
+/**
+ * Superadmin PIN prompt. The PIN lives only in this dialog's local state and is
+ * sent with the change request itself (X-Super-Pin header). It is cleared after
+ * every attempt and when the dialog closes, and is never saved anywhere.
+ * Wrong PIN / lockout errors stay in the dialog; any other error closes it and
+ * goes back to the card that asked, so existing error handling still applies.
+ */
+function PinDialog({ request, onClose }: { request: PinRequest; onClose: () => void }) {
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const cancel = useCallback(() => {
+    if (busy) return;
+    setPin('');
+    request.reject(new PinCancelled());
+    onClose();
+  }, [busy, onClose, request]);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopImmediatePropagation();
+        cancel();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [cancel]);
+
+  async function confirm(e: FormEvent) {
+    e.preventDefault();
+    const value = pin.trim();
+    if (busy) return;
+    if (!value) {
+      setError('Enter the superadmin PIN.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setPin('');
+    try {
+      const result = await request.run(value);
+      request.resolve(result);
+      onClose();
+    } catch (err) {
+      if (err instanceof ApiError && ['PIN_INCORRECT', 'PIN_LOCKED', 'SU_PIN_NOT_SET'].includes(err.code ?? '')) {
+        setError(err.message);
+        setBusy(false);
+        inputRef.current?.focus();
+        return;
+      }
+      request.reject(err);
+      onClose();
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) cancel();
+      }}
+    >
+      <motion.form
+        onSubmit={confirm}
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pin-dialog-title"
+        aria-describedby="pin-dialog-desc"
+        className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] sm:p-6"
+      >
+        <span className="flex size-10 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
+          <KeyRound size={19} aria-hidden />
+        </span>
+        <h2 id="pin-dialog-title" className="mt-3 font-display text-lg font-semibold tracking-[-0.02em] text-slate-900">
+          Enter superadmin PIN to confirm
+        </h2>
+        <p id="pin-dialog-desc" className="mt-1 text-[13px] leading-5 text-slate-600">
+          {request.title}
+        </p>
+        <label htmlFor="super-pin" className={cn(fieldLabel, 'mt-4')}>
+          Superadmin PIN
+        </label>
+        <input
+          ref={inputRef}
+          id="super-pin"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          value={pin}
+          onChange={(e) => {
+            setPin(e.target.value);
+            if (error) setError(null);
+          }}
+          disabled={busy}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? 'super-pin-error' : undefined}
+          className={inputClass}
+        />
+        {error && (
+          <p id="super-pin-error" role="alert" className="mt-2 text-[12.5px] font-medium leading-5 text-destructive">
+            {error}
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={cancel} disabled={busy} className={secondaryButton}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy} className={primaryButton}>
+            {busy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+            {busy ? 'Checking…' : 'Confirm'}
+          </button>
+        </div>
+      </motion.form>
+    </div>
+  );
+}
+
+type WithPin = <T,>(title: string, run: (pin: string) => Promise<T>) => Promise<T>;
+
+/**
+ * Google Sheets export card. The spreadsheet belongs to a person and is shared
+ * with the Calendar service account as Editor; every export adds a new tab.
+ * Saving or resetting the spreadsheet needs the superadmin PIN, and a new
+ * spreadsheet is tested on the server before it is saved.
+ */
+function GoogleSheetsCard({
+  withPin,
+  onToast,
+  enabled,
+  toggling,
+  onToggle,
+}: {
+  withPin: WithPin;
+  onToast: (t: ToastMessage) => void;
+  /** The on/off switch lives in the shared platform settings; undefined while loading. */
+  enabled: boolean | undefined;
+  toggling: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [sheets, setSheets] = useState<GoogleSheetsSettings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getGoogleSheetsSettings()
+      .then((r) => {
+        if (!cancelled) setSheets(r);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoadError(err instanceof ApiError ? err.message : 'Could not load Google Sheets status.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const value = draft.trim();
+    if (!value || saving) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const r = await withPin('Change the Google Sheets export spreadsheet.', (pin) =>
+        updateGoogleSheetsSettings({ spreadsheetId: value }, pin),
+      );
+      setSheets(r);
+      setDraft('');
+      onToast({ tone: 'success', message: 'Spreadsheet tested and saved.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      setError(
+        err instanceof ApiError
+          ? (err.errors?.spreadsheetId?.[0] ?? err.message)
+          : 'Could not save the spreadsheet. Try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function test() {
+    if (testing) return;
+    setTesting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const r = await testGoogleSheetsConnection();
+      setMessage(`Connected to "${r.title}". The service account can add and remove tabs.`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach Google Sheets. Try again.');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function reset() {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      const r = await withPin('Reset the Google Sheets spreadsheet to the server default.', (pin) =>
+        resetGoogleSheetsSettings(pin),
+      );
+      setSheets(r);
+      setResetOpen(false);
+      onToast({ tone: 'success', message: 'Google Sheets reset to the server default.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      onToast({ tone: 'error', message: err instanceof ApiError ? err.message : 'Could not reset. Try again.' });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <>
+      <motion.section
+        id="google-sheets"
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.13 }}
+        className={panel}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-xl">
+            <CardHeading
+              title="Google Sheets"
+              description="Reports and the Activity log can be exported to one shared spreadsheet. Each export adds a new tab and returns a link. Only people the spreadsheet is shared with can open it."
+            />
+          </div>
+          <div className="flex items-center gap-2.5">
+            {toggling && <LoaderCircle size={17} className="animate-spin text-slate-400" aria-hidden />}
+            {sheets === null ? (
+              <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
+            ) : !sheets.configured ? (
+              <StatusPill tone="amber">Not set up</StatusPill>
+            ) : null}
+            {enabled !== undefined && (
+              <>
+                <StatusPill tone={enabled ? 'teal' : 'slate'}>{enabled ? 'On' : 'Off'}</StatusPill>
+                <Toggle
+                  checked={enabled}
+                  disabled={toggling}
+                  label="Allow exports to Google Sheets"
+                  onChange={onToggle}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {enabled === false && (
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+            Google Sheets export is off. The &ldquo;Export to Sheets&rdquo; buttons show an error until it is turned
+            back on. CSV export and tabs already in the spreadsheet are not affected.
+          </p>
+        )}
+        {loadError && <InlineNotice className="mt-4">{loadError}</InlineNotice>}
+        {error && <InlineNotice className="mt-4">{error}</InlineNotice>}
+        {message && <SuccessNote className="mt-4">{message}</SuccessNote>}
+        {sheets && !sheets.serviceAccountConfigured && (
+          <InlineNotice className="mt-4">
+            The Google service account is not set in the server .env (the same one Google Calendar uses).
+          </InlineNotice>
+        )}
+
+        {sheets && (
+          <ConfigureSection
+            id="sheets-config"
+            label="Configure spreadsheet"
+            defaultOpen={!sheets.configured}
+            summary={
+              <>
+                <StatusPill tone={sheets.source === 'custom' ? 'sky' : 'slate'}>
+                  {sheets.source === 'custom' ? 'Custom' : 'Default'}
+                </StatusPill>
+                {sheets.spreadsheetUrl && (
+                  <a
+                    href={sheets.spreadsheetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-teal-700 underline-offset-4 hover:underline"
+                  >
+                    Open spreadsheet
+                  </a>
+                )}
+              </>
+            }
+          >
+            <div className="space-y-4">
+              <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2">
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Spreadsheet ID</dt>
+                  <dd className="mt-1 break-all font-mono text-[11.5px] leading-5 text-slate-700">
+                    {sheets.spreadsheetId || 'Not set'}
+                  </dd>
+                </div>
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Share it with (Editor)
+                  </dt>
+                  <dd className="mt-1 break-all font-mono text-[11.5px] leading-5 text-slate-700">
+                    {sheets.serviceAccountEmail || 'Service account not set'}
+                  </dd>
+                </div>
+              </dl>
+
+              <form onSubmit={save} className="space-y-2">
+                <label htmlFor="sheets-id" className={fieldLabel}>
+                  New spreadsheet <span className="font-normal text-slate-500">(ID or full link)</span>
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    id="sheets-id"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/…/edit"
+                    autoComplete="off"
+                    className={inputClass}
+                  />
+                  <button type="submit" disabled={!draft.trim() || saving} className={`${primaryButton} shrink-0`}>
+                    {saving && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                    {saving ? 'Testing…' : 'Test & save'}
+                  </button>
+                </div>
+                <p className="text-[12px] leading-5 text-slate-500">
+                  The server checks it can open the spreadsheet and add a tab before saving, so a typo or a missing
+                  share can&apos;t break exports.
+                </p>
+              </form>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={test}
+                  disabled={testing || !sheets.configured}
+                  className={secondaryButton}
+                >
+                  {testing ? (
+                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw size={16} aria-hidden />
+                  )}
+                  {testing ? 'Testing…' : 'Test connection'}
+                </button>
+                {sheets.source === 'custom' && (
+                  <button type="button" onClick={() => setResetOpen(true)} className={secondaryButton}>
+                    <RotateCcw size={16} aria-hidden /> Reset to default
+                  </button>
+                )}
+              </div>
+            </div>
+          </ConfigureSection>
+        )}
+      </motion.section>
+
+      {resetOpen && (
+        <ResetDialog
+          title="Reset Google Sheets?"
+          description={
+            <>
+              The custom spreadsheet will be removed from Settings. Exports will use the spreadsheet in the
+              server&apos;s <code className="font-mono text-[12px]">.env</code> file
+              {sheets?.defaultSet ? '.' : ', and none is set there, so Sheets exports will stop until one is added.'}
+            </>
+          }
+          busy={resetting}
+          onCancel={() => setResetOpen(false)}
+          onConfirm={reset}
+        />
+      )}
+    </>
+  );
+}
+
 function AdminSettings() {
+  const [pinRequest, setPinRequest] = useState<PinRequest | null>(null);
+  /** Opens the PIN prompt and runs `run(pin)`; resolves with its result once the server accepts the PIN. */
+  const withPin = useCallback(
+    <T,>(title: string, run: (pin: string) => Promise<T>): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        setPinRequest({ title, run, resolve: resolve as (value: unknown) => void, reject });
+      }),
+    [],
+  );
+  const closePin = useCallback(() => setPinRequest(null), []);
   const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
@@ -458,11 +881,17 @@ function AdminSettings() {
     setRecaptchaSaving(true);
     setRecaptchaError(null);
     try {
-      const r = await updateRecaptchaIntegrationSettings({
-        ...(siteKey ? { siteKey } : {}),
-        ...(secretKey ? { secretKey } : {}),
-        testToken: recaptchaTestToken,
-      });
+      const token = recaptchaTestToken;
+      const r = await withPin('Save new reCAPTCHA keys.', (pin) =>
+        updateRecaptchaIntegrationSettings(
+          {
+            ...(siteKey ? { siteKey } : {}),
+            ...(secretKey ? { secretKey } : {}),
+            testToken: token,
+          },
+          pin,
+        ),
+      );
       setRecaptchaKeys({
         siteKeyMasked: r.siteKeyMasked,
         secretKeyMasked: r.secretKeyMasked,
@@ -476,6 +905,7 @@ function AdminSettings() {
       setRecaptchaLoadError(null);
       setToast({ tone: 'success', message: 'reCAPTCHA keys verified and saved.' });
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       // A token is single-use: whatever happened, the admin must solve a new one.
       setRecaptchaTestToken(null);
       setRecaptchaTestKey(null);
@@ -493,7 +923,9 @@ function AdminSettings() {
     if (recaptchaResetting) return;
     setRecaptchaResetting(true);
     try {
-      const r = await resetRecaptchaIntegrationSettings();
+      const r = await withPin('Reset reCAPTCHA keys to the server defaults.', (pin) =>
+        resetRecaptchaIntegrationSettings(pin),
+      );
       setRecaptchaKeys({
         siteKeyMasked: r.siteKeyMasked,
         secretKeyMasked: r.secretKeyMasked,
@@ -507,6 +939,7 @@ function AdminSettings() {
       refreshActiveSiteKey();
       setToast({ tone: 'success', message: 'reCAPTCHA keys reset to the server defaults.' });
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setToast({
         tone: 'error',
         message: err instanceof ApiError ? err.message : 'Could not reset reCAPTCHA keys. Try again.',
@@ -522,15 +955,17 @@ function AdminSettings() {
     setSaving(true);
     setSaveError(null);
     setSaved(false);
-    // Optimistic: the switch flips immediately and rolls back if the API rejects it.
-    setSettings({ ...settings, googleSignInEnabled: next });
     try {
-      const r = await updateAuthSettings({ googleSignInEnabled: next });
+      // The switch flips only after the PIN is accepted and the change is saved.
+      const r = await withPin(`Turn Google sign-in ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAuthSettings({ googleSignInEnabled: next }, pin),
+      );
       setSettings(r.settings);
       setSaved(true);
-    } catch {
+    } catch (err) {
       setSettings(previous);
-      setSaveError('Could not save the setting. Try again.');
+      if (err instanceof PinCancelled) return;
+      setSaveError(err instanceof ApiError ? err.message : 'Could not save the setting. Try again.');
     } finally {
       setSaving(false);
     }
@@ -542,14 +977,16 @@ function AdminSettings() {
     setSaving(true);
     setSaveError(null);
     setSaved(false);
-    setSettings({ ...settings, recaptchaEnabled: next });
     try {
-      const r = await updateAuthSettings({ recaptchaEnabled: next });
+      const r = await withPin(`Turn reCAPTCHA protection ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAuthSettings({ recaptchaEnabled: next }, pin),
+      );
       setSettings(r.settings);
       setSaved(true);
-    } catch {
+    } catch (err) {
       setSettings(previous);
-      setSaveError('Could not save the setting. Try again.');
+      if (err instanceof PinCancelled) return;
+      setSaveError(err instanceof ApiError ? err.message : 'Could not save the setting. Try again.');
     } finally {
       setSaving(false);
     }
@@ -559,15 +996,41 @@ function AdminSettings() {
     if (!settings || saving) return;
     const previous = settings;
     setSaving(true);
-    // Optimistic: the switch flips immediately and rolls back if the API rejects it.
-    setSettings({ ...settings, notificationEmailsEnabled: next });
     try {
-      const r = await updateAuthSettings({ notificationEmailsEnabled: next });
+      const r = await withPin(`Turn notification emails ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAuthSettings({ notificationEmailsEnabled: next }, pin),
+      );
       setSettings(r.settings);
       setToast({ tone: 'success', message: `Notification emails ${next ? 'turned on' : 'turned off'}.` });
-    } catch {
+    } catch (err) {
       setSettings(previous);
-      setToast({ tone: 'error', message: 'Could not save the notification email setting. Try again.' });
+      if (err instanceof PinCancelled) return;
+      setToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not save the notification email setting. Try again.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setSheetsEnabled(next: boolean) {
+    if (!settings || saving) return;
+    const previous = settings;
+    setSaving(true);
+    try {
+      const r = await withPin(`Turn Google Sheets export ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAuthSettings({ googleSheetsEnabled: next }, pin),
+      );
+      setSettings(r.settings);
+      setToast({ tone: 'success', message: `Google Sheets export ${next ? 'turned on' : 'turned off'}.` });
+    } catch (err) {
+      setSettings(previous);
+      if (err instanceof PinCancelled) return;
+      setToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not save the Google Sheets setting. Try again.',
+      });
     } finally {
       setSaving(false);
     }
@@ -582,10 +1045,15 @@ function AdminSettings() {
 
     setGoogleSaving(true);
     try {
-      const r = await updateGoogleIntegrationSettings({
-        ...(clientId ? { clientId } : {}),
-        ...(clientSecret ? { clientSecret } : {}),
-      });
+      const r = await withPin('Save new Google sign-in credentials.', (pin) =>
+        updateGoogleIntegrationSettings(
+          {
+            ...(clientId ? { clientId } : {}),
+            ...(clientSecret ? { clientSecret } : {}),
+          },
+          pin,
+        ),
+      );
       setGoogle({
         clientIdMasked: r.clientIdMasked,
         clientSecretMasked: r.clientSecretMasked,
@@ -596,6 +1064,7 @@ function AdminSettings() {
       setGoogleLoadError(null);
       setToast({ tone: 'success', message: 'Google credentials saved.' });
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setToast({
         tone: 'error',
         message: err instanceof ApiError ? err.message : 'Could not save Google credentials. Try again.',
@@ -609,7 +1078,9 @@ function AdminSettings() {
     if (googleResetting) return;
     setGoogleResetting(true);
     try {
-      const r = await resetGoogleIntegrationSettings();
+      const r = await withPin('Reset Google sign-in credentials to the server defaults.', (pin) =>
+        resetGoogleIntegrationSettings(pin),
+      );
       setGoogle({
         clientIdMasked: r.clientIdMasked,
         clientSecretMasked: r.clientSecretMasked,
@@ -621,6 +1092,7 @@ function AdminSettings() {
       setResetOpen(false);
       setToast({ tone: 'success', message: 'Google credentials reset to the server defaults.' });
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setToast({
         tone: 'error',
         message: err instanceof ApiError ? err.message : 'Could not reset Google credentials. Try again.',
@@ -673,17 +1145,23 @@ function AdminSettings() {
     setEmailError(null);
     setEmailMessage(null);
     try {
-      const r = await updateEmailIntegrationSettings({
-        ...(host ? { host } : {}),
-        ...(portText ? { port: Number(portText) } : {}),
-        ...(user ? { user } : {}),
-        ...(password ? { password } : {}),
-        ...(fromAddress ? { fromAddress } : {}),
-      });
+      const r = await withPin('Save new email delivery (SMTP) settings.', (pin) =>
+        updateEmailIntegrationSettings(
+          {
+            ...(host ? { host } : {}),
+            ...(portText ? { port: Number(portText) } : {}),
+            ...(user ? { user } : {}),
+            ...(password ? { password } : {}),
+            ...(fromAddress ? { fromAddress } : {}),
+          },
+          pin,
+        ),
+      );
       applyEmailSettings(r);
       setEmailLoadError(null);
       setToast({ tone: 'success', message: 'Email delivery settings saved.' });
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setEmailError(err instanceof ApiError ? err.message : 'Could not save email settings. Try again.');
     } finally {
       setEmailSaving(false);
@@ -709,12 +1187,15 @@ function AdminSettings() {
     if (emailResetting) return;
     setEmailResetting(true);
     try {
-      const r = await resetEmailIntegrationSettings();
+      const r = await withPin('Reset email delivery to the server defaults.', (pin) =>
+        resetEmailIntegrationSettings(pin),
+      );
       applyEmailSettings(r);
       setEmailLoadError(null);
       setEmailResetOpen(false);
       setToast({ tone: 'success', message: 'Email settings reset to the server defaults.' });
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setToast({
         tone: 'error',
         message: err instanceof ApiError ? err.message : 'Could not reset email settings. Try again.',
@@ -730,14 +1211,15 @@ function AdminSettings() {
     setCalendarSaving(true);
     setCalendarActionError(null);
     setCalendarMessage(null);
-    // Optimistic: the switch flips immediately and rolls back if the API rejects it.
-    setCalendar({ ...calendar, enabled: next });
     try {
-      const r = await updateGoogleCalendarSettings({ enabled: next });
+      const r = await withPin(`Turn Google Calendar sync ${next ? 'on' : 'off'}.`, (pin) =>
+        updateGoogleCalendarSettings({ enabled: next }, pin),
+      );
       setCalendar(r);
       setCalendarMessage(`Automatic calendar sync ${next ? 'enabled' : 'disabled'}.`);
     } catch (err) {
       setCalendar(previous);
+      if (err instanceof PinCancelled) return;
       setCalendarActionError(
         err instanceof ApiError ? err.message : 'Could not save the calendar setting. Try again.',
       );
@@ -810,7 +1292,12 @@ function AdminSettings() {
   // future toggles to this list and the "x of y active" pill follows.
   const accessToggles = [
     ...(settings
-      ? [settings.googleSignInEnabled, settings.recaptchaEnabled, settings.notificationEmailsEnabled]
+      ? [
+          settings.googleSignInEnabled,
+          settings.recaptchaEnabled,
+          settings.notificationEmailsEnabled,
+          settings.googleSheetsEnabled,
+        ]
       : []),
     ...(calendar ? [calendar.enabled] : []),
   ];
@@ -1611,6 +2098,14 @@ function AdminSettings() {
           )}
         </motion.section>
 
+        <GoogleSheetsCard
+          withPin={withPin}
+          onToast={setToast}
+          enabled={settings?.googleSheetsEnabled}
+          toggling={saving}
+          onToggle={setSheetsEnabled}
+        />
+
         <SectionLabel>Tools</SectionLabel>
 
         <motion.section
@@ -1719,6 +2214,8 @@ function AdminSettings() {
           onConfirm={resetEmailSettings}
         />
       )}
+
+      {pinRequest && <PinDialog key={pinRequest.title} request={pinRequest} onClose={closePin} />}
     </>
   );
 }

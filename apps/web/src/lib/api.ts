@@ -62,19 +62,28 @@ export class ApiError extends Error {
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
+/** Superadmin PIN header for integration changes. Sent per request, never stored. */
+function pinHeader(pin: string): Record<string, string> {
+  return { 'X-Super-Pin': pin };
+}
+
 export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(`${API_URL}/api/health`);
   if (!res.ok) throw new Error(`API responded with ${res.status}`);
   return res.json() as Promise<HealthResponse>;
 }
 
-async function apiFetch<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<T> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}${path}`, {
     method: options.method ?? 'GET',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   });
@@ -166,6 +175,11 @@ export function queueAppointments(filters: {
   if (filters.to) params.set('to', filters.to);
   const qs = params.toString();
   return apiFetch(`/api/appointments${qs ? `?${qs}` : ''}`);
+}
+
+/** Staff/admin: link to the mirrored Google Calendar, only when sync is configured and on. */
+export function getCalendarLink(): Promise<{ success: true; available: boolean; url: string }> {
+  return apiFetch('/api/appointments/calendar-link');
 }
 
 export function confirmAppointment(id: string): Promise<{ appointment: StaffAppointment }> {
@@ -384,6 +398,19 @@ export function visitsPerService(days = 30): Promise<{
 }
 
 /** Downloads the visits-per-service report as CSV through the authenticated API. */
+export interface SheetsExportResult {
+  success: true;
+  /** Direct link to the new tab. Only people the spreadsheet is shared with can open it. */
+  url: string;
+  tab: string;
+  rows?: number;
+}
+
+/** Writes the visits-per-service report to a new tab in the export spreadsheet. */
+export function exportVisitsToSheets(days = 30): Promise<SheetsExportResult> {
+  return apiFetch(`/api/reports/visits-per-service/sheets?days=${days}`, { method: 'POST' });
+}
+
 export async function downloadVisitsCsv(days = 30): Promise<void> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}/api/reports/visits-per-service/export?days=${days}`, {
@@ -456,6 +483,8 @@ export interface AuthSettings {
   recaptchaEnabled: boolean;
   /** Announcement, appointment-update and reminder emails. Security codes ignore it. */
   notificationEmailsEnabled: boolean;
+  /** Off blocks new Google Sheets exports; existing tabs stay. */
+  googleSheetsEnabled: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -471,15 +500,18 @@ export function getGoogleIntegrationSettings(): Promise<{ success: true } & Goog
   return apiFetch('/api/admin/settings/google');
 }
 
-export function updateGoogleIntegrationSettings(input: {
-  clientId?: string;
-  clientSecret?: string;
-}): Promise<{ success: true } & GoogleIntegrationSettings> {
-  return apiFetch('/api/admin/settings/google', { method: 'PUT', body: input });
+export function updateGoogleIntegrationSettings(
+  input: {
+    clientId?: string;
+    clientSecret?: string;
+  },
+  pin: string,
+): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google', { method: 'PUT', body: input, headers: pinHeader(pin) });
 }
 
-export function resetGoogleIntegrationSettings(): Promise<{ success: true } & GoogleIntegrationSettings> {
-  return apiFetch('/api/admin/settings/google', { method: 'DELETE' });
+export function resetGoogleIntegrationSettings(pin: string): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
 export interface RecaptchaIntegrationSettings {
@@ -494,17 +526,20 @@ export function getRecaptchaIntegrationSettings(): Promise<{ success: true } & R
   return apiFetch('/api/admin/settings/recaptcha');
 }
 
-export function updateRecaptchaIntegrationSettings(input: {
-  siteKey?: string;
-  secretKey?: string;
-  /** A challenge solved with the new site key; the server checks it with the new secret before saving. */
-  testToken: string;
-}): Promise<{ success: true } & RecaptchaIntegrationSettings> {
-  return apiFetch('/api/admin/settings/recaptcha', { method: 'PUT', body: input });
+export function updateRecaptchaIntegrationSettings(
+  input: {
+    siteKey?: string;
+    secretKey?: string;
+    /** A challenge solved with the new site key; the server checks it with the new secret before saving. */
+    testToken: string;
+  },
+  pin: string,
+): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha', { method: 'PUT', body: input, headers: pinHeader(pin) });
 }
 
-export function resetRecaptchaIntegrationSettings(): Promise<{ success: true } & RecaptchaIntegrationSettings> {
-  return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE' });
+export function resetRecaptchaIntegrationSettings(pin: string): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
 export interface EmailIntegrationSettings {
@@ -525,18 +560,21 @@ export function getEmailIntegrationSettings(): Promise<{ success: true } & Email
   return apiFetch('/api/admin/settings/email');
 }
 
-export function updateEmailIntegrationSettings(input: {
-  host?: string;
-  port?: number;
-  user?: string;
-  password?: string;
-  fromAddress?: string;
-}): Promise<{ success: true } & EmailIntegrationSettings> {
-  return apiFetch('/api/admin/settings/email', { method: 'PUT', body: input });
+export function updateEmailIntegrationSettings(
+  input: {
+    host?: string;
+    port?: number;
+    user?: string;
+    password?: string;
+    fromAddress?: string;
+  },
+  pin: string,
+): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email', { method: 'PUT', body: input, headers: pinHeader(pin) });
 }
 
-export function resetEmailIntegrationSettings(): Promise<{ success: true } & EmailIntegrationSettings> {
-  return apiFetch('/api/admin/settings/email', { method: 'DELETE' });
+export function resetEmailIntegrationSettings(pin: string): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
 export function testEmailDelivery(input: { to?: string } = {}): Promise<{
@@ -572,8 +610,9 @@ export function getGoogleCalendarSettings(): Promise<{ success: true } & GoogleC
 
 export function updateGoogleCalendarSettings(
   input: { enabled: boolean },
+  pin: string,
 ): Promise<{ success: true } & GoogleCalendarSettings> {
-  return apiFetch('/api/admin/settings/google-calendar', { method: 'PATCH', body: input });
+  return apiFetch('/api/admin/settings/google-calendar', { method: 'PATCH', body: input, headers: pinHeader(pin) });
 }
 
 export function testGoogleCalendarConnection(): Promise<{
@@ -591,6 +630,37 @@ export function syncGoogleCalendar(): Promise<{
   status: GoogleCalendarSettings;
 }> {
   return apiFetch('/api/admin/settings/google-calendar/sync', { method: 'POST' });
+}
+
+export interface GoogleSheetsSettings {
+  /** True when a spreadsheet ID and the service account are both set. */
+  configured: boolean;
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+  source: 'custom' | 'default';
+  defaultSet: boolean;
+  serviceAccountEmail: string;
+  serviceAccountConfigured: boolean;
+}
+
+export function getGoogleSheetsSettings(): Promise<{ success: true } & GoogleSheetsSettings> {
+  return apiFetch('/api/admin/settings/google-sheets');
+}
+
+/** Tested (open + add/delete a tab) on the server before it is saved. */
+export function updateGoogleSheetsSettings(
+  input: { spreadsheetId: string },
+  pin: string,
+): Promise<{ success: true } & GoogleSheetsSettings> {
+  return apiFetch('/api/admin/settings/google-sheets', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetGoogleSheetsSettings(pin: string): Promise<{ success: true } & GoogleSheetsSettings> {
+  return apiFetch('/api/admin/settings/google-sheets', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export function testGoogleSheetsConnection(): Promise<{ success: true; title: string; url: string }> {
+  return apiFetch('/api/admin/settings/google-sheets/test', { method: 'POST' });
 }
 
 /**
@@ -623,9 +693,12 @@ export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
 }
 
 export function updateAuthSettings(
-  input: Partial<Pick<AuthSettings, 'googleSignInEnabled' | 'recaptchaEnabled' | 'notificationEmailsEnabled'>>,
+  input: Partial<
+    Pick<AuthSettings, 'googleSignInEnabled' | 'recaptchaEnabled' | 'notificationEmailsEnabled' | 'googleSheetsEnabled'>
+  >,
+  pin: string,
 ): Promise<{ settings: AuthSettings }> {
-  return apiFetch('/api/settings', { method: 'PATCH', body: input });
+  return apiFetch('/api/settings', { method: 'PATCH', body: input, headers: pinHeader(pin) });
 }
 
 /** Records the sign-out server-side before the client drops the token. */
@@ -755,6 +828,11 @@ export function purgeActivity(): Promise<{
 }
 
 /** Downloads the current filtered view as CSV through the authenticated API. */
+/** Admin: writes the filtered activity log to a new tab in the export spreadsheet. */
+export function exportActivityToSheets(filters: ActivityFilters = {}): Promise<SheetsExportResult> {
+  return apiFetch(`/api/activity/export/sheets${activityQuery(filters)}`, { method: 'POST' });
+}
+
 export async function downloadActivityCsv(filters: ActivityFilters = {}): Promise<void> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}/api/activity/export${activityQuery(filters)}`, {

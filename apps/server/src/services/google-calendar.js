@@ -45,6 +45,12 @@ function calendarConfig() {
   };
 }
 
+/** Public-safe bits for building a "view calendar" link (no credentials). */
+export function getGoogleCalendarViewConfig() {
+  const config = calendarConfig();
+  return { configured: isGoogleCalendarConfigured(), calendarId: config.calendarId, timezone: config.timezone };
+}
+
 export function isGoogleCalendarConfigured() {
   const config = calendarConfig();
   return Boolean(config.calendarId && config.serviceAccountEmail && config.privateKey);

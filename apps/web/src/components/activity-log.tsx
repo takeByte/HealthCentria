@@ -13,6 +13,7 @@ import {
   ACTIVITY_CATEGORY_LABELS,
   ApiError,
   downloadActivityCsv,
+  exportActivityToSheets,
   listActivity,
   listMyActivity,
   listOwnActivity,
@@ -33,6 +34,7 @@ import {
   panel,
   secondaryButton,
 } from './app-ui';
+import { SheetsExportButton, SheetsExportNote, useSheetsExport } from './sheets-export';
 import { formatDateTime } from './record-meta';
 import { cn } from '../lib/utils';
 
@@ -89,6 +91,11 @@ const ACTION_LABELS: Record<string, string> = {
   'settings.recaptcha.reset': 'reCAPTCHA reset to default',
   'settings.signin.update': 'Sign-in setting changed',
   'integration.update': 'Integration updated',
+  'settings.pin_failed': 'Incorrect superadmin PIN',
+  'settings.sheets.update': 'Google Sheets spreadsheet changed',
+  'settings.sheets.reset': 'Google Sheets reset to default',
+  'report.export_sheets': 'Report exported to Google Sheets',
+  'activity.export_sheets': 'Activity log exported to Google Sheets',
   'activity.purge': 'Activity log purged',
 };
 
@@ -166,6 +173,9 @@ export function ActivityFeed({
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const sheets = useSheetsExport(() =>
+    exportActivityToSheets({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }),
+  );
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purging, setPurging] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
@@ -324,6 +334,13 @@ export function ActivityFeed({
                   Export CSV
                 </button>
               )}
+              {showExport && (
+                <SheetsExportButton
+                  exporting={sheets.exporting}
+                  onClick={sheets.start}
+                  className={`${secondaryButton} h-11 px-4 text-[13px]`}
+                />
+              )}
               {showPurge && (
                 <button
                   type="button"
@@ -419,6 +436,7 @@ export function ActivityFeed({
       )}
 
       {exportError && <InlineNotice>{exportError}</InlineNotice>}
+      <SheetsExportNote result={sheets.result} error={sheets.error} />
       {purgeResult && <SuccessNote>{purgeResult}</SuccessNote>}
       {error && <InlineNotice>{error}</InlineNotice>}
 

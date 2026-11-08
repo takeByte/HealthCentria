@@ -5,6 +5,7 @@ import {
   ArrowRight,
   CalendarCheck,
   CalendarDays,
+  CalendarPlus,
   Clock3,
   Megaphone,
   Plus,
@@ -12,10 +13,21 @@ import {
 } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { patientNav } from '../../components/patient-nav';
-import { CardHeading, EmptyNote, InlineNotice, StatTile, StatusChip, cardPadding, primaryButton } from '../../components/app-ui';
+import {
+  CardHeading,
+  EmptyNote,
+  InlineNotice,
+  StatTile,
+  StatusChip,
+  cardPadding,
+  chipButton,
+  primaryButton,
+} from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import { CATEGORY_LABELS, listAnnouncements, myAppointments, type Announcement, type Appointment } from '../../lib/api';
+import { googleCalendarAddUrl } from '../../lib/calendar-link';
 import { getTodayService } from '../../lib/schedule';
+import { cn } from '../../lib/utils';
 
 export const Route = createFileRoute('/app/dashboard')({
   component: PatientDashboard,
@@ -56,6 +68,92 @@ const TIME_LABEL: Record<Appointment['timePreference'], string> = {
   afternoon: 'Afternoon',
   any: 'No time preference',
 };
+
+function fromYMD(ymd: string): Date {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function toYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function relativeDay(day: string, today: string): string {
+  const diff = Math.round((fromYMD(day).getTime() - fromYMD(today).getTime()) / 86_400_000);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return `In ${diff} days`;
+}
+
+/** Short tag for the clinic's fixed service days; as-needed days get none. */
+const SERVICE_TAG: Record<string, string> = {
+  Consultation: 'Consult',
+  Prenatal: 'Prenatal',
+  'Family Planning': 'FP',
+  'Routine Immunization (Newborn)': 'Immun.',
+};
+
+/** Mon–Sun week around the visit: the visit day is filled, today is outlined. */
+function WeekStrip({ day, today }: { day: string; today: string }) {
+  const visit = fromYMD(day);
+  const monday = new Date(visit.getFullYear(), visit.getMonth(), visit.getDate() - ((visit.getDay() + 6) % 7));
+  const week = Array.from(
+    { length: 7 },
+    (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i),
+  );
+  return (
+    <div className="mt-4">
+      <ol className="grid grid-cols-7 gap-1" aria-label="Week of your visit">
+        {week.map((d) => {
+          const ymd = toYMD(d);
+          const isVisit = ymd === day;
+          const isToday = ymd === today;
+          const tag = SERVICE_TAG[getTodayService(d).name];
+          return (
+            <li
+              key={ymd}
+              aria-current={isVisit ? 'date' : undefined}
+              aria-label={`${d.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' })}${
+                isVisit ? ', your visit' : ''
+              }${tag ? `, ${getTodayService(d).name} day` : ''}`}
+              className={cn(
+                'flex flex-col items-center rounded-lg py-1.5',
+                isVisit
+                  ? 'bg-teal-700 text-white shadow-[0_2px_8px_rgba(13,148,136,0.35)]'
+                  : isToday
+                    ? 'ring-1 ring-inset ring-teal-600/50'
+                    : 'bg-slate-50/80',
+              )}
+            >
+              <span
+                className={cn(
+                  'text-[10px] font-bold uppercase tracking-[0.06em]',
+                  isVisit ? 'text-white/80' : 'text-slate-400',
+                )}
+              >
+                {d.toLocaleDateString('en-PH', { weekday: 'narrow' })}
+              </span>
+              <span className={cn('text-[13px] font-semibold tabular-nums', isVisit ? 'text-white' : 'text-slate-700')}>
+                {d.getDate()}
+              </span>
+              <span
+                className={cn(
+                  'h-3 max-w-full truncate px-0.5 text-[8.5px] font-semibold uppercase leading-3',
+                  isVisit ? 'text-white/85' : 'text-teal-700/70',
+                )}
+              >
+                {tag ?? ''}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="mt-2 text-[11px] leading-4 text-slate-400">
+        Clinic days: Mon Consultation · Tue Prenatal · Thu Family Planning · 2nd Wed Immunization
+      </p>
+    </div>
+  );
+}
 
 function PatientDashboard() {
   const reduceMotion = useReducedMotion();
@@ -192,8 +290,33 @@ function PatientDashboard() {
                     <p className="mt-0.5 text-[12px] text-slate-500">{TIME_LABEL[next.timePreference]}</p>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-3">
+                <div className="mt-3 flex items-center gap-2">
                   <StatusChip status={next.status} />
+                  <span className="text-[12px] font-medium text-slate-500">{relativeDay(next.day, today)}</span>
+                </div>
+
+                <WeekStrip day={next.day} today={today} />
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  {next.status === 'confirmed' ? (
+                    <a
+                      href={googleCalendarAddUrl({
+                        serviceName: serviceName(next),
+                        day: next.day,
+                        timePreference: next.timePreference,
+                      })}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={chipButton}
+                    >
+                      <CalendarPlus size={15} aria-hidden />
+                      Add to my Google Calendar
+                    </a>
+                  ) : (
+                    <p className="text-[12px] leading-5 text-slate-500">
+                      You can add it to your own calendar once the center confirms it.
+                    </p>
+                  )}
                   <Link
                     to="/app/appointments"
                     className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
