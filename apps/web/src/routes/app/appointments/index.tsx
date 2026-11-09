@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, LoaderCircle, Plus } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, LoaderCircle, Plus } from 'lucide-react';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { patientNav } from '../../../components/patient-nav';
 import { CardHeading, EmptyNote, InlineNotice, StatusChip, cardPadding, chipButton, primaryButton } from '../../../components/app-ui';
 import { getSession } from '../../../lib/auth';
 import { ApiError, cancelAppointment, myAppointments, type Appointment } from '../../../lib/api';
+import { googleCalendarAddUrl } from '../../../lib/calendar-link';
 import { getTodayService } from '../../../lib/schedule';
 import { cn } from '../../../lib/utils';
 
@@ -41,6 +42,8 @@ function AppointmentCard({ appt, onCancelled }: { appt: Appointment; onCancelled
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cancellable = appt.status === 'pending' || appt.status === 'confirmed';
+  // Only confirmed, upcoming visits: a pending request may still be declined.
+  const addable = appt.status === 'confirmed' && appt.day >= todayYMD();
 
   async function doCancel() {
     setPending(true);
@@ -86,10 +89,29 @@ function AppointmentCard({ appt, onCancelled }: { appt: Appointment; onCancelled
         </p>
       )}
 
-      {cancellable && !confirming && (
-        <button type="button" onClick={() => setConfirming(true)} className={`${chipButton} mt-3.5`}>
-          Cancel appointment
-        </button>
+      {!confirming && (addable || cancellable) && (
+        <div className="mt-3.5 flex flex-wrap gap-2">
+          {addable && (
+            <a
+              href={googleCalendarAddUrl({
+                serviceName: serviceName(appt),
+                day: appt.day,
+                timePreference: appt.timePreference,
+              })}
+              target="_blank"
+              rel="noreferrer"
+              className={chipButton}
+            >
+              <CalendarPlus size={15} aria-hidden />
+              Add to my Google Calendar
+            </a>
+          )}
+          {cancellable && (
+            <button type="button" onClick={() => setConfirming(true)} className={chipButton}>
+              Cancel appointment
+            </button>
+          )}
+        </div>
       )}
 
       {cancellable && confirming && (

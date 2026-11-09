@@ -2,6 +2,10 @@ import { Router } from 'express';
 import {
   appointmentsByStatus,
   exportReportPdf,
+  exportVisitsPerServiceCsv,
+  exportVisitsPerServicePdf,
+  exportVisitsPerServiceSheets,
+  listExportRecipients,
   overview,
   patientList,
   visitsPerService,
@@ -16,4 +20,8 @@ reportRouter.get('/visits-per-service', ...staffOnly, visitsPerService);
 reportRouter.get('/appointments-by-status', ...staffOnly, appointmentsByStatus);
 reportRouter.get('/patients', ...staffOnly, patientList);
 reportRouter.get('/export.pdf', ...staffOnly, exportReportPdf);
+reportRouter.get('/visits-per-service/export', ...staffOnly, exportVisitsPerServiceCsv);
+reportRouter.post('/visits-per-service/sheets', ...staffOnly, exportVisitsPerServiceSheets);
+reportRouter.post('/visits-per-service/pdf', ...staffOnly, exportVisitsPerServicePdf);
+reportRouter.get('/export-recipients', ...staffOnly, listExportRecipients);
 reportRouter.get('/overview', ...staffOnly, overview);

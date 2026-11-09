@@ -10,6 +10,7 @@ import {
   UserCog,
   Users,
 } from 'lucide-react';
+import { ClinicSchedule } from '../../components/clinic-schedule';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
@@ -154,26 +155,11 @@ function AdminDashboard() {
         />
       </motion.div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-5">
-        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.08 }} className={`${panel} lg:col-span-2`}>
-          <CardHeading
-            title="Triage queue"
-            description={
-              counts === null
-                ? 'Loading…'
-                : counts.pending === 0
-                  ? 'Nothing waiting — the queue is clear.'
-                  : `${counts.pending} request${counts.pending === 1 ? '' : 's'} need${counts.pending === 1 ? 's' : ''} review.`
-            }
-          />
-          <Link to="/staff/appointments" className={`${primaryButton} mt-4 h-10 px-4 text-[13px]`}>
-            Open the queue <ArrowRight size={15} aria-hidden />
-          </Link>
-          <Link to="/staff/reports" className={`${secondaryButton} mt-2 h-10 px-4 text-[13px]`}>
-            Open reports <ArrowRight size={15} aria-hidden />
-          </Link>
-        </motion.section>
+      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.08 }}>
+        <ClinicSchedule />
+      </motion.div>
 
+      <div className="grid items-start gap-5 lg:grid-cols-5">
         <motion.section {...rise} transition={{ ...riseTransition, delay: 0.12 }} className={`${panel} lg:col-span-3`}>
           <CardHeading
             title="From the health center"
@@ -213,20 +199,8 @@ function AdminDashboard() {
             )}
           </div>
         </motion.section>
-      </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-2">
-        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.16 }} className={panel}>
-          <CardHeading
-            title="Service utilization"
-            description="Completed visits per service for the last 30 days."
-          />
-          <Link to="/staff/reports" className={`${secondaryButton} mt-4 h-10 px-4 text-[13px]`}>
-            Open reports <ArrowRight size={15} aria-hidden />
-          </Link>
-        </motion.section>
-
-        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.2 }} className={panel}>
+        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.16 }} className={`${panel} lg:col-span-2`}>
           <CardHeading
             title="Workspace administration"
             description="Manage who can sign in and how patients reach the center."
@@ -241,6 +215,18 @@ function AdminDashboard() {
           </div>
         </motion.section>
       </div>
+
+      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.2 }} className={panel}>
+        <CardHeading
+          title="Service utilization"
+          description="Completed visits per service for the last 30 days."
+          action={
+            <Link to="/staff/reports" className={`${secondaryButton} h-9 px-3.5 text-[13px]`}>
+              Open reports <ArrowRight size={15} aria-hidden />
+            </Link>
+          }
+        />
+      </motion.section>
     </DashboardShell>
   );
 }

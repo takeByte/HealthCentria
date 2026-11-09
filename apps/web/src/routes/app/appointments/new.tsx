@@ -48,6 +48,11 @@ function formatLong(ymd: string): string {
   });
 }
 
+function fromYMDShort(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 function BookAppointment() {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
@@ -99,7 +104,15 @@ function BookAppointment() {
     let cancelled = false;
     validDates(serviceId)
       .then((r) => {
-        if (!cancelled) setDates(new Set(r.dates));
+        if (cancelled) return;
+        setDates(new Set(r.dates));
+        // Open on the month of the first bookable date, e.g. when the rest of
+        // this month has no more service days.
+        const first = [...r.dates].sort().find((d) => d >= todayYMD() && d <= maxYMD());
+        if (first) {
+          const [y, m] = first.split('-').map(Number);
+          setMonthCursor({ y, m });
+        }
       })
       .catch(() => {
         if (!cancelled) setDatesError(true);
@@ -129,6 +142,19 @@ function BookAppointment() {
     for (let d = 1; d <= count; d += 1) out.push({ ymd: toYMD(y, m, d), label: d });
     return out;
   }, [monthCursor]);
+
+  const bookable = useMemo(() => {
+    if (!dates) return [];
+    const from = todayYMD();
+    return [...dates].filter((d) => d >= from && d <= maxDay).sort();
+  }, [dates, maxDay]);
+
+  function pickDay(ymd: string) {
+    setDay(ymd);
+    setStepError(null);
+    const [y, m] = ymd.split('-').map(Number);
+    setMonthCursor({ y, m });
+  }
 
   const canPrev = monthCursor.y > minMonth.y || (monthCursor.y === minMonth.y && monthCursor.m > minMonth.m);
   const canNext = monthCursor.y < maxMonth.y || (monthCursor.y === maxMonth.y && monthCursor.m < maxMonth.m);
@@ -328,6 +354,34 @@ function BookAppointment() {
                 <EmptyNote className="mt-3">Loading calendar…</EmptyNote>
               ) : (
                 <>
+                  {bookable.length === 0 ? (
+                    <EmptyNote className="mt-3">
+                      No open dates for this service in the next 30 days. Check the announcements or pick another
+                      service.
+                    </EmptyNote>
+                  ) : (
+                    <div className="mt-4">
+                      <p className="text-[12px] font-semibold text-slate-700">Next available</p>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        {bookable.slice(0, 3).map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => pickDay(d)}
+                            aria-pressed={day === d}
+                            className={cn(
+                              'h-9 rounded-lg border px-3 text-[13px] font-semibold transition-colors active:scale-[0.97]',
+                              day === d
+                                ? 'border-teal-700 bg-teal-700 text-white'
+                                : 'border-teal-600/25 bg-teal-600/[0.06] text-teal-900 hover:bg-teal-600/15',
+                            )}
+                          >
+                            {fromYMDShort(d)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-4 flex items-center justify-between">
                     <button
                       type="button"
@@ -367,6 +421,7 @@ function BookAppointment() {
                       if (!cell) return <span key={`e${i}`} />;
                       const enabled = dates.has(cell.ymd) && cell.ymd >= todayYMD() && cell.ymd <= maxDay;
                       const selected = day === cell.ymd;
+                      const isToday = cell.ymd === todayYMD();
                       return (
                         <button
                           key={cell.ymd}
@@ -374,7 +429,9 @@ function BookAppointment() {
                           role="gridcell"
                           disabled={!enabled}
                           aria-pressed={selected}
-                          aria-label={formatLong(cell.ymd)}
+                          aria-label={`${formatLong(cell.ymd)}${isToday ? ' (today)' : ''}${
+                            enabled ? '' : ', not available'
+                          }`}
                           onClick={() => {
                             setDay(cell.ymd);
                             setStepError(null);
@@ -386,6 +443,7 @@ function BookAppointment() {
                               : enabled
                                 ? 'bg-teal-600/[0.07] font-semibold text-teal-900 hover:bg-teal-600/15 active:scale-95'
                                 : 'cursor-not-allowed text-slate-300',
+                            isToday && !selected && 'ring-1 ring-inset ring-slate-400',
                           )}
                         >
                           {cell.label}
@@ -393,6 +451,22 @@ function BookAppointment() {
                       );
                     })}
                   </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-slate-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="size-3 rounded bg-teal-600/[0.15]" aria-hidden /> Open for booking
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="size-3 rounded bg-teal-700" aria-hidden /> Your pick
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="size-3 rounded ring-1 ring-inset ring-slate-400" aria-hidden /> Today
+                    </span>
+                  </div>
+                  {day && (
+                    <p className="mt-2 text-[12.5px] font-medium text-teal-800" aria-live="polite">
+                      Selected: {formatLong(day)}
+                    </p>
+                  )}
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <div>
                       <label htmlFor="book-time" className="mb-1.5 block text-[12.5px] font-semibold text-slate-700">

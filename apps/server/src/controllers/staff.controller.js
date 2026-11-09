@@ -130,7 +130,11 @@ export const updateStaff = asyncHandler(async (req, res) => {
   if (parsed.data.role !== undefined) target.role = parsed.data.role;
   if (parsed.data.active !== undefined) target.active = parsed.data.active;
   if (parsed.data.permissions !== undefined) target.permissions = parsed.data.permissions;
-  if (parsed.data.password !== undefined) target.passwordHash = await hashPassword(parsed.data.password);
+  if (parsed.data.password !== undefined) {
+    target.passwordHash = await hashPassword(parsed.data.password);
+    // An admin-forced reset must end that person's existing sessions too.
+    target.tokenVersion = (target.tokenVersion ?? 0) + 1;
+  }
   await target.save();
 
   const changedFields = Object.keys(parsed.data);

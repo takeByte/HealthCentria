@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { bookAppointment, cancelAppointment, myAppointments } from '../controllers/appointment.controller.js';
 import {
+  calendarLink,
   completeAppointment,
   confirmAppointment,
   declineAppointment,
@@ -28,6 +29,8 @@ appointmentRouter.get(
   requirePermission('appointments.manage'),
   queueAppointments,
 );
+// Dashboard "Open in Google Calendar" link: any staff/admin (no patient data).
+appointmentRouter.get('/calendar-link', requireAuth, requireRole('staff', 'admin'), calendarLink);
 appointmentRouter.get(
   '/lookup-patient',
   requireAuth,

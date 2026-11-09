@@ -1,4 +1,4 @@
-# E-Kalinga
+# HealthCentria
 
 Monorepo (pnpm workspaces):
 
@@ -56,6 +56,37 @@ before the controller runs; a frontend-only widget could be bypassed by calling
 the API directly. In development a missing secret skips the check, while
 production refuses unverified auth requests. Behind a reverse proxy also set
 `TRUST_PROXY=1` so rate limiting sees real client IPs.
+
+## Email delivery (SMTP)
+
+Password reset codes and announcements are sent through SMTP. Configure it in
+**Admin → Settings → Email delivery** (saved encrypted in MongoDB, applied
+immediately) or with the `DEFAULT_SMTP_*` values in `apps/server/.env`; the database
+settings win when both exist.
+
+| Variable | Example |
+| --- | --- |
+| `DEFAULT_SMTP_HOST` | `smtp-relay.brevo.com` |
+| `DEFAULT_SMTP_PORT` | `587` |
+| `DEFAULT_SMTP_USER` | SMTP login |
+| `DEFAULT_SMTP_PASS` | SMTP password or API key |
+| `DEFAULT_MAIL_FROM` | `HealthCentria <clinic@your-domain.com>` |
+
+Saving from the admin UI requires `SETTINGS_ENCRYPTION_KEY` (64 hex characters)
+in `apps/server/.env`. Use **Send test email** to verify the connection; the
+provider's error message is shown when it fails. Resend stays available as a
+fallback when `RESEND_API_KEY` is set and SMTP is not configured.
+
+## Email verification
+
+Patients who self-register start with `emailVerified: false`. Right after the
+account is created, registration shows a third step asking for the 6-digit code
+before continuing to the dashboard (the patient can choose **Skip for now**).
+Anyone who skips, or signs in later without verifying, sees a reminder banner in
+the app. The code is only ever sent to the address already stored on the account,
+so the public registration form cannot be used to mail arbitrary inboxes.
+Verification is a reminder, not a gate: unverified patients keep full access.
+Codes expire after 30 minutes and a resend is allowed once per minute.
 
 ## Demo data
 

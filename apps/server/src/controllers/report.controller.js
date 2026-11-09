@@ -3,6 +3,16 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
 import { User } from '../models/user.model.js';
+import { logActivity } from '../services/activity.js';
+import { exportStamp, exportToSheet } from '../services/google-sheets.js';
+import {
+  deliverPdf,
+  describeDelivery,
+  exportRecipientOptions,
+  recipientsSchema,
+  sendPdfResponse,
+} from '../services/export-delivery.js';
+import { buildReportPdf } from '../services/pdf-report.js';
 import { streamReportPdf } from '../services/report-pdf.js';
 import { addDaysYMD, todayYMD } from '../utils/service-schedule.js';
 
@@ -74,7 +84,8 @@ function generatedLabel() {
   });
 }
 
-function ageFromBirthdate(birthdate) {  if (!birthdate) return null;
+function ageFromBirthdate(birthdate) {
+  if (!birthdate) return null;
   const born = new Date(birthdate);
   if (Number.isNaN(born.getTime())) return null;
 
@@ -184,7 +195,7 @@ async function loadStatusReport({ from, to }) {
 }
 
 async function loadPatientRows(to) {
-  const patients = await User.find({ role: 'patient' })
+  const patients = await User.find({ role: 'patient', deletedAt: null })
     .select('fullName birthdate sex address barangay contactNumber householdNumber createdAt')
     .sort({ fullName: 1 })
     .lean();
@@ -334,6 +345,85 @@ export const exportReportPdf = asyncHandler(async (req, res) => {
   });
 });
 
+function csvCell(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+/**
+ * GET /api/reports/visits-per-service/export — the same report as a CSV file.
+ * Staff and admins only, matching the chart endpoint.
+ */
+export const exportVisitsPerServiceCsv = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const meta = parseRange(req.query);
+  if (!meta) {
+    return res.status(400).json({ success: false, message: 'Invalid range.' });
+  }
+  const { rows, total } = await loadVisitsReport(meta);
+
+  const lines = [
+    ['HealthCentria — Visits per service'],
+    ['Period', `${meta.from} to ${meta.to}`],
+    ['Days', meta.days],
+    [],
+    ['Service', 'Completed visits'],
+    ...rows.map((row) => [row.serviceName, row.count]),
+    ['Total', total],
+  ];
+  const csv = lines.map((columns) => columns.map(csvCell).join(',')).join('\r\n');
+
+  res.set('Cache-Control', 'no-store');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  // The web app reads this header to keep the server-generated filename even
+  // when the API is on a different origin (local dev).
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="healthcentria-visits-per-service-${meta.from}-to-${meta.to}.csv"`,
+  );
+  // BOM so Excel opens UTF-8 correctly.
+  res.send(`\uFEFF${csv}`);
+});
+
+/**
+ * POST /api/reports/visits-per-service/sheets — the same report written to a
+ * new tab in the export spreadsheet. Staff and admins, like the CSV.
+ */
+export const exportVisitsPerServiceSheets = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const meta = parseRange(req.query);
+  if (!meta) {
+    return res.status(400).json({ success: false, message: 'Invalid range.' });
+  }
+  const { rows, total } = await loadVisitsReport(meta);
+  const actor = await User.findById(req.user.id).select('fullName').lean();
+  const stamp = exportStamp();
+
+  let result;
+  try {
+    result = await exportToSheet({
+      tabTitle: `Visits ${stamp}`,
+      title: 'HealthCentria — Visits per service',
+      details: `Completed visits, ${meta.from} to ${meta.to} (${meta.days} days) · Exported by ${actor?.fullName || 'staff'}`,
+      header: ['Service', 'Completed visits'],
+      rows: [...rows.map((row) => [row.serviceName, row.count]), ['Total', total]],
+    });
+  } catch (error) {
+    return res.status(502).json({
+      success: false,
+      message: error instanceof Error ? error.message : 'Could not export to Google Sheets.',
+    });
+  }
+
+  await logActivity({
+    req,
+    action: 'report.export_sheets',
+    target: { type: 'report', id: 'visits-per-service', label: `Visits per service (${meta.days} days)` },
+    detail: `Exported ${rows.length} service rows to Google Sheets tab "${result.tab}".`,
+  });
+  res.json({ success: true, url: result.url, tab: result.tab, rows: rows.length });
+});
+
 // Daily-ops + system counts for the admin dashboard (staff see shared counts;
 // staff-account count is admin-only).
 export const overview = asyncHandler(async (req, res) => {
@@ -342,11 +432,72 @@ export const overview = asyncHandler(async (req, res) => {
   const [todayCount, pendingCount, totalPatients] = await Promise.all([
     Appointment.countDocuments({ day: today, status: { $in: ['confirmed', 'pending'] } }),
     Appointment.countDocuments({ status: 'pending' }),
-    User.countDocuments({ role: 'patient' }),
+    User.countDocuments({ role: 'patient', deletedAt: null }),
   ]);
   const out = { success: true, today: todayCount, pending: pendingCount, totalPatients };
   if (req.user.role === 'admin') {
     out.activeStaff = await User.countDocuments({ role: 'staff', active: true });
   }
   res.json(out);
+});
+
+/** GET /api/reports/export-recipients — who can be picked to receive a PDF link. */
+export const listExportRecipients = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, ...(await exportRecipientOptions()) });
+});
+
+/**
+ * POST /api/reports/visits-per-service/pdf?days= — body { recipients: [userId] }.
+ * Returns the PDF; it is also uploaded to Google Drive and the link emailed to
+ * the superadmin and the picked staff/admins (outcome in X-Drive-* headers).
+ */
+export const exportVisitsPerServicePdf = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const meta = parseRange(req.query);
+  const body = recipientsSchema.safeParse(req.body ?? {});
+  if (!meta || !body.success) {
+    return res.status(400).json({ success: false, message: 'Invalid range or recipients.' });
+  }
+  const { rows, total } = await loadVisitsReport(meta);
+  const actor = await User.findById(req.user.id).select('fullName').lean();
+  const details = `Completed visits, ${meta.from} to ${meta.to} (${meta.days} days)`;
+  const pct = (n) => (total ? `${((n / total) * 100).toFixed(1)}%` : '0%');
+
+  const buffer = await buildReportPdf({
+    title: 'Visits per service',
+    details: `${details} · Exported by ${actor?.fullName || 'staff'}`,
+    summary: [
+      { label: 'Completed visits', value: total },
+      { label: 'Services', value: rows.length },
+      { label: 'Period', value: `${meta.days} days` },
+    ],
+    columns: [
+      { header: 'Service' },
+      { header: 'Completed visits', width: 110, align: 'right' },
+      { header: 'Share', width: 70, align: 'right' },
+    ],
+    rows: rows.map((row) => [row.serviceName, row.count, pct(row.count)]),
+    totalRow: rows.length ? ['Total', total, '100%'] : undefined,
+  });
+
+  const fileName = `healthcentria-visits-per-service-${meta.from}-to-${meta.to}.pdf`;
+  const delivery = await deliverPdf({
+    req,
+    buffer,
+    fileName,
+    reportTitle: `Visits per service (${meta.days} days)`,
+    details,
+    recipientIds: body.data.recipients,
+    upload: body.data.uploadToDrive,
+  });
+
+  await logActivity({
+    req,
+    action: 'report.export_pdf',
+    target: { type: 'report', id: 'visits-per-service', label: `Visits per service (${meta.days} days)` },
+    detail: describeDelivery(delivery),
+  });
+  sendPdfResponse(res, { buffer, fileName, delivery });
 });

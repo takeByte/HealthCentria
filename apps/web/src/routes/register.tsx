@@ -1,20 +1,23 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
+import { Eye, EyeOff, LoaderCircle, MailCheck } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { PublicHeader } from '../components/public-header';
 import { Button } from '../components/ui/button';
 import {
   AuthError,
+  confirmEmailVerification,
   DuplicateEmailError,
   isValidEmail,
   isValidPassword,
   PASSWORD_ERROR_MESSAGE,
   registerPatient,
+  requestEmailVerification,
   type RegisterData,
 } from '../lib/auth';
 import { cn } from '../lib/utils';
+import { getPublicSettings } from '../lib/api';
 import appLogo from '../assets/E-Kalinga_Logo.png';
 import loginImage1 from '../assets/login-image1.jpg';
 import loginImage2 from '../assets/login-image2.jpg';
@@ -31,7 +34,9 @@ const labelClass = 'mb-1 block text-sm font-medium text-slate-800';
 
 // Public by design. Hidden when apps/web/.env has no site key; the server then
 // skips verification in development and fails closed in production.
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+// Fallback only: the active site key comes from the API, so a key an admin
+// saves in Settings takes effect without rebuilding the web app.
+const BUILD_SITE_KEY = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined) ?? '';
 
 const SEX_OPTIONS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
 
@@ -54,7 +59,8 @@ interface FormState {
 
 type Errors = Partial<Record<keyof FormState, string>>;
 
-type Step = 1 | 2;
+// Step 3 is the email check that runs right after the account is created.
+type Step = 1 | 2 | 3;
 
 // Step 1 owns everything except the account credentials and consent.
 const STEP_ONE_FIELDS = [
@@ -125,9 +131,42 @@ function RegisterComponent() {
   const [step, setStep] = useState<Step>(1);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
+  const [siteKey, setSiteKey] = useState(BUILD_SITE_KEY);
+  // Step 3: the code was already emailed during registration, so the user only
+  // has to type it here (or resend if it never arrived).
+  const [code, setCode] = useState('');
+  const [verifyPending, setVerifyPending] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifyNotice, setVerifyNotice] = useState('');
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const headingRef = useRef<HTMLDivElement>(null);
   const mounted = useRef(false);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublicSettings()
+      .then((settings) => {
+        if (!cancelled) {
+          setRecaptchaEnabled(settings.recaptchaEnabled);
+          setSiteKey(settings.recaptchaSiteKey || BUILD_SITE_KEY);
+        }
+      })
+      .catch(() => {
+        // Keep the default-on behavior if the public settings endpoint is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Move focus to the step title so keyboard and screen-reader users land at
   // the start of the new step instead of on a removed form.
@@ -186,7 +225,7 @@ function RegisterComponent() {
       if (STEP_ONE_FIELDS.some((key) => errs[key])) goToStep(1, -1);
       return;
     }
-    if (RECAPTCHA_SITE_KEY && !captchaToken) {
+    if (siteKey && recaptchaEnabled && !captchaToken) {
       setSubmitError('Please complete the CAPTCHA.');
       return;
     }
@@ -214,7 +253,14 @@ function RegisterComponent() {
 
     try {
       await registerPatient(payload);
-      await navigate({ to: '/app/dashboard' });
+      // The account exists now; show the verification step before the
+      // dashboard instead of sending the user straight there.
+      setVerifyError(null);
+      setVerifyNotice('');
+      setResendCooldown(0);
+      setCode('');
+      setDirection(1);
+      setStep(3);
     } catch (err) {
       if (err instanceof DuplicateEmailError) {
         setDuplicate(true);
@@ -228,6 +274,43 @@ function RegisterComponent() {
       setCaptchaToken(null);
     } finally {
       setPending(false);
+    }
+  }
+
+  async function handleVerify(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (verifyPending) return;
+    const trimmed = code.trim();
+    if (!/^\d{6}$/.test(trimmed)) {
+      setVerifyError('Enter the 6-digit code from your email.');
+      return;
+    }
+    setVerifyPending(true);
+    setVerifyError(null);
+    setVerifyNotice('');
+    try {
+      await confirmEmailVerification(trimmed);
+      await navigate({ to: '/app/dashboard' });
+    } catch (err) {
+      setVerifyError(err instanceof AuthError ? err.message : 'That code is not valid. Try again.');
+    } finally {
+      setVerifyPending(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resending || resendCooldown > 0) return;
+    setResending(true);
+    setVerifyError(null);
+    setVerifyNotice('');
+    try {
+      const result = await requestEmailVerification();
+      setVerifyNotice(result.message);
+      setResendCooldown(result.resendAfter);
+    } catch (err) {
+      setVerifyError(err instanceof AuthError ? err.message : 'Could not send the code. Try again.');
+    } finally {
+      setResending(false);
     }
   }
 
@@ -264,7 +347,7 @@ function RegisterComponent() {
             <div className="flex flex-col items-center text-center">
               <img
                 src={appLogo}
-                alt="E-Kalinga logo"
+                alt="HealthCentria logo"
                 className="size-12 rounded-full border border-slate-200 bg-white object-cover"
               />
               <p className="mt-2 text-lg font-bold tracking-tight text-slate-900">HealthCentria</p>
@@ -274,12 +357,16 @@ function RegisterComponent() {
             <div className="mt-4 text-center">
               <div ref={headingRef} tabIndex={-1} className="outline-none">
                 <h1 id="register-heading" className="text-2xl font-bold tracking-tight text-slate-900">
-                  Create an account
+                  {step === 3 ? 'Check your email' : 'Create an account'}
                 </h1>
-                <p className="mt-1.5 text-xs font-medium text-slate-500">Step {step} of 2</p>
+                <p className="mt-1.5 text-xs font-medium text-slate-500">
+                  {step === 3 ? 'Last step' : `Step ${step} of 2`}
+                </p>
               </div>
               <p className="mt-1 text-sm leading-5 text-slate-600">
-                For patients only. Staff accounts are created by an admin.
+                {step === 3
+                  ? 'Enter the code we emailed you to finish setting up your account.'
+                  : 'For patients only. Staff accounts are created by an admin.'}
               </p>
             </div>
 
@@ -429,7 +516,7 @@ function RegisterComponent() {
                       </p>
                     </div>
                   </motion.form>
-                ) : (
+                ) : step === 2 ? (
                   <motion.form
                     key="step-2"
                     initial={stepInitial}
@@ -533,11 +620,12 @@ function RegisterComponent() {
                       <FieldError id="reg-consent-error" message={errors.consent} />
                     </div>
 
-                    {RECAPTCHA_SITE_KEY && (
+                    {siteKey && recaptchaEnabled && (
                       <div className="auth-captcha flex w-full justify-center">
                         <ReCAPTCHA
                           ref={recaptchaRef}
-                          sitekey={RECAPTCHA_SITE_KEY}
+                          key={siteKey}
+                          sitekey={siteKey}
                           onChange={(token) => setCaptchaToken(token)}
                           onExpired={() => setCaptchaToken(null)}
                           onErrored={() => setCaptchaToken(null)}
@@ -563,7 +651,11 @@ function RegisterComponent() {
                       </Button>
                       <Button
                         type="submit"
-                        disabled={pending || !form.consent || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
+                        disabled={
+                          pending ||
+                          !form.consent ||
+                          (Boolean(siteKey) && recaptchaEnabled && !captchaToken)
+                        }
                         className="h-10 flex-1 bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
                       >
                         {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
@@ -579,6 +671,96 @@ function RegisterComponent() {
                         </Link>
                       </p>
                     </div>
+                  </motion.form>
+                ) : (
+                  <motion.form
+                    key="step-3"
+                    initial={stepInitial}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={stepExit}
+                    transition={stepTransition}
+                    onSubmit={handleVerify}
+                    noValidate
+                    className={cn(stepClass, 'justify-center')}
+                  >
+                    <div className="flex items-start gap-2.5 rounded-xl border border-teal-600/20 bg-teal-50/80 px-3.5 py-3">
+                      <MailCheck size={18} className="mt-0.5 shrink-0 text-teal-700" aria-hidden />
+                      <p className="text-sm leading-6 text-teal-950">
+                        We sent a 6-digit code to{' '}
+                        <span className="font-semibold break-all">{form.email.trim()}</span>. Enter it below to
+                        verify your email. Check your spam folder if it has not arrived.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label htmlFor="reg-code" className={labelClass}>
+                        Verification code
+                      </label>
+                      <input
+                        id="reg-code"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={code}
+                        onChange={(e) => {
+                          setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                          setVerifyError(null);
+                        }}
+                        placeholder="123456"
+                        aria-invalid={Boolean(verifyError)}
+                        aria-describedby={verifyError ? 'reg-code-error' : undefined}
+                        className={cn(inputClass, 'text-center font-mono text-lg tracking-[0.35em]')}
+                      />
+                      {verifyError && (
+                        <p id="reg-code-error" role="alert" className="mt-1.5 text-sm text-destructive">
+                          {verifyError}
+                        </p>
+                      )}
+                    </div>
+
+                    {verifyNotice && !verifyError && (
+                      <p
+                        role="status"
+                        className="rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-900 ring-1 ring-inset ring-teal-600/20"
+                      >
+                        {verifyNotice}
+                      </p>
+                    )}
+
+                    <Button
+                      type="submit"
+                      disabled={verifyPending || code.length !== 6}
+                      className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
+                    >
+                      {verifyPending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
+                      {verifyPending ? 'Verifying…' : 'Verify and continue'}
+                    </Button>
+
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <button
+                        type="button"
+                        onClick={handleResend}
+                        disabled={resending || resendCooldown > 0}
+                        className="font-medium text-teal-700 underline-offset-4 hover:underline disabled:text-slate-400 disabled:no-underline"
+                      >
+                        {resending
+                          ? 'Sending…'
+                          : resendCooldown > 0
+                            ? `Resend in ${resendCooldown}s`
+                            : 'Resend code'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void navigate({ to: '/app/dashboard' })}
+                        className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline"
+                      >
+                        Skip for now
+                      </button>
+                    </div>
+
+                    <p className="text-center text-xs leading-5 text-slate-500">
+                      You can also verify later from the reminder on your dashboard.
+                    </p>
                   </motion.form>
                 )}
               </AnimatePresence>

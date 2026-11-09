@@ -28,10 +28,15 @@ import {
   panel,
 } from '../../components/app-ui';
 import { Toast, type ToastMessage } from '../../components/toast';
+import { PdfExportButton, PdfExportDialog, PdfExportNote, usePdfExport } from '../../components/pdf-export';
+import { SheetsExportButton, SheetsExportNote, useSheetsExport } from '../../components/sheets-export';
 import { getSession } from '../../lib/auth';
 import {
   appointmentsByStatus,
   downloadReportPdf,
+  downloadVisitsCsv,
+  exportVisitsPdf,
+  exportVisitsToSheets,
   patientReport,
   visitsPerService,
   type AppointmentsByStatusRow,
@@ -71,6 +76,8 @@ const RANGE_OPTIONS = [
   { key: 'week', label: 'Week' },
   { key: 'month', label: 'Month' },
 ] as const;
+
+const RANGE_DAYS: Record<ReportRange, number> = { today: 1, week: 7, month: 30 };
 
 const STATUS_COLUMNS = [
   { key: 'pending', label: 'Pending', dot: 'bg-amber-500' },
@@ -123,7 +130,12 @@ function Reports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [csvExporting, setCsvExporting] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  const rangeDays = RANGE_DAYS[range];
+  const sheets = useSheetsExport(() => exportVisitsToSheets(rangeDays));
+  const pdf = usePdfExport((options) => exportVisitsPdf(rangeDays, options));
 
   useEffect(() => {
     let cancelled = false;
@@ -205,6 +217,22 @@ function Reports() {
     }
   }
 
+  async function handleExportCsv() {
+    if (csvExporting) return;
+    setCsvExporting(true);
+    try {
+      await downloadVisitsCsv(rangeDays);
+      setToast({ tone: 'success', message: 'Report CSV downloaded.' });
+    } catch (err) {
+      setToast({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'Could not generate the CSV. Try again.',
+      });
+    } finally {
+      setCsvExporting(false);
+    }
+  }
+
   const rise = reduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
     : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
@@ -223,15 +251,38 @@ function Reports() {
         <Printer size={15} aria-hidden />
         Print
       </button>
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={downloading}
-        className={chipButton}
-      >
-        <Download size={15} aria-hidden />
-        {downloading ? 'Preparing…' : 'Download PDF'}
-      </button>
+      {report === 'visits' && (
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          disabled={csvExporting}
+          className={chipButton}
+        >
+          <Download size={15} aria-hidden />
+          {csvExporting ? 'Preparing…' : 'Export CSV'}
+        </button>
+      )}
+      {report === 'visits' && (
+        <SheetsExportButton
+          exporting={sheets.exporting}
+          disabled={visits === null}
+          onClick={sheets.start}
+          className={chipButton}
+        />
+      )}
+      {report === 'visits' ? (
+        <PdfExportButton onClick={pdf.start} disabled={visits === null} className={chipButton} />
+      ) : (
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className={chipButton}
+        >
+          <Download size={15} aria-hidden />
+          {downloading ? 'Preparing…' : 'Download PDF'}
+        </button>
+      )}
     </div>
   );
 
@@ -275,6 +326,17 @@ function Reports() {
           className="print-hide"
         />
       </motion.div>
+
+      <SheetsExportNote result={sheets.result} error={sheets.error} />
+      <PdfExportNote result={pdf.result} error={pdf.error} />
+      {pdf.open && (
+        <PdfExportDialog
+          title="Export PDF"
+          subtitle={`${REPORT_TITLES.visits} · ${period || 'selected period'}`}
+          onCancel={pdf.close}
+          onGenerate={pdf.run}
+        />
+      )}
 
       <motion.div
         {...rise}

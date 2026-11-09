@@ -11,6 +11,7 @@ import { hashPassword, isValidPassword, PASSWORD_ERROR_MESSAGE, verifyPassword }
 import { presentUser } from '../utils/present-user.js';
 import { signSession } from '../utils/tokens.js';
 import { logActivity } from '../services/activity.js';
+import { issueEmailVerification } from '../services/email-verification.js';
 
 const phoneSchema = z
   .string()
@@ -39,13 +40,25 @@ const registerSchema = z.object({
   consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required to register.' }) }),
   // Verified and stripped by verifyCaptcha before this schema runs; listed
   // here so the field is part of the documented request shape.
-  captchaToken: z.string().min(1).max(4096).optional(),
+  // A client with CAPTCHA disabled may send ""; treat it as "no token" instead
+  // of failing validation. verifyCaptcha still rejects a missing token whenever
+  // CAPTCHA is enabled.
+  captchaToken: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).max(4096).optional(),
+  ),
 });
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
   password: z.string().min(1, 'Enter your password.'),
-  captchaToken: z.string().min(1).max(4096).optional(),
+  // A client with CAPTCHA disabled may send ""; treat it as "no token" instead
+  // of failing validation. verifyCaptcha still rejects a missing token whenever
+  // CAPTCHA is enabled.
+  captchaToken: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).max(4096).optional(),
+  ),
 });
 
 /** Only a well-formed email reaches the log — never arbitrary typed text. */
@@ -84,6 +97,10 @@ export const register = asyncHandler(async (req, res) => {
     email: data.email,
     passwordHash: await hashPassword(data.password),
     role: 'patient',
+    // New self-registered patients confirm their address with a code emailed
+    // after the account exists (see services/email-verification.js). Access is
+    // not blocked in the meantime.
+    emailVerified: false,
     fullName: data.fullName,
     profileComplete: true,
     birthdate: new Date(`${data.birthdate}T00:00:00`),
@@ -105,6 +122,17 @@ export const register = asyncHandler(async (req, res) => {
     target: { type: 'patient', id: user._id, label: user.fullName },
     detail: 'Self-registered patient account.',
   });
+
+  // Best-effort: a mail outage must never fail a registration that already
+  // succeeded. The reminder banner lets the patient request a new code.
+  try {
+    await issueEmailVerification(user);
+  } catch (error) {
+    console.error(
+      'Verification email could not be sent at registration:',
+      error instanceof Error ? error.message : 'unknown error',
+    );
+  }
 
   res.status(201).json({ success: true, token: signSession(user), user: presentUser(user) });
 });

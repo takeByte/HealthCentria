@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Announcement } from '../models/announcement.model.js';
+import { isNotificationEmailEnabled } from '../models/app-settings.model.js';
 import { User } from '../models/user.model.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
 import { announcementEmailText, sendEmail } from '../utils/email.js';
@@ -42,10 +43,12 @@ function present(a) {
 
 async function emailPatients(announcement) {
   // Per-post email to registered patients (spec §4.9). Fire-and-forget safe: never throws.
+  // Skipped while notification emails are off; the post still shows in the app.
+  if (!(await isNotificationEmailEnabled())) return;
   const patients = await User.find({ role: 'patient', active: true }).select('email').lean();
   const recipients = patients.map((p) => p.email).filter(Boolean);
   if (recipients.length === 0) return;
-  await sendEmail(recipients, `E-Kalinga: ${announcement.title}`, announcementEmailText(announcement));
+  await sendEmail(recipients, `HealthCentria: ${announcement.title}`, announcementEmailText(announcement));
 }
 
 export const listAnnouncements = asyncHandler(async (req, res) => {

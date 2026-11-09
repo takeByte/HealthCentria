@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as AnnouncementsRouteImport } from './routes/announcements'
 import { Route as AppRouteRouteImport } from './routes/app/route'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as StaffRouteRouteImport } from './routes/staff/route'
@@ -62,6 +63,11 @@ const AnnouncementsRoute = AnnouncementsRouteImport.update({
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -221,6 +227,7 @@ export interface FileRoutesByFullPath {
   '/app': typeof AppRouteRouteWithChildren
   '/staff': typeof StaffRouteRouteWithChildren
   '/announcements': typeof AnnouncementsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/activity': typeof AdminActivityRoute
@@ -257,6 +264,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppRouteRouteWithChildren
   '/staff': typeof StaffRouteRouteWithChildren
   '/announcements': typeof AnnouncementsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/activity': typeof AdminActivityRoute
@@ -293,6 +301,7 @@ export interface FileRoutesById {
   '/app': typeof AppRouteRouteWithChildren
   '/staff': typeof StaffRouteRouteWithChildren
   '/announcements': typeof AnnouncementsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/activity': typeof AdminActivityRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/staff'
     | '/announcements'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/admin/activity'
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/staff'
     | '/announcements'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/admin/activity'
@@ -402,6 +413,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/staff'
     | '/announcements'
+    | '/forgot-password'
     | '/login'
     | '/register'
     | '/admin/activity'
@@ -439,6 +451,7 @@ export interface RootRouteChildren {
   AppRouteRoute: typeof AppRouteRouteWithChildren
   StaffRouteRoute: typeof StaffRouteRouteWithChildren
   AnnouncementsRoute: typeof AnnouncementsRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -472,6 +485,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -785,6 +805,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRouteRoute: AppRouteRouteWithChildren,
   StaffRouteRoute: StaffRouteRouteWithChildren,
   AnnouncementsRoute: AnnouncementsRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
   AuthCallbackRoute: AuthCallbackRoute,

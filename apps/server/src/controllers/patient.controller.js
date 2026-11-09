@@ -2,7 +2,12 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { Appointment } from '../models/appointment.model.js';
+import { CalendarEventLink } from '../models/calendar-event-link.model.js';
+import { Notification } from '../models/notification.model.js';
 import { User } from '../models/user.model.js';
+import { VerificationCode } from '../models/verification-code.model.js';
+import { removeAppointmentFromCalendar } from '../services/google-calendar.js';
+import { todayYMD } from '../utils/service-schedule.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
 
@@ -138,7 +143,7 @@ export const listPatients = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid search.' });
   }
   const { search, limit } = parsed.data;
-  const filter = { role: 'patient' };
+  const filter = { role: 'patient', deletedAt: null };
   if (search) {
     const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [{ fullName: rx }, { email: rx }, { contactNumber: rx }, { householdNumber: rx }];
@@ -172,7 +177,7 @@ export const getPatient = asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
-  const patient = await User.findOne({ _id: req.params.id, role: 'patient' })
+  const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null })
     .populate('updatedBy', 'fullName')
     .lean();
   if (!patient) {
@@ -222,7 +227,7 @@ export const updatePatientRecord = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'No changes provided.' });
   }
 
-  const patient = await User.findOne({ _id: req.params.id, role: 'patient' });
+  const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null });
   if (!patient) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
@@ -328,4 +333,120 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   });
 
   res.json({ success: true, user: presentUser(user) });
+});
+
+const deleteSchema = z.object({
+  confirmName: z.string().trim().min(1, 'Type the patient\'s full name to confirm.').max(200),
+});
+
+function sameName(a, b) {
+  const norm = (v) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return norm(a) !== '' && norm(a) === norm(b);
+}
+
+/**
+ * POST /api/patients/:id/delete — admin only, superadmin PIN (route).
+ *
+ * The account becomes an anonymous "Deleted patient" placeholder instead of
+ * disappearing, so appointments that reference it (and the report counts built
+ * from them) stay valid:
+ *  - every personal field is wiped, sign-in is blocked, sessions are revoked,
+ *    and the email is freed so the person could register again later;
+ *  - upcoming pending/confirmed appointments are cancelled;
+ *  - every appointment keeps only service, date and status (diagnosis,
+ *    prescription, notes and decline reasons are wiped);
+ *  - Google Calendar events (which show the name) are removed;
+ *  - notifications and pending email codes are deleted.
+ * Activity log entries are kept: they are the audit trail.
+ */
+export const deletePatient = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+  const parsed = deleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+  }
+  const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null }).lean();
+  if (!patient) {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+  const expected = patient.fullName || patient.email;
+  if (!sameName(parsed.data.confirmName, expected)) {
+    return res.status(400).json({
+      success: false,
+      message: 'The name you typed does not match this patient.',
+      errors: { confirmName: ['Type the name exactly as shown on the record.'] },
+    });
+  }
+
+  const today = todayYMD();
+  const appointments = await Appointment.find({ patient: patient._id }).select('_id status day').lean();
+  const upcoming = appointments.filter((a) => ['pending', 'confirmed'].includes(a.status) && a.day >= today);
+
+  // Calendar events carry the patient's name: remove every one that exists
+  // (only appointments with a live link, so nothing new is created). Best effort.
+  const linked = await CalendarEventLink.find({
+    appointment: { $in: appointments.map((a) => a._id) },
+    status: { $ne: 'deleted' },
+  })
+    .select('appointment')
+    .lean();
+  await Promise.all(linked.map((l) => removeAppointmentFromCalendar(l.appointment).catch(() => null)));
+
+  if (upcoming.length) {
+    await Appointment.updateMany(
+      { _id: { $in: upcoming.map((a) => a._id) } },
+      { $set: { status: 'cancelled', updatedBy: req.user.id } },
+    );
+  }
+  await Appointment.updateMany(
+    { patient: patient._id },
+    { $set: { diagnosis: '', prescription: '', visitNotes: '', notes: '', declineReason: '' } },
+  );
+
+  await Promise.all([
+    Notification.deleteMany({ recipient: patient._id }),
+    VerificationCode.deleteMany({ email: patient.email }),
+  ]);
+
+  // updateOne skips schema validators on purpose: the placeholder has no
+  // password, Google id or profile fields, which a normal save would refuse.
+  await User.updateOne(
+    { _id: patient._id },
+    {
+      $set: {
+        email: `deleted-${patient._id}@deleted.invalid`,
+        fullName: 'Deleted patient',
+        active: false,
+        deletedAt: new Date(),
+        profileComplete: false,
+        emailVerified: false,
+        emailVerifiedAt: null,
+        provider: 'local',
+        avatarUrl: '',
+        barangay: '',
+        householdNumber: '',
+        philHealthNumber: '',
+        emergencyName: '',
+        emergencyNumber: '',
+        updatedBy: req.user.id,
+      },
+      $unset: { passwordHash: '', googleId: '', birthdate: '', sex: '', address: '', contactNumber: '' },
+      $inc: { tokenVersion: 1 },
+    },
+  );
+
+  const kept = appointments.length - upcoming.length;
+  await logActivity({
+    req,
+    action: 'patient.delete',
+    target: { type: 'patient', id: patient._id, label: expected },
+    detail: `Patient account deleted and anonymized. ${upcoming.length} upcoming appointment(s) cancelled; ${kept} past visit(s) kept for reports without clinical notes.`,
+  });
+
+  res.json({ success: true, cancelled: upcoming.length, keptVisits: kept });
 });

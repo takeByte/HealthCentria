@@ -16,6 +16,9 @@ export function presentUser(user) {
     contactNumber: user.contactNumber ?? '',
     authProvider: user.provider,
     profileCompleted: user.role === 'patient' ? user.profileComplete !== false : true,
+    // Only an explicit false means "not verified". Legacy rows predate the
+    // field and must not suddenly show a reminder banner.
+    emailVerified: user.emailVerified !== false,
     avatarUrl: user.avatarUrl ?? '',
     permissions: effectivePermissions(user),
   };

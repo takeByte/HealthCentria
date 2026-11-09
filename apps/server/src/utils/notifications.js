@@ -1,3 +1,4 @@
+import { isNotificationEmailEnabled } from '../models/app-settings.model.js';
 import { Notification } from '../models/notification.model.js';
 import { User } from '../models/user.model.js';
 import { sendEmail } from './email.js';
@@ -27,8 +28,14 @@ export async function notifyRoles(roles, { type, title, body = '', link = '', ke
   return docs.length;
 }
 
-/** Best-effort email — logs and swallows failures so requests never break on email. */
+/**
+ * Best-effort notification email (appointment updates, reminders) — logs and
+ * swallows failures so requests never break on email. Skipped while an admin
+ * has notification emails switched off; the in-app notification still exists.
+ * Never use this for security codes: those must always be delivered.
+ */
 export async function notifyEmail(to, subject, text) {
   if (!to) return;
+  if (!(await isNotificationEmailEnabled())) return;
   await sendEmail(to, subject, text);
 }

@@ -23,7 +23,9 @@ const inputClass =
 // Public by design. When it is absent (a fresh checkout without apps/web/.env)
 // the widget is hidden and the server decides — it skips the check in
 // development and fails closed in production.
-const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+// Fallback only: the active site key comes from the API, so a key an admin
+// saves in Settings takes effect without rebuilding the web app.
+const BUILD_SITE_KEY = (import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined) ?? '';
 
 function LoginComponent() {
   const navigate = useNavigate();
@@ -37,6 +39,8 @@ function LoginComponent() {
   const [touched, setTouched] = useState({ email: false, password: false });
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [recaptchaEnabled, setRecaptchaEnabled] = useState(true);
+  const [siteKey, setSiteKey] = useState(BUILD_SITE_KEY);
   // Hidden until the server confirms Google sign-in is on, so a disabled
   // provider never shows a button that would bounce the user through Google.
   const [googleEnabled, setGoogleEnabled] = useState(false);
@@ -51,6 +55,10 @@ function LoginComponent() {
         if (cancelled) return;
         // The client ID comes from the API at runtime — never a build-time constant.
         setGoogleEnabled(settings.googleSignInEnabled && Boolean(config.clientId));
+        {
+          setRecaptchaEnabled(settings.recaptchaEnabled);
+          setSiteKey(settings.recaptchaSiteKey || BUILD_SITE_KEY);
+        }
       })
       .catch(() => {
         // API unreachable: leave the button hidden rather than offer a dead end.
@@ -67,7 +75,7 @@ function LoginComponent() {
     setTouched({ email: true, password: true });
     setError(null);
     if (!isValidEmail(email) || password.length === 0) return;
-    if (RECAPTCHA_SITE_KEY && !captchaToken) {
+    if (siteKey && recaptchaEnabled && !captchaToken) {
       setError('Please complete the CAPTCHA.');
       return;
     }
@@ -144,7 +152,7 @@ function LoginComponent() {
             <div className="flex flex-col items-center text-center">
               <img
                 src={appLogo}
-                alt="E-Kalinga logo"
+                alt="HealthCentria logo"
                 className="size-12 rounded-full border border-slate-200 bg-white object-cover"
               />
               <p className="mt-2 text-lg font-bold tracking-tight text-slate-900">HealthCentria</p>
@@ -218,14 +226,12 @@ function LoginComponent() {
                       </button>
                     </div>
                     <div className="mt-1.5 flex justify-end">
-                      <button
-                        type="button"
-                        disabled
-                        title="Ask the front desk for a password reset — self-service reset is not in v1"
-                        className="cursor-not-allowed text-sm text-slate-400"
+                      <Link
+                        to="/forgot-password"
+                        className="text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
                       >
                         Forgot password?
-                      </button>
+                      </Link>
                     </div>
                     {capsOn && password.length > 0 && (
                       <p className="mt-1.5 text-sm text-amber-700">Caps Lock is on.</p>
@@ -237,11 +243,12 @@ function LoginComponent() {
                     )}
                   </div>
 
-                  {RECAPTCHA_SITE_KEY && (
+                  {siteKey && recaptchaEnabled && (
                     <div className="auth-captcha flex w-full justify-center">
                       <ReCAPTCHA
                         ref={recaptchaRef}
-                        sitekey={RECAPTCHA_SITE_KEY}
+                        key={siteKey}
+                        sitekey={siteKey}
                         onChange={(token) => setCaptchaToken(token)}
                         onExpired={() => setCaptchaToken(null)}
                         onErrored={() => setCaptchaToken(null)}
@@ -257,7 +264,7 @@ function LoginComponent() {
 
                   <Button
                     type="submit"
-                    disabled={pending || (Boolean(RECAPTCHA_SITE_KEY) && !captchaToken)}
+                    disabled={pending || (Boolean(siteKey) && recaptchaEnabled && !captchaToken)}
                     className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
                   >
                     {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}

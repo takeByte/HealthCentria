@@ -45,6 +45,12 @@ function calendarConfig() {
   };
 }
 
+/** Public-safe bits for building a "view calendar" link (no credentials). */
+export function getGoogleCalendarViewConfig() {
+  const config = calendarConfig();
+  return { configured: isGoogleCalendarConfigured(), calendarId: config.calendarId, timezone: config.timezone };
+}
+
 export function isGoogleCalendarConfigured() {
   const config = calendarConfig();
   return Boolean(config.calendarId && config.serviceAccountEmail && config.privateKey);
@@ -200,7 +206,7 @@ function buildEvent(appointment) {
       `Time preference: ${appointment.timePreference ?? 'any'}`,
       `Status: ${appointment.status ?? 'confirmed'}`,
       `Appointment ID: ${appointment._id}`,
-      'Managed by E-Kalinga',
+      'Managed by HealthCentria',
     ].join('\n'),
     // All-day event. The end date is exclusive, as required by Google Calendar.
     // The time zone is informational; a date-only event is not shifted by DST.

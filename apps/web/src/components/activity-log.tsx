@@ -13,6 +13,8 @@ import {
   ACTIVITY_CATEGORY_LABELS,
   ApiError,
   downloadActivityCsv,
+  exportActivityPdf,
+  exportActivityToSheets,
   listActivity,
   listMyActivity,
   listOwnActivity,
@@ -33,6 +35,8 @@ import {
   panel,
   secondaryButton,
 } from './app-ui';
+import { PdfExportButton, PdfExportDialog, PdfExportNote, usePdfExport } from './pdf-export';
+import { SheetsExportButton, SheetsExportNote, useSheetsExport } from './sheets-export';
 import { formatDateTime } from './record-meta';
 import { cn } from '../lib/utils';
 
@@ -57,6 +61,13 @@ const ACTION_LABELS: Record<string, string> = {
   'auth.login_failed': 'Failed sign-in',
   'auth.logout': 'Signed out',
   'auth.register': 'Registered an account',
+  'auth.password_reset_requested': 'Password reset code requested',
+  'auth.password_reset': 'Password reset with emailed code',
+  'auth.password_reset_failed': 'Wrong password reset code',
+  'auth.password_change': 'Password changed',
+  'auth.email_verification_sent': 'Verification code sent',
+  'auth.email_verified': 'Email verified',
+  'auth.email_verification_failed': 'Wrong email verification code',
   'appointment.book': 'Appointment requested',
   'appointment.confirm': 'Appointment confirmed',
   'appointment.decline': 'Appointment declined',
@@ -69,7 +80,6 @@ const ACTION_LABELS: Record<string, string> = {
   'staff.create': 'Staff account created',
   'staff.update': 'Staff account updated',
   'profile.update': 'Profile updated',
-  'auth.password_change': 'Password changed',
   'announcement.create': 'Announcement published',
   'announcement.update': 'Announcement edited',
   'announcement.delete': 'Announcement deleted',
@@ -77,8 +87,27 @@ const ACTION_LABELS: Record<string, string> = {
   'service.update': 'Service updated',
   'settings.google.update': 'Google credentials updated',
   'settings.google.reset': 'Google credentials reset',
+  'settings.email.update': 'Email delivery settings updated',
+  'settings.email.reset': 'Email delivery reset to default',
+  'settings.email.test': 'Test email sent',
+  'settings.recaptcha.update': 'reCAPTCHA settings updated',
+  'settings.recaptcha.reset': 'reCAPTCHA reset to default',
   'settings.signin.update': 'Sign-in setting changed',
   'integration.update': 'Integration updated',
+  'settings.pin_failed': 'Incorrect superadmin PIN',
+  'settings.sheets.update': 'Google Sheets spreadsheet changed',
+  'settings.sheets.reset': 'Google Sheets reset to default',
+  'report.export_sheets': 'Report exported to Google Sheets',
+  'activity.export_sheets': 'Activity log exported to Google Sheets',
+  'settings.drive.connect': 'Google Drive connected',
+  'report.export_pdf': 'Report exported as PDF',
+  'activity.export_pdf': 'Activity log exported as PDF',
+  'patient.delete': 'Patient account deleted',
+  'settings.drive.disconnect': 'Google Drive disconnected',
+  'settings.drive.credentials_update': 'Google Drive credentials updated',
+  'settings.drive.credentials_reset': 'Google Drive credentials reset',
+  'settings.drive.folder_update': 'Google Drive upload folder changed',
+  'settings.drive.folder_reset': 'Google Drive upload folder reset',
   'activity.purge': 'Activity log purged',
 };
 
@@ -211,6 +240,12 @@ export function ActivityFeed({
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const sheets = useSheetsExport(() =>
+    exportActivityToSheets({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }),
+  );
+  const pdf = usePdfExport((options) =>
+    exportActivityPdf({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }, options),
+  );
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purging, setPurging] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
@@ -369,6 +404,16 @@ export function ActivityFeed({
                   Export CSV
                 </button>
               )}
+              {showExport && (
+                <SheetsExportButton
+                  exporting={sheets.exporting}
+                  onClick={sheets.start}
+                  className={`${secondaryButton} h-11 px-4 text-[13px]`}
+                />
+              )}
+              {showExport && (
+                <PdfExportButton onClick={pdf.start} className={`${secondaryButton} h-11 px-4 text-[13px]`} />
+              )}
               {showPurge && (
                 <button
                   type="button"
@@ -464,6 +509,16 @@ export function ActivityFeed({
       )}
 
       {exportError && <InlineNotice>{exportError}</InlineNotice>}
+      <SheetsExportNote result={sheets.result} error={sheets.error} />
+      <PdfExportNote result={pdf.result} error={pdf.error} />
+      {pdf.open && (
+        <PdfExportDialog
+          title="Export PDF"
+          subtitle="Activity log · current filters (up to 2,000 entries)"
+          onCancel={pdf.close}
+          onGenerate={pdf.run}
+        />
+      )}
       {purgeResult && <SuccessNote>{purgeResult}</SuccessNote>}
       {error && <InlineNotice>{error}</InlineNotice>}
 

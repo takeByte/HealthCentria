@@ -62,19 +62,28 @@ export class ApiError extends Error {
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
+/** Superadmin PIN header for integration changes. Sent per request, never stored. */
+function pinHeader(pin: string): Record<string, string> {
+  return { 'X-Super-Pin': pin };
+}
+
 export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(`${API_URL}/api/health`);
   if (!res.ok) throw new Error(`API responded with ${res.status}`);
   return res.json() as Promise<HealthResponse>;
 }
 
-async function apiFetch<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+): Promise<T> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}${path}`, {
     method: options.method ?? 'GET',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
     },
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   });
@@ -169,6 +178,11 @@ export function queueAppointments(filters: {
   if (filters.to) params.set('to', filters.to);
   const qs = params.toString();
   return apiFetch(`/api/appointments${qs ? `?${qs}` : ''}`);
+}
+
+/** Staff/admin: link to the mirrored Google Calendar, only when sync is configured and on. */
+export function getCalendarLink(): Promise<{ success: true; available: boolean; url: string }> {
+  return apiFetch('/api/appointments/calendar-link');
 }
 
 export function confirmAppointment(id: string): Promise<{ appointment: StaffAppointment }> {
@@ -363,6 +377,23 @@ export function getMyPatientProfile(): Promise<{ patient: PatientDetail }> {
 }
 
 /** Staff/admin corrections to a patient chart. */
+/**
+ * Admin only, superadmin PIN required. The account is anonymized: personal
+ * data and login are removed, upcoming visits cancelled, past visits kept for
+ * reports without clinical notes.
+ */
+export function deletePatientAccount(
+  id: string,
+  confirmName: string,
+  pin: string,
+): Promise<{ success: true; cancelled: number; keptVisits: number }> {
+  return apiFetch(`/api/patients/${id}/delete`, {
+    method: 'POST',
+    body: { confirmName },
+    headers: pinHeader(pin),
+  });
+}
+
 export function updatePatientRecord(
   id: string,
   input: PatientRecordInput,
@@ -464,6 +495,136 @@ export async function downloadReportPdf(report: ReportKind, range: ReportRange):
   URL.revokeObjectURL(url);
 }
 
+/** Downloads the visits-per-service report as CSV through the authenticated API. */
+export interface SheetsExportResult {
+  success: true;
+  /** Direct link to the new tab. Only people the spreadsheet is shared with can open it. */
+  url: string;
+  tab: string;
+  rows?: number;
+}
+
+/** Writes the visits-per-service report to a new tab in the export spreadsheet. */
+export function exportVisitsToSheets(days = 30): Promise<SheetsExportResult> {
+  return apiFetch(`/api/reports/visits-per-service/sheets?days=${days}`, { method: 'POST' });
+}
+
+export async function downloadVisitsCsv(days = 30): Promise<void> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}/api/reports/visits-per-service/export?days=${days}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // keep the status-based message
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  link.href = url;
+  link.download = match?.[1] ?? `healthcentria-visits-${days}-days.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export interface ExportRecipient {
+  id: string;
+  name: string;
+  email: string;
+  role: 'staff' | 'admin';
+}
+
+export interface ExportRecipientOptions {
+  success: true;
+  recipients: ExportRecipient[];
+  /** SU_EMAIL is set on the server, so the superadmin always gets the link. */
+  superadminNotified: boolean;
+  driveReady: boolean;
+  /** Why Drive can't be used right now ('' when ready). */
+  driveMessage: string;
+  /** Folder chosen in Admin Settings ('' when Drive isn't ready). */
+  driveFolderName: string;
+}
+
+/** Active staff and admins that can be picked to receive a PDF's Drive link. */
+export function listExportRecipients(): Promise<ExportRecipientOptions> {
+  return apiFetch('/api/reports/export-recipients');
+}
+
+export interface PdfExportResult {
+  fileName: string;
+  /** 'off' = the exporter unticked "Upload to Google Drive" (download only). */
+  driveStatus: 'uploaded' | 'skipped' | 'failed' | 'off';
+  driveLink: string;
+  driveMessage: string;
+  emailedCount: number;
+}
+
+export interface PdfExportOptions {
+  /** Staff/admin IDs who get the Drive link by email. Ignored when not uploading. */
+  recipients: string[];
+  /** False = download only: no Drive upload, no sharing, no emails. */
+  uploadToDrive: boolean;
+}
+
+/** POSTs, downloads the returned PDF, and reports what happened with Drive and email. */
+async function downloadPdf(path: string, { recipients, uploadToDrive }: PdfExportOptions): Promise<PdfExportResult> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ recipients: uploadToDrive ? recipients : [], uploadToDrive }),
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // keep the status-based message
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'healthcentria-report.pdf';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  const status = res.headers.get('X-Drive-Status');
+  return {
+    fileName,
+    driveStatus: status === 'uploaded' || status === 'failed' || status === 'off' ? status : 'skipped',
+    driveLink: res.headers.get('X-Drive-Link') ?? '',
+    driveMessage: decodeURIComponent(res.headers.get('X-Drive-Message') ?? ''),
+    emailedCount: Number(res.headers.get('X-Emailed-Count') ?? 0) || 0,
+  };
+}
+
+/** Visits-per-service PDF: downloads it and, if chosen, uploads to Drive and emails the link. */
+export function exportVisitsPdf(days: number, options: PdfExportOptions): Promise<PdfExportResult> {
+  return downloadPdf(`/api/reports/visits-per-service/pdf?days=${days}`, options);
+}
+
 export function overview(): Promise<{
   today: number;
   pending: number;
@@ -544,6 +705,13 @@ export function changeMyPassword(input: {
 
 export interface AuthSettings {
   googleSignInEnabled: boolean;
+  recaptchaEnabled: boolean;
+  /** Announcement, appointment-update and reminder emails. Security codes ignore it. */
+  notificationEmailsEnabled: boolean;
+  /** Off blocks new Google Sheets exports; existing tabs stay. */
+  googleSheetsEnabled: boolean;
+  /** Off stops PDF uploads to Google Drive (and the emailed links). */
+  googleDriveEnabled: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -559,15 +727,89 @@ export function getGoogleIntegrationSettings(): Promise<{ success: true } & Goog
   return apiFetch('/api/admin/settings/google');
 }
 
-export function updateGoogleIntegrationSettings(input: {
-  clientId?: string;
-  clientSecret?: string;
-}): Promise<{ success: true } & GoogleIntegrationSettings> {
-  return apiFetch('/api/admin/settings/google', { method: 'PUT', body: input });
+export function updateGoogleIntegrationSettings(
+  input: {
+    clientId?: string;
+    clientSecret?: string;
+  },
+  pin: string,
+): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google', { method: 'PUT', body: input, headers: pinHeader(pin) });
 }
 
-export function resetGoogleIntegrationSettings(): Promise<{ success: true } & GoogleIntegrationSettings> {
-  return apiFetch('/api/admin/settings/google', { method: 'DELETE' });
+export function resetGoogleIntegrationSettings(pin: string): Promise<{ success: true } & GoogleIntegrationSettings> {
+  return apiFetch('/api/admin/settings/google', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export interface RecaptchaIntegrationSettings {
+  siteKeyMasked: string;
+  secretKeyMasked: string;
+  source: 'custom' | 'default';
+  /** False when neither the database nor .env has both keys. */
+  configured: boolean;
+}
+
+export function getRecaptchaIntegrationSettings(): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha');
+}
+
+export function updateRecaptchaIntegrationSettings(
+  input: {
+    siteKey?: string;
+    secretKey?: string;
+    /** A challenge solved with the new site key; the server checks it with the new secret before saving. */
+    testToken: string;
+  },
+  pin: string,
+): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetRecaptchaIntegrationSettings(pin: string): Promise<{ success: true } & RecaptchaIntegrationSettings> {
+  return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export interface EmailIntegrationSettings {
+  host: string;
+  port: number;
+  userMasked: string;
+  passwordSet: boolean;
+  fromAddress: string;
+  source: 'custom' | 'default';
+  /** False when neither the database nor .env has usable SMTP values. */
+  configured: boolean;
+  lastTestedAt: string | null;
+  lastTestOk: boolean | null;
+  lastTestError: string;
+}
+
+export function getEmailIntegrationSettings(): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email');
+}
+
+export function updateEmailIntegrationSettings(
+  input: {
+    host?: string;
+    port?: number;
+    user?: string;
+    password?: string;
+    fromAddress?: string;
+  },
+  pin: string,
+): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetEmailIntegrationSettings(pin: string): Promise<{ success: true } & EmailIntegrationSettings> {
+  return apiFetch('/api/admin/settings/email', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export function testEmailDelivery(input: { to?: string } = {}): Promise<{
+  success: true;
+  to: string;
+  message: string;
+}> {
+  return apiFetch('/api/admin/settings/email/test', { method: 'POST', body: input });
 }
 
 export interface GoogleCalendarSettings {
@@ -595,8 +837,9 @@ export function getGoogleCalendarSettings(): Promise<{ success: true } & GoogleC
 
 export function updateGoogleCalendarSettings(
   input: { enabled: boolean },
+  pin: string,
 ): Promise<{ success: true } & GoogleCalendarSettings> {
-  return apiFetch('/api/admin/settings/google-calendar', { method: 'PATCH', body: input });
+  return apiFetch('/api/admin/settings/google-calendar', { method: 'PATCH', body: input, headers: pinHeader(pin) });
 }
 
 export function testGoogleCalendarConnection(): Promise<{
@@ -616,6 +859,91 @@ export function syncGoogleCalendar(): Promise<{
   return apiFetch('/api/admin/settings/google-calendar/sync', { method: 'POST' });
 }
 
+export interface GoogleSheetsSettings {
+  /** True when a spreadsheet ID and the service account are both set. */
+  configured: boolean;
+  spreadsheetId: string;
+  spreadsheetUrl: string;
+  source: 'custom' | 'default';
+  defaultSet: boolean;
+  serviceAccountEmail: string;
+  serviceAccountConfigured: boolean;
+}
+
+export function getGoogleSheetsSettings(): Promise<{ success: true } & GoogleSheetsSettings> {
+  return apiFetch('/api/admin/settings/google-sheets');
+}
+
+/** Tested (open + add/delete a tab) on the server before it is saved. */
+export function updateGoogleSheetsSettings(
+  input: { spreadsheetId: string },
+  pin: string,
+): Promise<{ success: true } & GoogleSheetsSettings> {
+  return apiFetch('/api/admin/settings/google-sheets', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetGoogleSheetsSettings(pin: string): Promise<{ success: true } & GoogleSheetsSettings> {
+  return apiFetch('/api/admin/settings/google-sheets', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export function testGoogleSheetsConnection(): Promise<{ success: true; title: string; url: string }> {
+  return apiFetch('/api/admin/settings/google-sheets/test', { method: 'POST' });
+}
+
+export interface GoogleDriveSettings {
+  /** An OAuth Client ID + secret is set (custom in Settings, or the .env default). */
+  clientConfigured: boolean;
+  clientIdMasked: string;
+  clientSecretMasked: string;
+  credentialsSource: 'custom' | 'default';
+  connected: boolean;
+  /** Google rejected the stored token (e.g. the 7-day limit of a Testing app). */
+  needsReconnect: boolean;
+  /** Connected before full Drive access was requested: reconnect once to choose a folder. */
+  scopeUpgradeNeeded: boolean;
+  accountEmail: string;
+  connectedAt: string | null;
+  folderId: string;
+  folderName: string;
+  folderUrl: string;
+  /** 'custom' = pasted in Settings; 'default' = the .env folder or "HealthCentria Reports". */
+  folderSource: 'custom' | 'default';
+  lastUploadAt: string | null;
+  lastError: string;
+  redirectUri: string;
+}
+
+export function getGoogleDriveSettings(): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive');
+}
+
+/** Returns Google's consent URL; the page then navigates there. */
+export function startGoogleDriveConnect(pin: string): Promise<{ success: true; url: string }> {
+  return apiFetch('/api/admin/settings/google-drive/connect', { method: 'POST', headers: pinHeader(pin) });
+}
+
+export function disconnectGoogleDrive(pin: string): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive/connection', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+/** Folder ID or drive.google.com link. The server checks the account can add files there first. */
+export function updateGoogleDriveFolder(folder: string, pin: string): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive/folder', {
+    method: 'PUT',
+    body: { folder },
+    headers: pinHeader(pin),
+  });
+}
+
+/** Back to the .env folder, or HealthCentria's own "HealthCentria Reports" folder. */
+export function resetGoogleDriveFolder(pin: string): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive/folder', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export function testGoogleDriveUpload(): Promise<{ success: true; folderName: string; folderUrl: string }> {
+  return apiFetch('/api/admin/settings/google-drive/test', { method: 'POST' });
+}
+
 /**
  * Public: the login button reads the active client ID at runtime. The client ID
  * is public by design; the secret is never returned by this endpoint.
@@ -630,18 +958,35 @@ export async function getGoogleAuthConfig(): Promise<{ clientId: string }> {
  * Public, unauthenticated: the login page uses it to hide the Google button
  * while an admin has Google sign-in switched off.
  */
-export async function getPublicSettings(): Promise<{ googleSignInEnabled: boolean }> {
-  const res = await fetch(`${API_URL}/api/settings/public`);
+export async function getPublicSettings(): Promise<{
+  googleSignInEnabled: boolean;
+  recaptchaEnabled: boolean;
+  /** Public site key; empty when the server has none configured. */
+  recaptchaSiteKey: string;
+}> {
+  const res = await fetch(`${API_URL}/api/settings/public`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Request failed (${res.status}).`);
-  return res.json() as Promise<{ googleSignInEnabled: boolean }>;
+  return res.json();
 }
 
 export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
   return apiFetch('/api/settings');
 }
 
-export function updateAuthSettings(input: { googleSignInEnabled: boolean }): Promise<{ settings: AuthSettings }> {
-  return apiFetch('/api/settings', { method: 'PATCH', body: input });
+export function updateAuthSettings(
+  input: Partial<
+    Pick<
+      AuthSettings,
+      | 'googleSignInEnabled'
+      | 'recaptchaEnabled'
+      | 'notificationEmailsEnabled'
+      | 'googleSheetsEnabled'
+      | 'googleDriveEnabled'
+    >
+  >,
+  pin: string,
+): Promise<{ settings: AuthSettings }> {
+  return apiFetch('/api/settings', { method: 'PATCH', body: input, headers: pinHeader(pin) });
 }
 
 /** Records the sign-out server-side before the client drops the token. */
@@ -771,6 +1116,16 @@ export function purgeActivity(): Promise<{
 }
 
 /** Downloads the current filtered view as CSV through the authenticated API. */
+/** Admin: activity log PDF for the current filters (max 2,000 rows); optionally uploaded to Drive and emailed. */
+export function exportActivityPdf(filters: ActivityFilters, options: PdfExportOptions): Promise<PdfExportResult> {
+  return downloadPdf(`/api/activity/export/pdf${activityQuery(filters)}`, options);
+}
+
+/** Admin: writes the filtered activity log to a new tab in the export spreadsheet. */
+export function exportActivityToSheets(filters: ActivityFilters = {}): Promise<SheetsExportResult> {
+  return apiFetch(`/api/activity/export/sheets${activityQuery(filters)}`, { method: 'POST' });
+}
+
 export async function downloadActivityCsv(filters: ActivityFilters = {}): Promise<void> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}/api/activity/export${activityQuery(filters)}`, {

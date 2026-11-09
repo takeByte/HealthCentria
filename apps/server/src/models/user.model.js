@@ -27,6 +27,15 @@ const userSchema = new mongoose.Schema(
     // records means "unrestricted" — see utils/permissions.js.
     permissions: { type: [String], enum: PERMISSION_KEYS, default: undefined },
     active: { type: Boolean, default: true },
+    // Email ownership. Self-registered patients start unverified and see a
+    // reminder until they enter the code; staff/admin accounts, Google
+    // sign-ins, and seeded demo data are trusted by default. Rows created
+    // before this field existed have no value and are treated as verified.
+    emailVerified: { type: Boolean, default: true },
+    emailVerifiedAt: { type: Date, default: null },
+    // Incremented whenever the password changes or an admin forces a reset.
+    // The value is embedded in every JWT, so bumping it revokes all sessions.
+    tokenVersion: { type: Number, default: 0 },
     fullName: { type: String, required: true, trim: true },
     // Optional Google avatar. Kept separate from the patient's profile fields.
     avatarUrl: { type: String, default: '', trim: true },
@@ -56,6 +65,10 @@ const userSchema = new mongoose.Schema(
     // Last staff/admin account to edit this chart (patients editing their own
     // profile leave it null). Shown as "Updated by" on the patient record.
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Set when an admin deletes a patient account. The row stays as an
+    // anonymous "Deleted patient" placeholder so past visits keep counting in
+    // reports; every personal field is wiped and sign-in is impossible.
+    deletedAt: { type: Date, default: null, index: true },
   },
   // Admin edits and self-service profile/password changes can race. A stale
   // save raises Mongoose's VersionError, which the API reports as HTTP 409.

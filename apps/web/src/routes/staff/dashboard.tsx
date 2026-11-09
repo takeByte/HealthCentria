@@ -9,6 +9,7 @@ import {
   Megaphone,
   Stethoscope,
 } from 'lucide-react';
+import { ClinicSchedule } from '../../components/clinic-schedule';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
@@ -175,6 +176,10 @@ function StaffDashboard() {
         {canReports && (
           <StatTile icon={FileText} label="Reports" value="30 days" hint="Visits per service" tone="slate" />
         )}
+      </motion.div>
+
+      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.06 }}>
+        <ClinicSchedule />
       </motion.div>
 
       <div className="grid items-start gap-5 lg:grid-cols-5">
