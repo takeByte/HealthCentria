@@ -29,8 +29,12 @@ import {
   disconnectDriveSettings,
   driveCallback,
   getDriveSettings,
+  resetDriveCredentials,
+  resetDriveFolder,
   startDriveConnect,
   testDriveSettings,
+  updateDriveCredentials,
+  updateDriveFolder,
 } from '../controllers/drive-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireSuperPin } from '../middleware/requireSuperPin.js';
@@ -99,3 +103,19 @@ adminSettingsRouter.delete(
   disconnectDriveSettings,
 );
 adminSettingsRouter.post('/google-drive/test', testDriveSettings);
+adminSettingsRouter.put('/google-drive/folder', requireSuperPin('Google Drive upload folder'), updateDriveFolder);
+adminSettingsRouter.delete(
+  '/google-drive/folder',
+  requireSuperPin('Google Drive upload folder (reset to default)'),
+  resetDriveFolder,
+);
+adminSettingsRouter.put(
+  '/google-drive/credentials',
+  requireSuperPin('Google Drive credentials'),
+  updateDriveCredentials,
+);
+adminSettingsRouter.delete(
+  '/google-drive/credentials',
+  requireSuperPin('Google Drive credentials (reset to default)'),
+  resetDriveCredentials,
+);

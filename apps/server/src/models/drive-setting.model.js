@@ -12,10 +12,14 @@ const driveSettingSchema = new mongoose.Schema(
     accountEmail: { type: String, default: '' },
     connectedAt: { type: Date, default: null },
     connectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    // Folder the uploads go to. Either the .env folder (if the app can write
-    // to it) or a folder the app created itself on connect.
+    // Scopes Google granted on connect. Connections made before the switch to
+    // full `drive` access only have drive.file and must reconnect once.
+    grantedScope: { type: String, default: '' },
+    // Folder the uploads go to. 'custom' = pasted in Settings; 'auto' = the
+    // .env folder (if writable) or a folder the app created itself.
     folderId: { type: String, default: '' },
     folderName: { type: String, default: '' },
+    folderSource: { type: String, enum: ['auto', 'custom'], default: 'auto' },
     // Set when Google rejects the refresh token (e.g. the 7-day Testing limit).
     needsReconnect: { type: Boolean, default: false },
     lastError: { type: String, default: '' },

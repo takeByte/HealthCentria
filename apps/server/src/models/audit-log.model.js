@@ -70,6 +70,10 @@ export const ACTIVITY_ACTIONS = [
   'activity.export_pdf',
   'settings.drive.connect',
   'settings.drive.disconnect',
+  'settings.drive.credentials_update',
+  'settings.drive.credentials_reset',
+  'settings.drive.folder_update',
+  'settings.drive.folder_reset',
   // System
   'activity.purge',
 ];
@@ -123,6 +127,10 @@ export const ACTION_CATEGORY = {
   'activity.export_pdf': 'system',
   'settings.drive.connect': 'configuration',
   'settings.drive.disconnect': 'configuration',
+  'settings.drive.credentials_update': 'configuration',
+  'settings.drive.credentials_reset': 'configuration',
+  'settings.drive.folder_update': 'configuration',
+  'settings.drive.folder_reset': 'configuration',
   'activity.purge': 'system',
 };
 

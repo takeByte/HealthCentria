@@ -46,6 +46,8 @@ import {
   startGoogleDriveConnect,
   disconnectGoogleDrive,
   testGoogleDriveUpload,
+  updateGoogleDriveFolder,
+  resetGoogleDriveFolder,
   type GoogleDriveSettings,
   resetGoogleSheetsSettings,
   testGoogleSheetsConnection,
@@ -544,6 +546,11 @@ function GoogleDriveCard({
   const [testing, setTesting] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [folderDraft, setFolderDraft] = useState('');
+  const [folderSaving, setFolderSaving] = useState(false);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const [folderResetOpen, setFolderResetOpen] = useState(false);
+  const [folderResetting, setFolderResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -608,6 +615,49 @@ function GoogleDriveCard({
         .catch(() => {});
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function saveFolder(e: FormEvent) {
+    e.preventDefault();
+    const value = folderDraft.trim();
+    if (!value || folderSaving) return;
+    setFolderSaving(true);
+    setFolderError(null);
+    setMessage(null);
+    try {
+      const r = await withPin('Change the Google Drive folder PDFs are uploaded to.', (pin) =>
+        updateGoogleDriveFolder(value, pin),
+      );
+      setDrive(r);
+      setFolderDraft('');
+      onToast({ tone: 'success', message: `Upload folder set to "${r.folderName}".` });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      setFolderError(
+        err instanceof ApiError ? (err.errors?.folder?.[0] ?? err.message) : 'Could not save the folder. Try again.',
+      );
+    } finally {
+      setFolderSaving(false);
+    }
+  }
+
+  async function resetFolder() {
+    if (folderResetting) return;
+    setFolderResetting(true);
+    try {
+      const r = await withPin('Reset the Google Drive upload folder to the default.', (pin) =>
+        resetGoogleDriveFolder(pin),
+      );
+      setDrive(r);
+      setFolderResetOpen(false);
+      setFolderError(null);
+      onToast({ tone: 'success', message: `Upload folder reset to "${r.folderName}".` });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      onToast({ tone: 'error', message: err instanceof ApiError ? err.message : 'Could not reset. Try again.' });
+    } finally {
+      setFolderResetting(false);
     }
   }
 
@@ -690,8 +740,14 @@ function GoogleDriveCard({
         )}
         {drive && !drive.clientConfigured && (
           <InlineNotice className="mt-4">
-            Add DEFAULT_GOOGLE_DRIVE_CLIENT_ID and DEFAULT_GOOGLE_DRIVE_CLIENT_SECRET to the server .env, then restart
-            the server.
+            No OAuth client yet. Set DEFAULT_GOOGLE_DRIVE_CLIENT_ID and DEFAULT_GOOGLE_DRIVE_CLIENT_SECRET in the
+            server .env and restart the server.
+          </InlineNotice>
+        )}
+        {drive?.scopeUpgradeNeeded && !drive.needsReconnect && (
+          <InlineNotice className="mt-4">
+            Click &ldquo;Reconnect Google Drive&rdquo; once to let HealthCentria upload into a folder you choose.
+            Uploads keep working until then.
           </InlineNotice>
         )}
 
@@ -720,7 +776,14 @@ function GoogleDriveCard({
                   )}
                 </div>
                 <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Upload folder</dt>
+                  <dt className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Upload folder
+                    {drive.connected && drive.folderId && (
+                      <StatusPill tone={drive.folderSource === 'custom' ? 'sky' : 'slate'}>
+                        {drive.folderSource === 'custom' ? 'Custom' : 'Default'}
+                      </StatusPill>
+                    )}
+                  </dt>
                   <dd className="mt-1 text-slate-700">
                     {drive.folderUrl ? (
                       <a
@@ -735,6 +798,11 @@ function GoogleDriveCard({
                       'Chosen when you connect'
                     )}
                   </dd>
+                  {drive.folderId && (
+                    <dd className="mt-0.5 break-all font-mono text-[11px] leading-5 text-slate-500">
+                      {drive.folderId}
+                    </dd>
+                  )}
                   {drive.lastUploadAt && (
                     <dd className="mt-0.5 text-[11.5px] text-slate-500">
                       Last upload {formatDateTime(drive.lastUploadAt)}
@@ -742,6 +810,42 @@ function GoogleDriveCard({
                   )}
                 </div>
               </dl>
+
+              {drive.connected && (
+                <form onSubmit={saveFolder} className="space-y-2">
+                  {folderError && <InlineNotice>{folderError}</InlineNotice>}
+                  <label htmlFor="drive-folder" className={fieldLabel}>
+                    New upload folder <span className="font-normal text-slate-500">(folder link or ID)</span>
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="drive-folder"
+                      value={folderDraft}
+                      onChange={(e) => setFolderDraft(e.target.value)}
+                      placeholder="https://drive.google.com/drive/folders/…"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={drive.scopeUpgradeNeeded || drive.needsReconnect}
+                      className={inputClass}
+                    />
+                    <button
+                      type="submit"
+                      disabled={
+                        !folderDraft.trim() || folderSaving || drive.scopeUpgradeNeeded || drive.needsReconnect
+                      }
+                      className={`${primaryButton} shrink-0`}
+                    >
+                      {folderSaving && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                      {folderSaving ? 'Checking…' : 'Test & save'}
+                    </button>
+                  </div>
+                  <p className="text-[12px] leading-5 text-slate-500">
+                    Open the folder in Google Drive and copy the link from the address bar. The connected account
+                    ({drive.accountEmail || 'Google account'}) needs Editor access to it. The server checks it can
+                    add files there before saving.
+                  </p>
+                </form>
+              )}
 
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={connect} disabled={connecting} className={primaryButton}>
@@ -773,6 +877,16 @@ function GoogleDriveCard({
                     {testing ? 'Testing…' : 'Test upload'}
                   </button>
                 )}
+                {drive.connected && drive.folderSource === 'custom' && (
+                  <button
+                    type="button"
+                    onClick={() => setFolderResetOpen(true)}
+                    disabled={drive.needsReconnect || folderResetting}
+                    className={secondaryButton}
+                  >
+                    <RotateCcw size={16} aria-hidden /> Reset folder
+                  </button>
+                )}
                 {drive.connected && (
                   <button type="button" onClick={() => setDisconnectOpen(true)} className={secondaryButton}>
                     <RotateCcw size={16} aria-hidden /> Disconnect
@@ -781,15 +895,31 @@ function GoogleDriveCard({
               </div>
 
               <p className="text-[12px] leading-5 text-slate-500">
-                Sign in with the Google account that should own the PDFs (ideally the superadmin&apos;s). HealthCentria
-                only gets access to files it creates, never the rest of the Drive. If it can&apos;t use the folder set
-                in .env, it creates its own &ldquo;HealthCentria Reports&rdquo; folder, which you can move anywhere in
-                Drive.
+                Sign in with the Google account that should own the PDFs (ideally the superadmin&apos;s). Switch
+                account lets you pick a different Google account. Without a chosen folder, PDFs go to the folder set
+                in .env, or to a &ldquo;HealthCentria Reports&rdquo; folder the app creates.
               </p>
             </div>
           </ConfigureSection>
         )}
       </motion.section>
+
+      {folderResetOpen && (
+        <ResetDialog
+          title="Reset the upload folder?"
+          description={
+            <>
+              New PDFs will go to the default folder: the one in the server&apos;s{' '}
+              <code className="font-mono text-[12px]">.env</code> file if the account can use it, otherwise
+              &ldquo;HealthCentria Reports&rdquo;. Files already in &ldquo;{drive?.folderName}&rdquo; stay where they
+              are.
+            </>
+          }
+          busy={folderResetting}
+          onCancel={() => setFolderResetOpen(false)}
+          onConfirm={resetFolder}
+        />
+      )}
 
       {disconnectOpen && (
         <ResetDialog

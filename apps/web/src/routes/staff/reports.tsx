@@ -53,7 +53,7 @@ function Reports() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const sheets = useSheetsExport(() => exportVisitsToSheets(Number(range)));
-  const pdf = usePdfExport((recipients) => exportVisitsPdf(Number(range), recipients));
+  const pdf = usePdfExport((options) => exportVisitsPdf(Number(range), options));
 
   useEffect(() => {
     let cancelled = false;

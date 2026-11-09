@@ -213,6 +213,7 @@ export const exportVisitsPerServicePdf = asyncHandler(async (req, res) => {
     reportTitle: `Visits per service (${data.days} days)`,
     details,
     recipientIds: body.data.recipients,
+    upload: body.data.uploadToDrive,
   });
 
   await logActivity({

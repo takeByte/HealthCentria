@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 // provider; when there is no row the server falls back to the .env defaults.
 const integrationSettingSchema = new mongoose.Schema(
   {
-    provider: { type: String, required: true, enum: ['google'], unique: true, index: true },
+    provider: { type: String, required: true, enum: ['google', 'google-drive'], unique: true, index: true },
     clientId: { type: String, required: true, trim: true },
     // AES-256-GCM payload: iv + auth tag + ciphertext. Never store the secret
     // in plain text — the server must decrypt it to talk to Google.
@@ -15,6 +15,8 @@ const integrationSettingSchema = new mongoose.Schema(
 );
 
 export const GOOGLE_PROVIDER = 'google';
+// OAuth client used for Google Drive uploads (separate from Google sign-in).
+export const GOOGLE_DRIVE_PROVIDER = 'google-drive';
 
 export const IntegrationSetting =
   mongoose.models.IntegrationSetting ?? mongoose.model('IntegrationSetting', integrationSettingSchema);

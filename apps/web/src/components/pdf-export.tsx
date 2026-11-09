@@ -7,6 +7,7 @@ import {
   ApiError,
   listExportRecipients,
   type ExportRecipientOptions,
+  type PdfExportOptions,
   type PdfExportResult,
 } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -15,11 +16,12 @@ const MAX_RECIPIENTS = 10;
 
 /**
  * "Export PDF" for Reports and the Activity log. A dialog lets the exporter
- * pick who else gets the Drive link, from active staff/admin accounts only
- * (no typed addresses); the superadmin is always included. The server checks
- * the list again, uploads the PDF to Drive and sends the emails.
+ * choose whether to upload to Google Drive and, if so, who else gets the
+ * link, from active staff/admin accounts only (no typed addresses); the
+ * superadmin is always included. The server checks the list again, uploads
+ * the PDF to Drive and sends the emails. Unticked = download only.
  */
-export function usePdfExport(run: (recipients: string[]) => Promise<PdfExportResult>) {
+export function usePdfExport(run: (options: PdfExportOptions) => Promise<PdfExportResult>) {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<PdfExportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,10 +36,10 @@ export function usePdfExport(run: (recipients: string[]) => Promise<PdfExportRes
       setOpen(true);
     },
     close: () => setOpen(false),
-    run: async (recipients: string[]) => {
+    run: async (options: PdfExportOptions) => {
       setError(null);
       try {
-        const r = await run(recipients);
+        const r = await run(options);
         setResult(r);
         setOpen(false);
       } catch (err) {
@@ -74,7 +76,7 @@ export function PdfExportDialog({
   title: string;
   subtitle: string;
   onCancel: () => void;
-  onGenerate: (recipients: string[]) => Promise<void>;
+  onGenerate: (options: PdfExportOptions) => Promise<void>;
 }) {
   const me = getSession()?.email?.toLowerCase() ?? '';
   const [options, setOptions] = useState<ExportRecipientOptions | null>(null);
@@ -82,6 +84,8 @@ export function PdfExportDialog({
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // Ticked by default; only takes effect while Drive is ready.
+  const [uploadChoice, setUploadChoice] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +116,7 @@ export function PdfExportDialog({
   }, [options, query]);
 
   const driveReady = options?.driveReady ?? false;
+  const upload = driveReady && uploadChoice;
 
   function toggle(id: string) {
     setPicked((current) => {
@@ -125,7 +130,7 @@ export function PdfExportDialog({
   async function generate() {
     if (busy) return;
     setBusy(true);
-    await onGenerate(driveReady ? [...picked] : []);
+    await onGenerate({ recipients: upload ? [...picked] : [], uploadToDrive: upload });
     setBusy(false);
   }
 
@@ -150,7 +155,37 @@ export function PdfExportDialog({
         </h2>
         <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
 
-        <p className="mt-4 text-[12.5px] font-semibold text-slate-700">Also email the Google Drive link to:</p>
+        <label
+          className={cn(
+            'mt-4 flex items-start gap-3 rounded-xl px-3.5 py-3 ring-1 ring-inset',
+            upload ? 'bg-teal-50/60 ring-teal-600/25' : 'bg-white ring-slate-200',
+            driveReady ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={upload}
+            disabled={!driveReady || busy}
+            onChange={(e) => setUploadChoice(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-teal-600"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-slate-900">Upload to Google Drive</span>
+            <span className="block text-[12px] leading-5 text-slate-500">
+              {options === null
+                ? 'Checking Google Drive…'
+                : !driveReady
+                  ? 'Not available right now.'
+                  : upload
+                    ? `Saved to “${options.driveFolderName || 'the Drive folder'}” and the link is emailed.`
+                    : 'Download only. Nothing is saved to Drive and no one is emailed.'}
+            </span>
+          </span>
+        </label>
+
+        <p className={cn('mt-4 text-[12.5px] font-semibold text-slate-700', !upload && 'text-slate-400')}>
+          Also email the Google Drive link to:
+        </p>
 
         {loadError && <InlineNotice className="mt-2">{loadError}</InlineNotice>}
         {options && !driveReady && (
@@ -166,7 +201,10 @@ export function PdfExportDialog({
           </p>
         ) : (
           options && (
-            <div className={cn('mt-2 flex min-h-0 flex-col', !driveReady && 'pointer-events-none opacity-50')}>
+            <div
+              className={cn('mt-2 flex min-h-0 flex-col', !upload && 'pointer-events-none opacity-50')}
+              aria-disabled={!upload}
+            >
               <div className="relative">
                 <Search
                   size={15}
@@ -178,7 +216,7 @@ export function PdfExportDialog({
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search name or email"
                   aria-label="Search staff and admins"
-                  disabled={!driveReady}
+                  disabled={!upload}
                   className={`${inputClass} h-10 pl-9`}
                 />
               </div>
@@ -210,7 +248,7 @@ export function PdfExportDialog({
                         <input
                           type="checkbox"
                           checked={checked}
-                          disabled={full || !driveReady}
+                          disabled={full || !upload}
                           onChange={() => toggle(r.id)}
                           className="size-4 shrink-0 accent-teal-600"
                         />
@@ -235,8 +273,9 @@ export function PdfExportDialog({
                 })}
               </ul>
               <p className="mt-2 text-[11.5px] leading-4 text-slate-500">
-                {picked.size} picked (max {MAX_RECIPIENTS}). Each person gets view access to this one file. Opening it
-                needs a Google account with the same email.
+                {upload
+                  ? `${picked.size} picked (max ${MAX_RECIPIENTS}). Each person gets view access to this one file. Opening it needs a Google account with the same email.`
+                  : 'Turn on “Upload to Google Drive” to email the link.'}
               </p>
             </div>
           )
@@ -248,7 +287,7 @@ export function PdfExportDialog({
           </button>
           <button type="button" onClick={generate} disabled={busy || options === null} className={primaryButton}>
             {busy ? <LoaderCircle size={16} className="animate-spin" aria-hidden /> : <FileDown size={16} aria-hidden />}
-            {busy ? 'Generating…' : 'Generate PDF'}
+            {busy ? 'Generating…' : upload ? 'Generate PDF' : 'Download PDF'}
           </button>
         </div>
       </motion.div>
@@ -260,6 +299,9 @@ export function PdfExportDialog({
 export function PdfExportNote({ result, error }: { result: PdfExportResult | null; error: string | null }) {
   if (error) return <InlineNotice>{error}</InlineNotice>;
   if (!result) return null;
+  if (result.driveStatus === 'off') {
+    return <SuccessNote>PDF downloaded. It was not uploaded to Google Drive, as chosen.</SuccessNote>;
+  }
   if (result.driveStatus === 'uploaded') {
     return (
       <SuccessNote className="flex flex-wrap items-center justify-between gap-2">

@@ -508,6 +508,7 @@ export const exportActivityPdf = asyncHandler(async (req, res) => {
     reportTitle: 'Activity log',
     details: `${details} · ${entries.length} entries · Generated ${footerTimestamp()}`,
     recipientIds: body.data.recipients,
+    upload: body.data.uploadToDrive,
   });
 
   await logActivity({

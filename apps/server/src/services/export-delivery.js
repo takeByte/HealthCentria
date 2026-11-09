@@ -28,6 +28,8 @@ export const recipientsSchema = z.object({
     .max(MAX_RECIPIENTS, `Pick at most ${MAX_RECIPIENTS} people.`)
     .optional()
     .default([]),
+  // Unticked in the export dialog: download only, no Drive upload or emails.
+  uploadToDrive: z.boolean().optional().default(true),
 });
 
 function superadminEmail() {
@@ -36,7 +38,7 @@ function superadminEmail() {
 
 /** Why Drive can't be used right now, or '' when it is ready. */
 async function driveBlocker() {
-  if (!isDriveClientConfigured()) return 'Google Drive is not set up on the server.';
+  if (!(await isDriveClientConfigured())) return 'Google Drive is not set up on the server.';
   if (!(await isGoogleDriveEnabled())) return 'Google Drive uploads are turned off in Settings.';
   const row = await getDriveRow();
   if (!row?.refreshTokenEncrypted) return 'Google Drive is not connected.';
@@ -51,11 +53,13 @@ export async function exportRecipientOptions() {
     .sort({ role: 1, fullName: 1 })
     .lean();
   const blocker = await driveBlocker();
+  const row = blocker ? null : await getDriveRow();
   return {
     recipients: users.map((u) => ({ id: String(u._id), name: u.fullName, email: u.email, role: u.role })),
     superadminNotified: Boolean(superadminEmail()),
     driveReady: !blocker,
     driveMessage: blocker,
+    driveFolderName: row?.folderName ?? '',
   };
 }
 
@@ -74,12 +78,20 @@ async function resolveRecipients(ids) {
 
 /**
  * @returns {Promise<{
- *   drive: { status: 'uploaded' | 'skipped' | 'failed', link: string, message: string },
+ *   drive: { status: 'uploaded' | 'skipped' | 'failed' | 'off', link: string, message: string },
  *   emailed: string[],
  *   recipientNames: string[],
  * }>}
  */
-export async function deliverPdf({ req, buffer, fileName, reportTitle, details, recipientIds }) {
+export async function deliverPdf({ req, buffer, fileName, reportTitle, details, recipientIds, upload = true }) {
+  if (!upload) {
+    return {
+      drive: { status: 'off', link: '', message: 'Drive upload was not selected for this export.' },
+      emailed: [],
+      recipientNames: [],
+    };
+  }
+
   const [exporter, picked] = await Promise.all([
     User.findById(req.user.id).select('fullName email').lean(),
     resolveRecipients(recipientIds),
@@ -172,6 +184,7 @@ export function sendPdfResponse(res, { buffer, fileName, delivery }) {
 
 /** One line for the Activity log: Drive outcome and who was emailed. */
 export function describeDelivery(delivery) {
+  if (delivery.drive.status === 'off') return 'PDF exported (download only; not uploaded to Google Drive).';
   const drive =
     delivery.drive.status === 'uploaded'
       ? 'Uploaded to Google Drive'

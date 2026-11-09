@@ -471,6 +471,8 @@ export interface ExportRecipientOptions {
   driveReady: boolean;
   /** Why Drive can't be used right now ('' when ready). */
   driveMessage: string;
+  /** Folder chosen in Admin Settings ('' when Drive isn't ready). */
+  driveFolderName: string;
 }
 
 /** Active staff and admins that can be picked to receive a PDF's Drive link. */
@@ -480,14 +482,22 @@ export function listExportRecipients(): Promise<ExportRecipientOptions> {
 
 export interface PdfExportResult {
   fileName: string;
-  driveStatus: 'uploaded' | 'skipped' | 'failed';
+  /** 'off' = the exporter unticked "Upload to Google Drive" (download only). */
+  driveStatus: 'uploaded' | 'skipped' | 'failed' | 'off';
   driveLink: string;
   driveMessage: string;
   emailedCount: number;
 }
 
+export interface PdfExportOptions {
+  /** Staff/admin IDs who get the Drive link by email. Ignored when not uploading. */
+  recipients: string[];
+  /** False = download only: no Drive upload, no sharing, no emails. */
+  uploadToDrive: boolean;
+}
+
 /** POSTs, downloads the returned PDF, and reports what happened with Drive and email. */
-async function downloadPdf(path: string, recipients: string[]): Promise<PdfExportResult> {
+async function downloadPdf(path: string, { recipients, uploadToDrive }: PdfExportOptions): Promise<PdfExportResult> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
@@ -495,7 +505,7 @@ async function downloadPdf(path: string, recipients: string[]): Promise<PdfExpor
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ recipients }),
+    body: JSON.stringify({ recipients: uploadToDrive ? recipients : [], uploadToDrive }),
   });
   if (!res.ok) {
     let message = `Export failed (${res.status}).`;
@@ -522,16 +532,16 @@ async function downloadPdf(path: string, recipients: string[]): Promise<PdfExpor
   const status = res.headers.get('X-Drive-Status');
   return {
     fileName,
-    driveStatus: status === 'uploaded' || status === 'failed' ? status : 'skipped',
+    driveStatus: status === 'uploaded' || status === 'failed' || status === 'off' ? status : 'skipped',
     driveLink: res.headers.get('X-Drive-Link') ?? '',
     driveMessage: decodeURIComponent(res.headers.get('X-Drive-Message') ?? ''),
     emailedCount: Number(res.headers.get('X-Emailed-Count') ?? 0) || 0,
   };
 }
 
-/** Visits-per-service PDF: downloads it, uploads to Drive, emails the link. */
-export function exportVisitsPdf(days: number, recipients: string[]): Promise<PdfExportResult> {
-  return downloadPdf(`/api/reports/visits-per-service/pdf?days=${days}`, recipients);
+/** Visits-per-service PDF: downloads it and, if chosen, uploads to Drive and emails the link. */
+export function exportVisitsPdf(days: number, options: PdfExportOptions): Promise<PdfExportResult> {
+  return downloadPdf(`/api/reports/visits-per-service/pdf?days=${days}`, options);
 }
 
 export function overview(): Promise<{
@@ -792,16 +802,23 @@ export function testGoogleSheetsConnection(): Promise<{ success: true; title: st
 }
 
 export interface GoogleDriveSettings {
-  /** Client ID + secret present in the server .env. */
+  /** An OAuth Client ID + secret is set (custom in Settings, or the .env default). */
   clientConfigured: boolean;
+  clientIdMasked: string;
+  clientSecretMasked: string;
+  credentialsSource: 'custom' | 'default';
   connected: boolean;
   /** Google rejected the stored token (e.g. the 7-day limit of a Testing app). */
   needsReconnect: boolean;
+  /** Connected before full Drive access was requested: reconnect once to choose a folder. */
+  scopeUpgradeNeeded: boolean;
   accountEmail: string;
   connectedAt: string | null;
   folderId: string;
   folderName: string;
   folderUrl: string;
+  /** 'custom' = pasted in Settings; 'default' = the .env folder or "HealthCentria Reports". */
+  folderSource: 'custom' | 'default';
   lastUploadAt: string | null;
   lastError: string;
   redirectUri: string;
@@ -818,6 +835,20 @@ export function startGoogleDriveConnect(pin: string): Promise<{ success: true; u
 
 export function disconnectGoogleDrive(pin: string): Promise<{ success: true } & GoogleDriveSettings> {
   return apiFetch('/api/admin/settings/google-drive/connection', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+/** Folder ID or drive.google.com link. The server checks the account can add files there first. */
+export function updateGoogleDriveFolder(folder: string, pin: string): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive/folder', {
+    method: 'PUT',
+    body: { folder },
+    headers: pinHeader(pin),
+  });
+}
+
+/** Back to the .env folder, or HealthCentria's own "HealthCentria Reports" folder. */
+export function resetGoogleDriveFolder(pin: string): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive/folder', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
 export function testGoogleDriveUpload(): Promise<{ success: true; folderName: string; folderUrl: string }> {
@@ -996,9 +1027,9 @@ export function purgeActivity(): Promise<{
 }
 
 /** Downloads the current filtered view as CSV through the authenticated API. */
-/** Admin: activity log PDF for the current filters (max 2,000 rows), uploaded to Drive and emailed. */
-export function exportActivityPdf(filters: ActivityFilters, recipients: string[]): Promise<PdfExportResult> {
-  return downloadPdf(`/api/activity/export/pdf${activityQuery(filters)}`, recipients);
+/** Admin: activity log PDF for the current filters (max 2,000 rows); optionally uploaded to Drive and emailed. */
+export function exportActivityPdf(filters: ActivityFilters, options: PdfExportOptions): Promise<PdfExportResult> {
+  return downloadPdf(`/api/activity/export/pdf${activityQuery(filters)}`, options);
 }
 
 /** Admin: writes the filtered activity log to a new tab in the export spreadsheet. */

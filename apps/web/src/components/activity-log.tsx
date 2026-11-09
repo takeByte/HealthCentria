@@ -104,6 +104,10 @@ const ACTION_LABELS: Record<string, string> = {
   'activity.export_pdf': 'Activity log exported as PDF',
   'patient.delete': 'Patient account deleted',
   'settings.drive.disconnect': 'Google Drive disconnected',
+  'settings.drive.credentials_update': 'Google Drive credentials updated',
+  'settings.drive.credentials_reset': 'Google Drive credentials reset',
+  'settings.drive.folder_update': 'Google Drive upload folder changed',
+  'settings.drive.folder_reset': 'Google Drive upload folder reset',
   'activity.purge': 'Activity log purged',
 };
 
@@ -239,8 +243,8 @@ export function ActivityFeed({
   const sheets = useSheetsExport(() =>
     exportActivityToSheets({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }),
   );
-  const pdf = usePdfExport((recipients) =>
-    exportActivityPdf({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }, recipients),
+  const pdf = usePdfExport((options) =>
+    exportActivityPdf({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }, options),
   );
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purging, setPurging] = useState(false);
