@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, LoaderCircle, Pencil, ShieldCheck, UserRound, X } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Camera, KeyRound, LoaderCircle, Pencil, ShieldCheck, Trash2, UserRound, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
@@ -21,6 +21,7 @@ import {
   setSession,
 } from '../../lib/auth';
 import { ApiError, changeMyPassword, getMyAccount, updateMyAccount } from '../../lib/api';
+import { fileToAvatarDataUrl } from '../../lib/image';
 import { PERMISSION_OPTIONS } from '../../lib/permissions';
 import { getTodayService } from '../../lib/schedule';
 import { cn } from '../../lib/utils';
@@ -64,23 +65,34 @@ function MyProfilePage() {
   const session = getSession();
   const today = getTodayService();
   const isAdmin = session?.role === 'admin';
+  const photoInput = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(session?.name ?? '');
   const [contact, setContact] = useState('');
-  const [savedContact, setSavedContact] = useState('');
-  const [editingProfile, setEditingProfile] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(session?.avatarUrl ?? '');
+  const [authProvider, setAuthProvider] = useState(session?.authProvider);
+  const [editing, setEditing] = useState(false);
+
   const [nameError, setNameError] = useState('');
   const [contactError, setContactError] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [password, setPassword] = useState<PasswordForm>(EMPTY_PASSWORD_FORM);
   const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({});
-  const [savingPassword, setSavingPassword] = useState(false);
-
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
-  const displayName = session?.name?.trim() || name.trim() || session?.email || '';
+  // Snapshot of the saved values so Cancel can undo edits without a refetch.
+  const [saved, setSaved] = useState({
+    name: session?.name ?? '',
+    contact: '',
+    avatarUrl: session?.avatarUrl ?? '',
+  });
+  const displayName = saved.name || session?.email || '';
   const granted = session?.permissions ?? [];
+  const canChangePassword = authProvider !== 'google';
+  const passwordEntered = passwordOpen;
 
   // Read the account from the server so the form reflects saved values even
   // after a sign-in on another device.
@@ -89,9 +101,16 @@ function MyProfilePage() {
     getMyAccount()
       .then(({ user }) => {
         if (cancelled) return;
-        setName(user.name);
-        setContact(user.contactNumber ?? '');
-        setSavedContact(user.contactNumber ?? '');
+        const next = {
+          name: user.name,
+          contact: user.contactNumber ?? '',
+          avatarUrl: user.avatarUrl ?? '',
+        };
+        setName(next.name);
+        setContact(next.contact);
+        setAvatarUrl(next.avatarUrl);
+        setAuthProvider(user.authProvider);
+        setSaved(next);
       })
       .catch(() => {
         // Keep the session values as the fallback.
@@ -100,6 +119,45 @@ function MyProfilePage() {
       cancelled = true;
     };
   }, []);
+
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      setAvatarUrl(await fileToAvatarDataUrl(file));
+    } catch (err) {
+      setToast({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'Could not read that image.',
+      });
+    } finally {
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  }
+
+  function setPasswordField(field: keyof PasswordForm, value: string) {
+    setPassword((current) => ({ ...current, [field]: value }));
+    setPasswordErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function togglePassword(next: boolean) {
+    setPasswordOpen(next);
+    if (!next) {
+      setPassword(EMPTY_PASSWORD_FORM);
+      setPasswordErrors({});
+    }
+  }
+
+  function validatePassword(form: PasswordForm): PasswordErrors {
+    if (!passwordOpen) return {};
+    const errors: PasswordErrors = {};
+    if (!form.currentPassword) errors.currentPassword = 'Enter your current password.';
+    if (!form.newPassword) errors.newPassword = 'Enter a new password.';
+    else if (!isValidPassword(form.newPassword)) errors.newPassword = PASSWORD_ERROR_MESSAGE;
+    if (form.confirmPassword !== form.newPassword) errors.confirmPassword = 'Passwords do not match.';
+    return errors;
+  }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,74 +171,83 @@ function MyProfilePage() {
       setContactError('Enter a valid contact number.');
       return;
     }
-    setNameError('');
-    setContactError('');
-    setSavingProfile(true);
-    try {
-      const result = await updateMyAccount({ fullName: nextName, contactNumber: nextContact });
-      const current = getSession();
-      if (current) {
-        setSession({ ...current, name: result.user.name, permissions: result.user.permissions });
-      }
-      setName(result.user.name);
-      setContact(result.user.contactNumber ?? '');
-      setSavedContact(result.user.contactNumber ?? '');
-      setEditingProfile(false);
-      setToast({ tone: 'success', message: 'Profile updated.' });
-    } catch (err) {
-      setToast({
-        tone: 'error',
-        message: err instanceof ApiError ? err.message : 'Could not save your profile. Try again.',
-      });
-    } finally {
-      setSavingProfile(false);
-    }
-  }
-
-  function setPasswordField(field: keyof PasswordForm, value: string) {
-    setPassword((current) => ({ ...current, [field]: value }));
-    setPasswordErrors((current) => ({ ...current, [field]: undefined }));
-  }
-
-  function validatePassword(form: PasswordForm): PasswordErrors {
-    const errors: PasswordErrors = {};
-    if (!form.currentPassword) errors.currentPassword = 'Enter your current password.';
-    if (!form.newPassword) errors.newPassword = 'Enter a new password.';
-    else if (!isValidPassword(form.newPassword)) errors.newPassword = PASSWORD_ERROR_MESSAGE;
-    if (form.confirmPassword !== form.newPassword) errors.confirmPassword = 'Passwords do not match.';
-    return errors;
-  }
-
-  async function savePassword(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const errors = validatePassword(password);
-    setPasswordErrors(errors);
-    if (Object.values(errors).some(Boolean)) {
+    const passwordChecks = validatePassword(password);
+    setPasswordErrors(passwordChecks);
+    if (Object.values(passwordChecks).some(Boolean)) {
       setToast({ tone: 'error', message: 'Please fix the highlighted fields and try again.' });
       return;
     }
-    setSavingPassword(true);
+
+    setNameError('');
+    setContactError('');
+    setSaving(true);
     try {
-      await changeMyPassword({
-        currentPassword: password.currentPassword,
-        newPassword: password.newPassword,
+      const result = await updateMyAccount({
+        fullName: nextName,
+        contactNumber: nextContact,
+        avatarUrl,
       });
+      if (passwordEntered) {
+        await changeMyPassword({
+          currentPassword: password.currentPassword,
+          newPassword: password.newPassword,
+        });
+      }
+
+      const next = {
+        name: result.user.name,
+        contact: result.user.contactNumber ?? '',
+        avatarUrl: result.user.avatarUrl ?? '',
+      };
+      const current = getSession();
+      if (current) {
+        setSession({
+          ...current,
+          name: next.name,
+          avatarUrl: next.avatarUrl,
+          permissions: result.user.permissions,
+        });
+      }
+      setName(next.name);
+      setContact(next.contact);
+      setAvatarUrl(next.avatarUrl);
+      setSaved(next);
       setPassword(EMPTY_PASSWORD_FORM);
-      setToast({ tone: 'success', message: 'Password changed.' });
+      setPasswordErrors({});
+      setPasswordOpen(false);
+      setEditing(false);
+      setToast({
+        tone: 'success',
+        message: passwordEntered ? 'Profile and password updated.' : 'Profile updated.',
+      });
     } catch (err) {
       if (err instanceof ApiError) {
-        const fieldErrors = err.errors ?? {};
-        setPasswordErrors({
-          currentPassword: fieldErrors.currentPassword?.[0],
-          newPassword: fieldErrors.newPassword?.[0],
-        });
-        setToast({ tone: 'error', message: err.message || 'Could not change your password.' });
+        const errors = err.errors ?? {};
+        if (errors.currentPassword || errors.newPassword) {
+          setPasswordErrors({
+            currentPassword: errors.currentPassword?.[0],
+            newPassword: errors.newPassword?.[0],
+          });
+        }
+        setToast({ tone: 'error', message: err.message || 'Could not save your profile. Try again.' });
       } else {
-        setToast({ tone: 'error', message: 'Could not change your password. Try again.' });
+        setToast({ tone: 'error', message: 'Could not save your profile. Try again.' });
       }
     } finally {
-      setSavingPassword(false);
+      setSaving(false);
     }
+  }
+
+  function cancelEdit() {
+    setName(saved.name);
+    setContact(saved.contact);
+    setAvatarUrl(saved.avatarUrl);
+    setNameError('');
+    setContactError('');
+    setPassword(EMPTY_PASSWORD_FORM);
+    setPasswordErrors({});
+    setPasswordOpen(false);
+    setEditing(false);
   }
 
   const rise = reduceMotion
@@ -193,7 +260,7 @@ function MyProfilePage() {
       title="My Profile"
       subtitle={isAdmin ? 'Your admin account details' : 'Your staff account details'}
       roleLabel={isAdmin ? 'Admin' : 'Staff'}
-      userName={session?.name}
+      userName={displayName}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
       nav={opsNav(session?.role, session?.permissions)}
@@ -205,9 +272,13 @@ function MyProfilePage() {
           <div className="flex min-w-0 items-center gap-3.5">
             <span
               aria-hidden
-              className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
             >
-              {initials(displayName) || <UserRound size={20} />}
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
+              ) : (
+                initials(displayName) || <UserRound size={20} />
+              )}
             </span>
             <div className="min-w-0">
               <h2 className="truncate font-display text-[20px] font-semibold tracking-[-0.02em] text-slate-900">
@@ -216,19 +287,14 @@ function MyProfilePage() {
               <p className="mt-0.5 truncate text-[13px] text-slate-600">{session?.email}</p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <StatusPill tone={isAdmin ? 'sky' : 'teal'}>{isAdmin ? 'Admin' : 'Staff'}</StatusPill>
-                {session?.authProvider === 'google' && <StatusPill tone="slate">Google account</StatusPill>}
+                {authProvider === 'google' && <StatusPill tone="slate">Google account</StatusPill>}
               </div>
             </div>
           </div>
-          {!editingProfile && (
+          {!editing && (
             <button
               type="button"
-              onClick={() => {
-                setName(session?.name ?? '');
-                setNameError('');
-                setContactError('');
-                setEditingProfile(true);
-              }}
+              onClick={() => setEditing(true)}
               className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
             >
               <Pencil size={14} aria-hidden /> Edit profile
@@ -237,16 +303,60 @@ function MyProfilePage() {
         </div>
       </motion.section>
 
-      <div className="grid items-start gap-5 lg:grid-cols-2">
-        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.04 }} className={panel}>
-          <CardHeading
-            title="Account details"
-            description="Your name appears on every action you record in the activity log."
-          />
+      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.04 }} className={panel}>
+        <CardHeading
+          title="Profile details"
+          description="Your name appears on every action you record in the activity log."
+        />
 
-          {editingProfile ? (
-            <form onSubmit={saveProfile} className="mt-4 space-y-3.5" noValidate>
-              <div>
+        {editing ? (
+          <form onSubmit={saveProfile} className="mt-4 space-y-5" noValidate>
+            <div className="flex flex-wrap items-center gap-4">
+              <span
+                aria-hidden
+                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
+                ) : (
+                  initials(name) || <UserRound size={22} />
+                )}
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={photoInput}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(event) => void pickPhoto(event.target.files?.[0])}
+                />
+                <button
+                  type="button"
+                  onClick={() => photoInput.current?.click()}
+                  disabled={photoBusy}
+                  className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+                >
+                  {photoBusy ? (
+                    <LoaderCircle size={15} className="animate-spin" aria-hidden />
+                  ) : (
+                    <Camera size={15} aria-hidden />
+                  )}
+                  {photoBusy ? 'Preparing…' : avatarUrl ? 'Change photo' : 'Add photo'}
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl('')}
+                    className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+                  >
+                    <Trash2 size={15} aria-hidden /> Remove
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              <div className="sm:col-span-2">
                 <label htmlFor="my-profile-name" className={fieldLabel}>
                   Full name
                 </label>
@@ -293,124 +403,133 @@ function MyProfilePage() {
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="submit" disabled={savingProfile} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
-                  {savingProfile ? <LoaderCircle size={15} className="animate-spin" aria-hidden /> : null}
-                  Save profile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingProfile(false);
-                    setNameError('');
-                    setContactError('');
-                    setName(session?.name ?? '');
-                    setContact(savedContact);
-                  }}
-                  className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            <dl className="mt-4 space-y-3">
               <div>
-                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Full name</dt>
-                <dd className="mt-0.5 text-[13.5px] text-slate-800">{displayName}</dd>
+                <span className={fieldLabel}>Email</span>
+                <p className="mt-1 truncate rounded-lg bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
+                  {session?.email}
+                </p>
               </div>
-              <div>
-                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                  Contact number
-                </dt>
-                <dd className="mt-0.5 text-[13.5px] text-slate-800">{contact || '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Email</dt>
-                <dd className="mt-0.5 text-[13.5px] text-slate-800">{session?.email}</dd>
-              </div>
-              <div>
-                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</dt>
-                <dd className="mt-0.5 text-[13.5px] capitalize text-slate-800">{session?.role}</dd>
-              </div>
-            </dl>
-          )}
+            </div>
 
-          <p className="mt-4 text-[12px] leading-5 text-slate-500">
-            Email, role, status and permissions are managed by an admin in Staff Accounts.
-          </p>
-        </motion.section>
-
-        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.08 }} className={panel}>
-          <CardHeading
-            title="Change password"
-            description="Use at least 8 characters with two of: letters, numbers, special characters."
-          />
-          <form onSubmit={savePassword} className="mt-4 space-y-3.5" noValidate>
-            <div>
-              <label htmlFor="my-profile-current" className={fieldLabel}>
-                Current password
-              </label>
-              <input
-                id="my-profile-current"
-                type="password"
-                autoComplete="current-password"
-                value={password.currentPassword}
-                onChange={(event) => setPasswordField('currentPassword', event.target.value)}
-                aria-invalid={Boolean(passwordErrors.currentPassword)}
-                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-              />
-              {passwordErrors.currentPassword && (
-                <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.currentPassword}</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="my-profile-new" className={fieldLabel}>
-                New password
-              </label>
-              <input
-                id="my-profile-new"
-                type="password"
-                autoComplete="new-password"
-                value={password.newPassword}
-                onChange={(event) => setPasswordField('newPassword', event.target.value)}
-                aria-invalid={Boolean(passwordErrors.newPassword)}
-                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-              />
-              {passwordErrors.newPassword && (
-                <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.newPassword}</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="my-profile-confirm" className={fieldLabel}>
-                Confirm new password
-              </label>
-              <input
-                id="my-profile-confirm"
-                type="password"
-                autoComplete="new-password"
-                value={password.confirmPassword}
-                onChange={(event) => setPasswordField('confirmPassword', event.target.value)}
-                aria-invalid={Boolean(passwordErrors.confirmPassword)}
-                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-              />
-              {passwordErrors.confirmPassword && (
-                <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.confirmPassword}</p>
-              )}
-            </div>
-            <button type="submit" disabled={savingPassword} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
-              {savingPassword ? (
-                <LoaderCircle size={15} className="animate-spin" aria-hidden />
+            <div className="border-t border-slate-200/80 pt-4">
+              {canChangePassword ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => togglePassword(!passwordOpen)}
+                    aria-expanded={passwordOpen}
+                    className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+                  >
+                    <KeyRound size={15} aria-hidden />
+                    {passwordOpen ? 'Cancel password change' : 'Change password'}
+                  </button>
+                  {passwordOpen && (
+                    <div className="mt-3 grid gap-3.5 sm:grid-cols-3">
+                      <div>
+                        <label htmlFor="my-profile-current" className={fieldLabel}>
+                          Current password
+                        </label>
+                        <input
+                          id="my-profile-current"
+                          type="password"
+                          autoComplete="current-password"
+                          value={password.currentPassword}
+                          onChange={(event) => setPasswordField('currentPassword', event.target.value)}
+                          aria-invalid={Boolean(passwordErrors.currentPassword)}
+                          className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                        />
+                        {passwordErrors.currentPassword && (
+                          <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.currentPassword}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label htmlFor="my-profile-new" className={fieldLabel}>
+                          New password
+                        </label>
+                        <input
+                          id="my-profile-new"
+                          type="password"
+                          autoComplete="new-password"
+                          value={password.newPassword}
+                          onChange={(event) => setPasswordField('newPassword', event.target.value)}
+                          aria-invalid={Boolean(passwordErrors.newPassword)}
+                          className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                        />
+                        {passwordErrors.newPassword && (
+                          <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.newPassword}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label htmlFor="my-profile-confirm" className={fieldLabel}>
+                          Confirm new password
+                        </label>
+                        <input
+                          id="my-profile-confirm"
+                          type="password"
+                          autoComplete="new-password"
+                          value={password.confirmPassword}
+                          onChange={(event) => setPasswordField('confirmPassword', event.target.value)}
+                          aria-invalid={Boolean(passwordErrors.confirmPassword)}
+                          className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                        />
+                        {passwordErrors.confirmPassword && (
+                          <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.confirmPassword}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
-                <KeyRound size={15} aria-hidden />
+                <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] leading-5 text-slate-500">
+                  You sign in with Google, so this account has no password to change here.
+                </p>
               )}
-              Change password
-            </button>
-          </form>
-        </motion.section>
-      </div>
+            </div>
 
-      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.12 }} className={panel}>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={saving || photoBusy} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
+                {saving ? <LoaderCircle size={15} className="animate-spin" aria-hidden /> : null}
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={saving}
+                className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <dl className="mt-4 space-y-3">
+            <div>
+              <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Full name</dt>
+              <dd className="mt-0.5 text-[13.5px] text-slate-800">{displayName}</dd>
+            </div>
+            <div>
+              <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                Contact number
+              </dt>
+              <dd className="mt-0.5 text-[13.5px] text-slate-800">{saved.contact || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Email</dt>
+              <dd className="mt-0.5 text-[13.5px] text-slate-800">{session?.email}</dd>
+            </div>
+            <div>
+              <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</dt>
+              <dd className="mt-0.5 text-[13.5px] capitalize text-slate-800">{session?.role}</dd>
+            </div>
+          </dl>
+        )}
+
+        <p className="mt-4 text-[12px] leading-5 text-slate-500">
+          Email, role, status and permissions are managed by an admin in Staff Accounts.
+        </p>
+      </motion.section>
+
+      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.08 }} className={panel}>
         <CardHeading
           title="What this account can do"
           description={

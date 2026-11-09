@@ -8,6 +8,7 @@ import { isGoogleSignInEnabled } from '../models/app-settings.model.js';
 import { buildGoogleAuthUrl, exchangeCodeForTokens, verifyGoogleIdToken } from '../utils/google.js';
 import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-credentials.js';
 import { hashPassword, isValidPassword, PASSWORD_ERROR_MESSAGE, verifyPassword } from '../utils/password.js';
+import { avatarSchema } from '../utils/avatar.js';
 import { presentUser } from '../utils/present-user.js';
 import { signSession } from '../utils/tokens.js';
 import { logActivity } from '../services/activity.js';
@@ -239,10 +240,17 @@ const updateMeSchema = z
         'Enter a valid contact number.',
       )
       .optional(),
+    avatarUrl: avatarSchema.optional(),
   })
-  .refine((data) => data.fullName !== undefined || data.contactNumber !== undefined, {
-    message: 'No changes provided.',
-  });
+  .refine(
+    (data) =>
+      data.fullName !== undefined ||
+      data.contactNumber !== undefined ||
+      data.avatarUrl !== undefined,
+    {
+      message: 'No changes provided.',
+    },
+  );
 
 /**
  * PATCH /api/auth/me — let staff and admin edit their own display name and
@@ -278,6 +286,15 @@ export const updateMe = asyncHandler(async (req, res) => {
   if (parsed.data.contactNumber !== undefined && parsed.data.contactNumber !== user.contactNumber) {
     changes.push(['contactNumber', user.contactNumber ?? '', parsed.data.contactNumber]);
     user.contactNumber = parsed.data.contactNumber;
+  }
+  if (parsed.data.avatarUrl !== undefined && parsed.data.avatarUrl !== (user.avatarUrl ?? '')) {
+    // Never write image data into the activity log; record only that it changed.
+    changes.push([
+      'avatarUrl',
+      user.avatarUrl ? 'Photo set' : 'No photo',
+      parsed.data.avatarUrl ? 'Photo set' : 'No photo',
+    ]);
+    user.avatarUrl = parsed.data.avatarUrl;
   }
   if (changes.length === 0) {
     return res.json({ success: true, user: presentUser(user) });

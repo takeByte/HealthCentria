@@ -10,6 +10,7 @@ import { removeAppointmentFromCalendar } from '../services/google-calendar.js';
 import { todayYMD } from '../utils/service-schedule.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
+import { avatarSchema } from '../utils/avatar.js';
 
 const listQuery = z.object({
   search: z.string().trim().max(100).optional().default(''),
@@ -58,6 +59,7 @@ const profileSchema = z.object({
   householdNumber: optionalText(60, 'Household number is too long.'),
   emergencyName: optionalText(120, 'Emergency contact name is too long.'),
   emergencyNumber: optionalText(60, 'Emergency contact number is too long.'),
+  avatarUrl: avatarSchema.optional(),
 });
 
 const SEX_VALUES = ['Female', 'Male', 'Other', 'Prefer not to say'];
@@ -298,6 +300,7 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   }
 
   const data = parsed.data;
+  const hadAvatar = Boolean(user.avatarUrl);
   const before = {
     fullName: user.fullName,
     birthdate: user.birthdate,
@@ -316,6 +319,8 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   if (data.householdNumber !== undefined) user.householdNumber = data.householdNumber;
   if (data.emergencyName !== undefined) user.emergencyName = data.emergencyName;
   if (data.emergencyNumber !== undefined) user.emergencyNumber = data.emergencyNumber;
+  const avatarChanged = data.avatarUrl !== undefined && data.avatarUrl !== (user.avatarUrl ?? '');
+  if (data.avatarUrl !== undefined) user.avatarUrl = data.avatarUrl;
   // Google does not provide sex, and the completion form intentionally does
   // not ask for it. Keep the schema's complete-patient requirement satisfied.
   if (!user.sex) user.sex = 'Prefer not to say';
@@ -323,12 +328,18 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   user.profileComplete = true;
   await user.save();
 
+  const changes = snapshotChanges(before, user, Object.keys(before));
+  if (avatarChanged) {
+    // Keep image data out of the activity log; record only the outcome.
+    changes.push(['avatarUrl', hadAvatar ? 'Photo set' : 'No photo', user.avatarUrl ? 'Photo set' : 'No photo']);
+  }
+
   await logActivity({
     req,
     action: 'patient.update',
     target: { type: 'patient', id: user._id, label: user.fullName },
-    changes: snapshotChanges(before, user, Object.keys(before)),
-    detail: 'Patient completed their own profile.',
+    changes,
+    detail: 'Patient updated their own profile.',
     patient: user._id,
   });
 

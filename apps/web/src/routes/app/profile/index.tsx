@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, Link } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, LoaderCircle, Pencil, UserRound } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Camera, KeyRound, LoaderCircle, Pencil, Trash2, UserRound } from 'lucide-react';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { patientNav } from '../../../components/patient-nav';
 import {
@@ -17,6 +17,7 @@ import {
 } from '../../../components/app-ui';
 import { Toast, type ToastMessage } from '../../../components/toast';
 import { getSession, isValidPassword, PASSWORD_ERROR_MESSAGE, setSession } from '../../../lib/auth';
+import { fileToAvatarDataUrl } from '../../../lib/image';
 import {
   ApiError,
   changeMyPassword,
@@ -166,13 +167,17 @@ function MyProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Errors>({});
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
 
   const [password, setPassword] = useState<PasswordForm>(EMPTY_PASSWORD_FORM);
   const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({});
-  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const passwordEntered = passwordOpen;
 
   useEffect(() => {
     let cancelled = false;
@@ -182,6 +187,7 @@ function MyProfilePage() {
         if (!cancelled) {
           setPatient(result.patient);
           setForm(formFromPatient(result.patient));
+          setAvatarUrl(result.patient.avatarUrl ?? '');
         }
       })
       .catch((err: unknown) => {
@@ -202,7 +208,16 @@ function MyProfilePage() {
     setPasswordErrors((current) => ({ ...current, [field]: undefined }));
   }
 
+  function togglePassword(next: boolean) {
+    setPasswordOpen(next);
+    if (!next) {
+      setPassword(EMPTY_PASSWORD_FORM);
+      setPasswordErrors({});
+    }
+  }
+
   function validatePassword(form: PasswordForm): PasswordErrors {
+    if (!passwordOpen) return {};
     const errors: PasswordErrors = {};
     if (!form.currentPassword) errors.currentPassword = 'Enter your current password.';
     if (!form.newPassword) errors.newPassword = 'Enter a new password.';
@@ -211,47 +226,41 @@ function MyProfilePage() {
     return errors;
   }
 
-  async function savePassword(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const errors = validatePassword(password);
-    setPasswordErrors(errors);
-    if (Object.values(errors).some(Boolean)) {
-      setToast({ tone: 'error', message: 'Please fix the highlighted fields and try again.' });
-      return;
-    }
-    setSavingPassword(true);
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true);
     try {
-      await changeMyPassword({
-        currentPassword: password.currentPassword,
-        newPassword: password.newPassword,
-      });
-      setPassword(EMPTY_PASSWORD_FORM);
-      setToast({ tone: 'success', message: 'Password changed.' });
+      setAvatarUrl(await fileToAvatarDataUrl(file));
     } catch (err) {
-      if (err instanceof ApiError) {
-        const errors = err.errors ?? {};
-        setPasswordErrors({
-          currentPassword: errors.currentPassword?.[0],
-          newPassword: errors.newPassword?.[0],
-        });
-        setToast({ tone: 'error', message: err.message || 'Could not change your password.' });
-      } else {
-        setToast({ tone: 'error', message: 'Could not change your password. Try again.' });
-      }
+      setToast({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'Could not read that image.',
+      });
     } finally {
-      setSavingPassword(false);
+      setPhotoBusy(false);
+      if (photoInput.current) photoInput.current.value = '';
     }
   }
 
   function startEdit() {
     if (!patient) return;
     setForm(formFromPatient(patient));
+    setAvatarUrl(patient.avatarUrl ?? '');
+    setPassword(EMPTY_PASSWORD_FORM);
+    setPasswordErrors({});
+    setPasswordOpen(false);
     setFieldErrors({});
     setEditing(true);
   }
 
   function cancelEdit() {
-    if (patient) setForm(formFromPatient(patient));
+    if (patient) {
+      setForm(formFromPatient(patient));
+      setAvatarUrl(patient.avatarUrl ?? '');
+    }
+    setPassword(EMPTY_PASSWORD_FORM);
+    setPasswordErrors({});
+    setPasswordOpen(false);
     setFieldErrors({});
     setEditing(false);
   }
@@ -262,6 +271,13 @@ function MyProfilePage() {
     setFieldErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
       setToast({ tone: 'error', message: 'Please fix the highlighted fields and try again.' });
+      return;
+    }
+
+    const nextPasswordErrors = validatePassword(password);
+    setPasswordErrors(nextPasswordErrors);
+    if (Object.values(nextPasswordErrors).some(Boolean)) {
+      setToast({ tone: 'error', message: 'Please fix the highlighted password fields and try again.' });
       return;
     }
 
@@ -276,7 +292,14 @@ function MyProfilePage() {
         householdNumber: form.householdNumber.trim(),
         emergencyName: form.emergencyName.trim(),
         emergencyNumber: form.emergencyNumber.trim(),
+        avatarUrl,
       });
+      if (passwordEntered) {
+        await changeMyPassword({
+          currentPassword: password.currentPassword,
+          newPassword: password.newPassword,
+        });
+      }
 
       const normalized: FormState = {
         fullName: form.fullName.trim(),
@@ -301,6 +324,7 @@ function MyProfilePage() {
               householdNumber: normalized.householdNumber,
               emergencyName: normalized.emergencyName,
               emergencyNumber: normalized.emergencyNumber,
+              avatarUrl: result.user.avatarUrl,
               profileCompleted: true,
             }
           : current,
@@ -316,9 +340,15 @@ function MyProfilePage() {
           avatarUrl: result.user.avatarUrl,
         });
       }
+      setPassword(EMPTY_PASSWORD_FORM);
+      setPasswordErrors({});
+      setPasswordOpen(false);
       setEditing(false);
       setFieldErrors({});
-      setToast({ tone: 'success', message: 'Profile updated.' });
+      setToast({
+        tone: 'success',
+        message: passwordEntered ? 'Profile and password updated.' : 'Profile updated.',
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.errors) {
@@ -328,6 +358,12 @@ function MyProfilePage() {
             if (message) serverErrors[key] = message;
           }
           setFieldErrors(serverErrors);
+          if (err.errors.currentPassword || err.errors.newPassword) {
+            setPasswordErrors({
+              currentPassword: err.errors.currentPassword?.[0],
+              newPassword: err.errors.newPassword?.[0],
+            });
+          }
         }
         setToast({ tone: 'error', message: err.message || 'Could not save your profile. Try again.' });
       } else {
@@ -387,9 +423,9 @@ function MyProfilePage() {
             <section className={`${panel} overflow-hidden`}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-3.5">
-                  {patient.avatarUrl ? (
+                  {avatarUrl ? (
                     <img
-                      src={patient.avatarUrl}
+                      src={avatarUrl}
                       alt=""
                       referrerPolicy="no-referrer"
                       className="size-14 shrink-0 rounded-full object-cover ring-2 ring-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
@@ -445,6 +481,55 @@ function MyProfilePage() {
                   <p className="mt-1 text-[12.5px] leading-5 text-slate-500">
                     Keep your contact details current so the health center can reach you.
                   </p>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-4">
+                    <span
+                      aria-hidden
+                      className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                    >
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        initials(form.fullName) || <UserRound size={22} />
+                      )}
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        ref={photoInput}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="sr-only"
+                        onChange={(event) => void pickPhoto(event.target.files?.[0])}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => photoInput.current?.click()}
+                        disabled={photoBusy}
+                        className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+                      >
+                        {photoBusy ? (
+                          <LoaderCircle size={15} className="animate-spin" aria-hidden />
+                        ) : (
+                          <Camera size={15} aria-hidden />
+                        )}
+                        {photoBusy ? 'Preparing…' : avatarUrl ? 'Change photo' : 'Add photo'}
+                      </button>
+                      {avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAvatarUrl('')}
+                          className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+                        >
+                          <Trash2 size={15} aria-hidden /> Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">
@@ -591,11 +676,86 @@ function MyProfilePage() {
                     </div>
                   </div>
 
+                  <div className="mt-5 border-t border-slate-200/80 pt-4">
+                    {patient.authProvider === 'google' ? (
+                      <p className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] leading-5 text-slate-500">
+                        You sign in with Google, so this account has no password to change here.
+                      </p>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => togglePassword(!passwordOpen)}
+                          aria-expanded={passwordOpen}
+                          className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
+                        >
+                          <KeyRound size={15} aria-hidden />
+                          {passwordOpen ? 'Cancel password change' : 'Change password'}
+                        </button>
+                        {passwordOpen && (
+                          <div className="mt-3 grid gap-3.5 sm:grid-cols-3">
+                            <div>
+                              <label htmlFor="my-profile-current" className={fieldLabel}>
+                                Current password
+                              </label>
+                              <input
+                                id="my-profile-current"
+                                type="password"
+                                autoComplete="current-password"
+                                value={password.currentPassword}
+                                onChange={(event) => setPasswordField('currentPassword', event.target.value)}
+                                aria-invalid={Boolean(passwordErrors.currentPassword)}
+                                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                              />
+                              {passwordErrors.currentPassword && (
+                                <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.currentPassword}</p>
+                              )}
+                            </div>
+                            <div>
+                              <label htmlFor="my-profile-new" className={fieldLabel}>
+                                New password
+                              </label>
+                              <input
+                                id="my-profile-new"
+                                type="password"
+                                autoComplete="new-password"
+                                value={password.newPassword}
+                                onChange={(event) => setPasswordField('newPassword', event.target.value)}
+                                aria-invalid={Boolean(passwordErrors.newPassword)}
+                                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                              />
+                              {passwordErrors.newPassword && (
+                                <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.newPassword}</p>
+                              )}
+                            </div>
+                            <div>
+                              <label htmlFor="my-profile-confirm" className={fieldLabel}>
+                                Confirm new password
+                              </label>
+                              <input
+                                id="my-profile-confirm"
+                                type="password"
+                                autoComplete="new-password"
+                                value={password.confirmPassword}
+                                onChange={(event) => setPasswordField('confirmPassword', event.target.value)}
+                                aria-invalid={Boolean(passwordErrors.confirmPassword)}
+                                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                              />
+                              {passwordErrors.confirmPassword && (
+                                <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.confirmPassword}</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
                   <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:justify-end">
                     <button type="button" onClick={cancelEdit} className={secondaryButton} disabled={pending}>
                       Cancel
                     </button>
-                    <button type="submit" disabled={pending} className={primaryButton}>
+                    <button type="submit" disabled={pending || photoBusy} className={primaryButton}>
                       {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                       {pending ? 'Saving…' : 'Save changes'}
                     </button>
@@ -662,95 +822,6 @@ function MyProfilePage() {
                 </p>
               </motion.section>
             </div>
-
-            <motion.section
-              {...rise}
-              transition={{ ...riseTransition, delay: 0.12 }}
-              className={panel}
-              aria-labelledby="profile-password-heading"
-            >
-              <h3
-                id="profile-password-heading"
-                className="font-display text-[16px] font-semibold tracking-[-0.01em] text-slate-900"
-              >
-                Change password
-              </h3>
-
-              {patient.authProvider === 'google' ? (
-                <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] leading-5 text-slate-500">
-                  You sign in with Google, so this account has no password to change here.
-                </p>
-              ) : (
-                <>
-                  <p className="mt-1 text-[12.5px] leading-5 text-slate-500">
-                    Use at least 8 characters with two of: letters, numbers, special characters.
-                  </p>
-                  <form onSubmit={savePassword} className="mt-4 grid gap-3.5 sm:grid-cols-3" noValidate>
-                    <div>
-                      <label htmlFor="my-profile-current" className={fieldLabel}>
-                        Current password
-                      </label>
-                      <input
-                        id="my-profile-current"
-                        type="password"
-                        autoComplete="current-password"
-                        value={password.currentPassword}
-                        onChange={(event) => setPasswordField('currentPassword', event.target.value)}
-                        aria-invalid={Boolean(passwordErrors.currentPassword)}
-                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-                      />
-                      {passwordErrors.currentPassword && (
-                        <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.currentPassword}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label htmlFor="my-profile-new" className={fieldLabel}>
-                        New password
-                      </label>
-                      <input
-                        id="my-profile-new"
-                        type="password"
-                        autoComplete="new-password"
-                        value={password.newPassword}
-                        onChange={(event) => setPasswordField('newPassword', event.target.value)}
-                        aria-invalid={Boolean(passwordErrors.newPassword)}
-                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-                      />
-                      {passwordErrors.newPassword && (
-                        <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.newPassword}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label htmlFor="my-profile-confirm" className={fieldLabel}>
-                        Confirm new password
-                      </label>
-                      <input
-                        id="my-profile-confirm"
-                        type="password"
-                        autoComplete="new-password"
-                        value={password.confirmPassword}
-                        onChange={(event) => setPasswordField('confirmPassword', event.target.value)}
-                        aria-invalid={Boolean(passwordErrors.confirmPassword)}
-                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-                      />
-                      {passwordErrors.confirmPassword && (
-                        <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.confirmPassword}</p>
-                      )}
-                    </div>
-                    <div className="sm:col-span-3">
-                      <button type="submit" disabled={savingPassword} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
-                        {savingPassword ? (
-                          <LoaderCircle size={15} className="animate-spin" aria-hidden />
-                        ) : (
-                          <KeyRound size={15} aria-hidden />
-                        )}
-                        Change password
-                      </button>
-                    </div>
-                  </form>
-                </>
-              )}
-            </motion.section>
           </motion.div>
         )}
       </DashboardShell>

@@ -148,6 +148,7 @@ export interface PatientProfileInput {
   householdNumber?: string;
   emergencyName?: string;
   emergencyNumber?: string;
+  avatarUrl?: string;
 }
 
 export interface PatientProfileUser {
@@ -692,6 +693,7 @@ export function getMyAccount(): Promise<{ user: MyAccount }> {
 export function updateMyAccount(input: {
   fullName?: string;
   contactNumber?: string;
+  avatarUrl?: string;
 }): Promise<{ user: MyAccount }> {
   return apiFetch('/api/auth/me', { method: 'PATCH', body: input });
 }

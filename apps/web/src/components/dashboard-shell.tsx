@@ -1,12 +1,11 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type ComponentType } from 'react';
-import { CalendarCheck, ChevronDown, KeyRound, LogOut, Menu, UserRound, X } from 'lucide-react';
+import { CalendarCheck, ChevronDown, LogOut, Menu, UserRound, X } from 'lucide-react';
 import { clearSession, getSession } from '../lib/auth';
 import { listNotifications, logoutRequest, type NotificationItem } from '../lib/api';
 import { AppBackdrop } from './app-backdrop';
 import { BellDot, NotificationCenter } from './notifications';
-import { ChangePasswordDialog } from './change-password-dialog';
 import { EmailVerificationBanner } from './email-verification-banner';
 import { cn } from '../lib/utils';
 import appLogo from '../assets/E-Kalinga_Logo.png';
@@ -141,14 +140,12 @@ export function DashboardShell({
   const [drawer, setDrawer] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [bellItems, setBellItems] = useState<NotificationItem[] | null>(null);
+  const session = getSession();
   const initial = userName?.trim()?.charAt(0) ?? userEmail.trim().charAt(0).toUpperCase();
   const profileTo = nav.find((item) => item.label === 'My Profile')?.to;
-  // Google-created accounts have no password yet, so the dialog skips the
-  // current-password field for them.
-  const hasPassword = getSession()?.authProvider !== 'google';
+  const avatarUrl = session?.avatarUrl ?? '';
 
   useEffect(() => {
     let cancelled = false;
@@ -339,9 +336,18 @@ export function DashboardShell({
                   >
                     <span
                       aria-hidden
-                      className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
-                      {initial}
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        initial
+                      )}
                     </span>
                     <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
                       {userEmail}
@@ -382,17 +388,6 @@ export function DashboardShell({
                             role="menuitem"
                             onClick={() => {
                               setProfileOpen(false);
-                              setPasswordOpen(true);
-                            }}
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            <KeyRound size={16} aria-hidden /> Change password
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              setProfileOpen(false);
                               void logout();
                             }}
                             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
@@ -409,22 +404,23 @@ export function DashboardShell({
                   <div className="hidden items-center gap-2.5 sm:flex">
                     <span
                       aria-hidden
-                      className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
-                      {initial}
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        initial
+                      )}
                     </span>
                     <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
                       {userEmail}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setPasswordOpen(true)}
-                    className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-white/80 active:scale-[0.97]"
-                  >
-                    <KeyRound size={17} aria-hidden />
-                    <span className="hidden sm:inline">Password</span>
-                  </button>
                   <button
                     type="button"
                     onClick={logout}
@@ -444,12 +440,6 @@ export function DashboardShell({
           {children}
         </main>
       </div>
-
-      <ChangePasswordDialog
-        open={passwordOpen}
-        hasPassword={hasPassword}
-        onClose={() => setPasswordOpen(false)}
-      />
     </div>
   );
 }
