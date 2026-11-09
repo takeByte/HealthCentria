@@ -1,3 +1,5 @@
+import { effectivePermissions } from './permissions.js';
+
 /**
  * Public user shape shared by login, /me and the profile-completion endpoint.
  *
@@ -17,5 +19,6 @@ export function presentUser(user) {
     // field and must not suddenly show a reminder banner.
     emailVerified: user.emailVerified !== false,
     avatarUrl: user.avatarUrl ?? '',
+    permissions: effectivePermissions(user),
   };
 }

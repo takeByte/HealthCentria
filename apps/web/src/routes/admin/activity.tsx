@@ -62,7 +62,7 @@ function AdminActivity() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div {...rise} transition={riseTransition}>

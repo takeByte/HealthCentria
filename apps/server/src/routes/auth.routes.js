@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import {
+  // Staff/admin profile page (POST /change-password); the account-menu dialog
+  // uses changePassword from password.controller.js (PUT /password).
+  changePassword as changeStaffPassword,
   googleCallback,
   googleConfig,
   googleStart,
@@ -7,6 +10,7 @@ import {
   logout,
   me,
   register,
+  updateMe,
 } from '../controllers/auth.controller.js';
 import { changePassword, requestPasswordReset, resetPassword } from '../controllers/password.controller.js';
 import {
@@ -17,6 +21,7 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import {
   emailVerificationLimiter,
   loginLimiter,
+  passwordChangeLimiter,
   passwordResetLimiter,
   registerLimiter,
 } from '../middleware/rateLimit.js';
@@ -41,6 +46,9 @@ authRouter.post('/email/verify/confirm', requireAuth, emailVerificationLimiter, 
 
 authRouter.post('/logout', requireAuth, logout);
 authRouter.get('/me', requireAuth, me);
+// Self-service for staff/admin. Patients keep using the patient profile flow.
+authRouter.patch('/me', requireAuth, updateMe);
+authRouter.post('/change-password', requireAuth, passwordChangeLimiter, changeStaffPassword);
 authRouter.get('/google/config', googleConfig);
 authRouter.get('/google', googleStart);
 authRouter.get('/google/callback', googleCallback);

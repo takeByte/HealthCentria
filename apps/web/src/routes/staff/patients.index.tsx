@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Search, UserCheck, UserX, Users } from 'lucide-react';
@@ -18,8 +18,13 @@ import { PATIENTS_FLASH_KEY } from '../../components/delete-patient';
 import { getSession } from '../../lib/auth';
 import { listPatients, type PatientSummary } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 
 export const Route = createFileRoute('/staff/patients/')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'patients.manage')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: PatientsList,
 });
 
@@ -94,7 +99,7 @@ function PatientsList() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div {...rise} transition={riseTransition} className="flex flex-wrap items-center justify-between gap-3">

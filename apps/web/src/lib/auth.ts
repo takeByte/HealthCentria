@@ -17,6 +17,8 @@ export interface AuthSession {
   /** False for self-registered patients who have not confirmed their email yet. */
   emailVerified?: boolean;
   avatarUrl?: string;
+  /** Staff capabilities granted by an admin. Absent on legacy sessions. */
+  permissions?: string[];
   createdAt: string;
   /** JWT from the API. Absent only for pre-backend local fallback sessions. */
   token?: string;
@@ -165,6 +167,9 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
       typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined;
     const emailVerified = typeof user.emailVerified === 'boolean' ? user.emailVerified : undefined;
     const avatarUrl = typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined;
+    const permissions = Array.isArray(user.permissions)
+      ? user.permissions.filter((p): p is string => typeof p === 'string')
+      : undefined;
     return {
       email,
       role,
@@ -173,6 +178,7 @@ function sessionFromApi(data: unknown, fallbackEmail: string): AuthSession {
       profileCompleted,
       emailVerified,
       avatarUrl,
+      permissions,
       token,
       createdAt: new Date().toISOString(),
     };
@@ -315,6 +321,7 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
       profileCompleted?: boolean;
       emailVerified?: boolean;
       avatarUrl?: string;
+      permissions?: string[];
     };
   };
   const user = data.user ?? {};
@@ -329,6 +336,9 @@ export async function completeGoogleLogin(token: string): Promise<AuthSession> {
     profileCompleted: typeof user.profileCompleted === 'boolean' ? user.profileCompleted : undefined,
     emailVerified: typeof user.emailVerified === 'boolean' ? user.emailVerified : undefined,
     avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined,
+    permissions: Array.isArray(user.permissions)
+      ? user.permissions.filter((p): p is string => typeof p === 'string')
+      : undefined,
     token,
     createdAt: new Date().toISOString(),
   };

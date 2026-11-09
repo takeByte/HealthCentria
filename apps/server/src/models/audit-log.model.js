@@ -44,6 +44,7 @@ export const ACTIVITY_ACTIONS = [
   'patient.delete',
   'staff.create',
   'staff.update',
+  'profile.update',
   // Content
   'announcement.create',
   'announcement.update',
@@ -98,6 +99,7 @@ export const ACTION_CATEGORY = {
   'patient.delete': 'people',
   'staff.create': 'people',
   'staff.update': 'people',
+  'profile.update': 'people',
   'announcement.create': 'content',
   'announcement.update': 'content',
   'announcement.delete': 'content',
@@ -130,6 +132,7 @@ const PREFIX_CATEGORY = {
   patient: 'clinical',
   record: 'clinical',
   staff: 'people',
+  profile: 'people',
   announcement: 'content',
   service: 'content',
   settings: 'configuration',
@@ -171,6 +174,10 @@ const auditLogSchema = new mongoose.Schema(
     },
     targetId: { type: String, default: '', index: true },
     targetLabel: { type: String, default: '', trim: true },
+    // Role of the affected account when the target is a person. `targetType`
+    // is 'staff' for both staff and admin accounts, so this is what tells them
+    // apart in the log. Empty for non-account targets and older entries.
+    targetRole: { type: String, enum: ['patient', 'staff', 'admin', ''], default: '' },
     changes: { type: [changeSchema], default: [] },
     outcome: { type: String, enum: ['success', 'failed'], default: 'success', index: true },
     ip: { type: String, default: '' },

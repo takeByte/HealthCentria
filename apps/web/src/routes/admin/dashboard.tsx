@@ -99,7 +99,7 @@ function AdminDashboard() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${service.name} — ${service.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div {...rise} transition={riseTransition}>

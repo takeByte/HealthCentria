@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CalendarDays, EyeOff, Layers, LoaderCircle, Plus, X } from 'lucide-react';
@@ -30,9 +30,14 @@ import {
   type ServiceSchedule,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 import { cn } from '../../lib/utils';
 
 export const Route = createFileRoute('/staff/services')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'services.manage')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: ServicesManage,
 });
 
@@ -242,7 +247,7 @@ function ServicesManage() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-3">

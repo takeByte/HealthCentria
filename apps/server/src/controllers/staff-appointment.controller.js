@@ -92,6 +92,18 @@ async function logAppointment(req, action, appt, { changes = [], detail = '' } =
   });
 }
 
+/**
+ * A guarded update matched nothing: either the appointment is gone or someone
+ * else changed its status first. 404 vs 409 lets the UI tell those apart.
+ */
+async function appointmentConflict(res, id, message) {
+  const exists = mongoose.isValidObjectId(id) && (await Appointment.exists({ _id: id }));
+  if (!exists) {
+    return res.status(404).json({ success: false, message: 'Appointment not found.' });
+  }
+  return res.status(409).json({ success: false, code: 'APPOINTMENT_CONFLICT', message });
+}
+
 export const queueAppointments = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const parsed = listQuery.safeParse(req.query);
@@ -118,14 +130,20 @@ export const queueAppointments = asyncHandler(async (req, res) => {
 
 export const confirmAppointment = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
-  const appt = await Appointment.findById(req.params.id);
-  if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found.' });
-  if (appt.status !== 'pending') {
-    return res.status(400).json({ success: false, message: 'Only pending appointments can be confirmed.' });
+  // Atomic transition: only one request can move pending → confirmed. A second
+  // one matches no document and is told to reload instead of overwriting it.
+  const appt = await Appointment.findOneAndUpdate(
+    { _id: req.params.id, status: 'pending' },
+    { $set: { status: 'confirmed', updatedBy: req.user.id }, $inc: { __v: 1 } },
+    { new: true },
+  );
+  if (!appt) {
+    return appointmentConflict(
+      res,
+      req.params.id,
+      'Only pending appointments can be confirmed. Reload the queue to see its current status.',
+    );
   }
-  appt.status = 'confirmed';
-  appt.updatedBy = req.user.id;
-  await appt.save();
   await appt.populate([
     { path: 'patient', select: 'fullName email' },
     { path: 'service', select: 'name' },
@@ -159,15 +177,25 @@ export const declineAppointment = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: 'A reason is required to decline.', errors: parsed.error.flatten().fieldErrors });
   }
-  const appt = await Appointment.findById(req.params.id);
-  if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found.' });
-  if (appt.status !== 'pending') {
-    return res.status(400).json({ success: false, message: 'Only pending appointments can be declined.' });
+  const appt = await Appointment.findOneAndUpdate(
+    { _id: req.params.id, status: 'pending' },
+    {
+      $set: {
+        status: 'declined',
+        declineReason: parsed.data.reason,
+        updatedBy: req.user.id,
+      },
+      $inc: { __v: 1 },
+    },
+    { new: true },
+  );
+  if (!appt) {
+    return appointmentConflict(
+      res,
+      req.params.id,
+      'Only pending appointments can be declined. Reload the queue to see its current status.',
+    );
   }
-  appt.status = 'declined';
-  appt.declineReason = parsed.data.reason;
-  appt.updatedBy = req.user.id;
-  await appt.save();
   await appt.populate([
     { path: 'patient', select: 'fullName email' },
     { path: 'service', select: 'name' },
@@ -204,24 +232,45 @@ export const completeAppointment = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
   }
-  const appt = await Appointment.findById(req.params.id);
-  if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found.' });
-  if (appt.status !== 'confirmed') {
-    return res.status(400).json({ success: false, message: 'Only confirmed appointments can be completed.' });
+  // Read first only to build the change diff and the 404/state message; the
+  // write below is guarded on status so two staff cannot both complete it.
+  const before = await Appointment.findById(req.params.id).lean();
+  if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
+  if (before.status !== 'confirmed') {
+    return res.status(409).json({
+      success: false,
+      code: 'APPOINTMENT_CONFLICT',
+      message: 'Only confirmed appointments can be completed. Reload the queue to see its current status.',
+    });
   }
   const clinicalChanges = diffChanges([
-    ['status', appt.status, 'completed'],
-    ['diagnosis', appt.diagnosis ?? '', parsed.data.diagnosis],
-    ['prescription', appt.prescription ?? '', parsed.data.prescription],
-    ['visitNotes', appt.visitNotes ?? '', parsed.data.visitNotes],
+    ['status', before.status, 'completed'],
+    ['diagnosis', before.diagnosis ?? '', parsed.data.diagnosis],
+    ['prescription', before.prescription ?? '', parsed.data.prescription],
+    ['visitNotes', before.visitNotes ?? '', parsed.data.visitNotes],
   ]);
 
-  appt.status = 'completed';
-  appt.diagnosis = parsed.data.diagnosis;
-  appt.prescription = parsed.data.prescription;
-  appt.visitNotes = parsed.data.visitNotes;
-  appt.updatedBy = req.user.id;
-  await appt.save();
+  const appt = await Appointment.findOneAndUpdate(
+    { _id: req.params.id, status: 'confirmed' },
+    {
+      $set: {
+        status: 'completed',
+        diagnosis: parsed.data.diagnosis,
+        prescription: parsed.data.prescription,
+        visitNotes: parsed.data.visitNotes,
+        updatedBy: req.user.id,
+      },
+      $inc: { __v: 1 },
+    },
+    { new: true },
+  );
+  if (!appt) {
+    return appointmentConflict(
+      res,
+      req.params.id,
+      'This visit was already completed or changed by someone else. Reload the queue.',
+    );
+  }
   await appt.populate([
     { path: 'patient', select: 'fullName email' },
     { path: 'service', select: 'name' },

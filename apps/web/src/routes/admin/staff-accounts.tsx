@@ -21,6 +21,11 @@ import {
 import { RecordMeta } from '../../components/record-meta';
 import { getSession, isValidPassword, PASSWORD_ERROR_MESSAGE } from '../../lib/auth';
 import {
+  DEFAULT_STAFF_PERMISSIONS,
+  PERMISSION_KEYS,
+  PERMISSION_OPTIONS,
+} from '../../lib/permissions';
+import {
   ApiError,
   createStaffAccount,
   listStaffAccounts,
@@ -34,6 +39,73 @@ export const Route = createFileRoute('/admin/staff-accounts')({
   component: StaffAccounts,
 });
 
+function PermissionPicker({
+  idPrefix,
+  value,
+  onChange,
+}: {
+  idPrefix: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  function toggle(key: string) {
+    onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
+  }
+
+  return (
+    <fieldset
+      aria-describedby={`${idPrefix}-hint`}
+      className="rounded-xl border border-slate-200/80 p-3.5"
+    >
+      <legend className="px-1 text-[12.5px] font-semibold text-slate-700">Allowed actions</legend>
+      <p id={`${idPrefix}-hint`} className="text-[11.5px] leading-4 text-slate-500">
+        Set staff account permissions.
+      </p>
+      <div className="mt-1.5 flex gap-3">
+        <button
+          type="button"
+          onClick={() => onChange([...PERMISSION_KEYS])}
+          className="text-[11.5px] font-semibold text-teal-700 hover:underline"
+        >
+          Select all
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="text-[11.5px] font-semibold text-slate-500 hover:underline"
+        >
+          Clear
+        </button>
+      </div>
+      <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+        {PERMISSION_OPTIONS.map((p) => {
+          const checked = value.includes(p.key);
+          return (
+            <label
+              key={p.key}
+              className={cn(
+                'flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors',
+                checked ? 'border-teal-600/30 bg-teal-600/5' : 'border-slate-200 bg-white',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(p.key)}
+                className="mt-0.5 size-4 shrink-0 accent-teal-600"
+              />
+              <span className="min-w-0">
+                <span className="block text-[12.5px] font-semibold text-slate-800">{p.label}</span>
+                <span className="block text-[11.5px] leading-4 text-slate-500">{p.description}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function StaffAccounts() {
   const reduceMotion = useReducedMotion();
   const session = getSession();
@@ -46,6 +118,7 @@ function StaffAccounts() {
   const [cEmail, setCEmail] = useState('');
   const [cPassword, setCPassword] = useState('');
   const [cRole, setCRole] = useState<'staff' | 'admin'>('staff');
+  const [cPermissions, setCPermissions] = useState<string[]>(DEFAULT_STAFF_PERMISSIONS);
   const [cShow, setCShow] = useState(false);
   const [cBusy, setCBusy] = useState(false);
   const [cError, setCError] = useState<string | null>(null);
@@ -55,6 +128,7 @@ function StaffAccounts() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [eName, setEName] = useState('');
   const [eRole, setERole] = useState<'staff' | 'admin'>('staff');
+  const [ePermissions, setEPermissions] = useState<string[]>([]);
   const [ePassword, setEPassword] = useState('');
   const [eBusy, setEBusy] = useState(false);
   const [eError, setEError] = useState<string | null>(null);
@@ -88,11 +162,13 @@ function StaffAccounts() {
         email: cEmail.trim().toLowerCase(),
         password: cPassword,
         role: cRole,
+        permissions: cRole === 'admin' ? PERMISSION_KEYS : cPermissions,
       });
       setCName('');
       setCEmail('');
       setCPassword('');
       setCRole('staff');
+      setCPermissions(DEFAULT_STAFF_PERMISSIONS);
       setShowCreate(false);
       await reload();
     } catch (err) {
@@ -106,6 +182,7 @@ function StaffAccounts() {
     setEditingId(a.id);
     setEName(a.name);
     setERole(a.role);
+    setEPermissions(a.permissions);
     setEPassword('');
     setEError(null);
     setEPasswordError(null);
@@ -124,6 +201,7 @@ function StaffAccounts() {
       await updateStaffAccount(id, {
         fullName: eName.trim(),
         role: eRole,
+        permissions: eRole === 'admin' ? PERMISSION_KEYS : ePermissions,
         ...(ePassword ? { password: ePassword } : {}),
       });
       setEditingId(null);
@@ -240,7 +318,7 @@ function StaffAccounts() {
           <div className="sm:col-span-2">
             <CardHeading
               title="New staff account"
-              description="Staff manage the queue. Admins also manage accounts, settings and deletions."
+              description="Choose what this account can do. Admins always have full access."
             />
           </div>
           <div className="sm:col-span-2">
@@ -258,6 +336,15 @@ function StaffAccounts() {
               <option value="admin">Admin</option>
             </select>
           </div>
+          {cRole === 'staff' && (
+            <div className="sm:col-span-2">
+              <PermissionPicker
+                idPrefix="sa-permissions"
+                value={cPermissions}
+                onChange={setCPermissions}
+              />
+            </div>
+          )}
           <div className="sm:col-span-2">
             <label htmlFor="sa-password" className={fieldLabel}>Temporary password *</label>
             <div className="relative">
@@ -318,6 +405,19 @@ function StaffAccounts() {
                 <StatusPill tone={a.active ? 'teal' : 'slate'}>{a.active ? 'Active' : 'Inactive'}</StatusPill>
               </div>
             </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {a.role === 'admin' ? (
+                <span className="text-[11.5px] text-slate-500">Full access to every action.</span>
+              ) : a.permissions.length === 0 ? (
+                <span className="text-[11.5px] text-slate-500">No actions assigned yet.</span>
+              ) : (
+                PERMISSION_OPTIONS.filter((p) => a.permissions.includes(p.key)).map((p) => (
+                  <StatusPill key={p.key} tone="slate">
+                    {p.label}
+                  </StatusPill>
+                ))
+              )}
+            </div>
             {editingId === a.id ? (
               <form onSubmit={(e) => handleUpdate(e, a.id)} className="mt-4 grid gap-4 border-t border-slate-200/70 pt-4 sm:grid-cols-2">
                 <div>
@@ -331,6 +431,15 @@ function StaffAccounts() {
                     <option value="admin">Admin</option>
                   </select>
                 </div>
+                {eRole === 'staff' && (
+                  <div className="sm:col-span-2">
+                    <PermissionPicker
+                      idPrefix={`edit-permissions-${a.id}`}
+                      value={ePermissions}
+                      onChange={setEPermissions}
+                    />
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <label htmlFor={`edit-pw-${a.id}`} className={fieldLabel}>Reset password (leave blank to keep)</label>
                   <input

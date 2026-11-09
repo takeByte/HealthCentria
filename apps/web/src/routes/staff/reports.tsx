@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { CalendarCheck, Download, FileText, LoaderCircle, TrendingUp } from 'lucide-react';
@@ -30,8 +30,13 @@ import {
   type VisitsPerServiceRow,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 
 export const Route = createFileRoute('/staff/reports')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'reports.view')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: Reports,
 });
 
@@ -96,7 +101,7 @@ function Reports() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div {...rise} transition={riseTransition} className="flex flex-wrap items-center justify-between gap-3">

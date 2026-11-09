@@ -19,7 +19,7 @@ const serviceSchema = new mongoose.Schema(
     // Last staff/admin account to edit the definition.
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
-  { timestamps: true },
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 export const Service = mongoose.models.Service ?? mongoose.model('Service', serviceSchema);

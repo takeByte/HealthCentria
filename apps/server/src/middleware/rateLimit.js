@@ -59,3 +59,14 @@ export const emailVerificationLimiter = rateLimit({
   message: limitResponse('Too many verification attempts. Try again in 15 minutes.'),
   validate: { xForwardedForHeader: false },
 });
+
+/** Caps attempts to guess a signed-in account's current password. */
+export const passwordChangeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many password attempts. Try again in 15 minutes.'),
+  validate: { xForwardedForHeader: false },
+});

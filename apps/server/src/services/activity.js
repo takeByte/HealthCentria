@@ -138,6 +138,7 @@ export async function logActivity({
       targetType: target?.type ?? '',
       targetId: target?.id ? String(target.id) : '',
       targetLabel: label,
+      targetRole: ['patient', 'staff', 'admin'].includes(target?.role) ? target.role : '',
       changes: diffChanges(changes),
       outcome,
       ip: req?.ctx?.ip ?? '',

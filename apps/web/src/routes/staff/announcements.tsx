@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { LoaderCircle, Plus, Search } from 'lucide-react';
@@ -31,8 +31,13 @@ import {
   type AnnouncementCategory,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 
 export const Route = createFileRoute('/staff/announcements')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'announcements.manage')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: StaffAnnouncements,
 });
 
@@ -140,7 +145,7 @@ function StaffAnnouncements() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.section

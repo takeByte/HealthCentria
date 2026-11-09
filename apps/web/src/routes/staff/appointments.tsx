@@ -1,7 +1,7 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle, Search } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
@@ -12,6 +12,7 @@ import {
   StatusChip,
   dangerChipButton,
   fieldLabel,
+  inputClass,
   panel,
   primaryButton,
   secondaryButton,
@@ -31,8 +32,13 @@ import {
   type StaffAppointment,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
+import { sessionCan } from '../../lib/permissions';
 
 export const Route = createFileRoute('/staff/appointments')({
+  beforeLoad: () => {
+    const session = getSession();
+    if (!sessionCan(session, 'appointments.manage')) throw redirect({ to: '/staff/dashboard' });
+  },
   component: StaffQueue,
 });
 
@@ -66,9 +72,11 @@ function formatDay(ymd: string): string {
 
 function QueueCard({
   appt,
+  canViewPatient,
   onChange,
 }: {
   appt: StaffAppointment;
+  canViewPatient: boolean;
   onChange: (a: StaffAppointment) => void;
 }) {
   const [declining, setDeclining] = useState(false);
@@ -116,7 +124,7 @@ function QueueCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-display text-[14.5px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
-            {linkedPatientId ? (
+            {linkedPatientId && canViewPatient ? (
               <Link
                 to="/staff/patients/$patientId"
                 params={{ patientId: linkedPatientId }}
@@ -335,11 +343,13 @@ function StaffQueue() {
   const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
+  const canViewPatients = sessionCan(session, 'patients.manage');
   const [list, setList] = useState<StaffAppointment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<StatusFilter>('all');
   const [preset, setPreset] = useState<DatePreset>('all');
   const [serviceId, setServiceId] = useState('');
+  const [search, setSearch] = useState('');
   const [services, setServices] = useState<Service[]>([]);
 
   useEffect(() => {
@@ -387,6 +397,14 @@ function StaffQueue() {
     };
   }, [list]);
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return list ?? [];
+    return (list ?? []).filter((a) =>
+      [patientName(a), patientEmail(a), serviceName(a)].some((field) => field.toLowerCase().includes(q)),
+    );
+  }, [list, search]);
+
   return (
     <DashboardShell
       title="Appointments"
@@ -395,7 +413,7 @@ function StaffQueue() {
       userName={session?.name}
       userEmail={session?.email ?? ''}
       todayService={`${today.name} — ${today.detail}`}
-      nav={opsNav(session?.role)}
+      nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
       <motion.div
@@ -460,7 +478,23 @@ function StaffQueue() {
       </motion.div>
 
       <div className={`${panel} py-4`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative">
+          <Search
+            size={17}
+            aria-hidden
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            id="appointment-search"
+            type="search"
+            placeholder="Search patient by name or email…"
+            aria-label="Search appointments by patient name, email, or service"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={`${inputClass} pl-10`}
+          />
+        </div>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           <Segmented
             ariaLabel="Date range"
             value={preset}
@@ -505,10 +539,13 @@ function StaffQueue() {
       {list !== null && list.length === 0 && !error && (
         <EmptyNote>No appointments match these filters.</EmptyNote>
       )}
+      {list !== null && list.length > 0 && filtered.length === 0 && !error && (
+        <EmptyNote>No patient matches “{search.trim()}”.</EmptyNote>
+      )}
 
       <AnimatePresence mode="popLayout" initial={false}>
         <div className="grid gap-4 md:grid-cols-2">
-          {(list ?? []).map((a) => (
+          {filtered.map((a) => (
             <motion.div
               key={a.id}
               layout
@@ -519,6 +556,7 @@ function StaffQueue() {
             >
               <QueueCard
                 appt={a}
+                canViewPatient={canViewPatients}
                 onChange={(updated) => setList((l) => (l ?? []).map((x) => (x.id === updated.id ? updated : x)))}
               />
             </motion.div>

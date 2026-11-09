@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { PERMISSION_KEYS } from '../utils/permissions.js';
 
 const userSchema = new mongoose.Schema(
   {
@@ -21,6 +22,10 @@ const userSchema = new mongoose.Schema(
     // Fixed roles for v1 — public registration always creates "patient".
     // Staff/admin accounts are created by an admin (see future staff management).
     role: { type: String, enum: ['patient', 'staff', 'admin'], default: 'patient' },
+    // Granular staff capabilities. Admins ignore this list and always have
+    // every permission; patients never have any. Undefined on legacy staff
+    // records means "unrestricted" — see utils/permissions.js.
+    permissions: { type: [String], enum: PERMISSION_KEYS, default: undefined },
     active: { type: Boolean, default: true },
     // Email ownership. Self-registered patients start unverified and see a
     // reminder until they enter the code; staff/admin accounts, Google
@@ -65,7 +70,9 @@ const userSchema = new mongoose.Schema(
     // reports; every personal field is wiped and sign-in is impossible.
     deletedAt: { type: Date, default: null, index: true },
   },
-  { timestamps: true },
+  // Admin edits and self-service profile/password changes can race. A stale
+  // save raises Mongoose's VersionError, which the API reports as HTTP 409.
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 // Patient profile fields are optional while a Google-created account is still
