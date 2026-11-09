@@ -57,7 +57,7 @@ async function sendChangeNotice(req, label) {
   const who = actor ? `${actor.fullName || 'Admin'} <${actor.email}>` : 'An admin account';
   const when = formatWhen(new Date());
   const text = [
-    'An integration setting was changed in E-Kalinga.',
+    'An integration setting was changed in HealthCentria.',
     '',
     `What: ${label}`,
     `Who: ${who}`,
@@ -70,7 +70,7 @@ async function sendChangeNotice(req, label) {
   // Sent directly, not through notifyEmail: this is a security notice and must
   // go out even while notification emails are switched off. Best effort, so a
   // broken SMTP setup never undoes the saved change.
-  await sendEmail(to, `E-Kalinga: ${label} changed`, text);
+  await sendEmail(to, `HealthCentria: ${label} changed`, text);
 }
 
 /**

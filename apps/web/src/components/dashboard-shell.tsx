@@ -49,7 +49,7 @@ function SidebarBody({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Brand lockup — the E-Kalinga seal is the app's anchor top-left. */}
+      {/* Brand lockup — the HealthCentria seal is the app's anchor top-left. */}
       <div className="px-4 pb-4 pt-5">
         <div className="flex items-center gap-3">
           <img

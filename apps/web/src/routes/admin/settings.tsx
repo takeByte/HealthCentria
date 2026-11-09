@@ -32,6 +32,7 @@ import {
   primaryButton,
   secondaryButton,
 } from '../../components/app-ui';
+import { PinCancelled, PinDialog, type PinRequest, type WithPin } from '../../components/super-pin';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
@@ -41,6 +42,11 @@ import {
   getGoogleCalendarSettings,
   getGoogleIntegrationSettings,
   getGoogleSheetsSettings,
+  getGoogleDriveSettings,
+  startGoogleDriveConnect,
+  disconnectGoogleDrive,
+  testGoogleDriveUpload,
+  type GoogleDriveSettings,
   resetGoogleSheetsSettings,
   testGoogleSheetsConnection,
   updateGoogleSheetsSettings,
@@ -244,147 +250,6 @@ function ResetDialog({
     </div>
   );
 }
-
-/** Thrown when the admin closes the PIN prompt; callers just stop quietly. */
-class PinCancelled extends Error {
-  constructor() {
-    super('PIN entry cancelled.');
-    this.name = 'PinCancelled';
-  }
-}
-
-interface PinRequest {
-  title: string;
-  run: (pin: string) => Promise<unknown>;
-  resolve: (value: unknown) => void;
-  reject: (reason: unknown) => void;
-}
-
-/**
- * Superadmin PIN prompt. The PIN lives only in this dialog's local state and is
- * sent with the change request itself (X-Super-Pin header). It is cleared after
- * every attempt and when the dialog closes, and is never saved anywhere.
- * Wrong PIN / lockout errors stay in the dialog; any other error closes it and
- * goes back to the card that asked, so existing error handling still applies.
- */
-function PinDialog({ request, onClose }: { request: PinRequest; onClose: () => void }) {
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const cancel = useCallback(() => {
-    if (busy) return;
-    setPin('');
-    request.reject(new PinCancelled());
-    onClose();
-  }, [busy, onClose, request]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopImmediatePropagation();
-        cancel();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [cancel]);
-
-  async function confirm(e: FormEvent) {
-    e.preventDefault();
-    const value = pin.trim();
-    if (busy) return;
-    if (!value) {
-      setError('Enter the superadmin PIN.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setPin('');
-    try {
-      const result = await request.run(value);
-      request.resolve(result);
-      onClose();
-    } catch (err) {
-      if (err instanceof ApiError && ['PIN_INCORRECT', 'PIN_LOCKED', 'SU_PIN_NOT_SET'].includes(err.code ?? '')) {
-        setError(err.message);
-        setBusy(false);
-        inputRef.current?.focus();
-        return;
-      }
-      request.reject(err);
-      onClose();
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) cancel();
-      }}
-    >
-      <motion.form
-        onSubmit={confirm}
-        initial={{ opacity: 0, y: 10, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', bounce: 0, duration: 0.25 }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pin-dialog-title"
-        aria-describedby="pin-dialog-desc"
-        className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] sm:p-6"
-      >
-        <span className="flex size-10 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
-          <KeyRound size={19} aria-hidden />
-        </span>
-        <h2 id="pin-dialog-title" className="mt-3 font-display text-lg font-semibold tracking-[-0.02em] text-slate-900">
-          Enter superadmin PIN to confirm
-        </h2>
-        <p id="pin-dialog-desc" className="mt-1 text-[13px] leading-5 text-slate-600">
-          {request.title}
-        </p>
-        <label htmlFor="super-pin" className={cn(fieldLabel, 'mt-4')}>
-          Superadmin PIN
-        </label>
-        <input
-          ref={inputRef}
-          id="super-pin"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          value={pin}
-          onChange={(e) => {
-            setPin(e.target.value);
-            if (error) setError(null);
-          }}
-          disabled={busy}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? 'super-pin-error' : undefined}
-          className={inputClass}
-        />
-        {error && (
-          <p id="super-pin-error" role="alert" className="mt-2 text-[12.5px] font-medium leading-5 text-destructive">
-            {error}
-          </p>
-        )}
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={cancel} disabled={busy} className={secondaryButton}>
-            Cancel
-          </button>
-          <button type="submit" disabled={busy} className={primaryButton}>
-            {busy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
-            {busy ? 'Checking…' : 'Confirm'}
-          </button>
-        </div>
-      </motion.form>
-    </div>
-  );
-}
-
-type WithPin = <T,>(title: string, run: (pin: string) => Promise<T>) => Promise<T>;
 
 /**
  * Google Sheets export card. The spreadsheet belongs to a person and is shared
@@ -647,6 +512,297 @@ function GoogleSheetsCard({
           busy={resetting}
           onCancel={() => setResetOpen(false)}
           onConfirm={reset}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Google Drive card. Exported PDFs are uploaded as the connected Google account
+ * (OAuth), because the service account has no Drive storage. Connecting and
+ * disconnecting need the superadmin PIN; the token is stored encrypted on the
+ * server and never reaches the browser.
+ */
+function GoogleDriveCard({
+  withPin,
+  onToast,
+  enabled,
+  toggling,
+  onToggle,
+}: {
+  withPin: WithPin;
+  onToast: (t: ToastMessage) => void;
+  enabled: boolean | undefined;
+  toggling: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [drive, setDrive] = useState<GoogleDriveSettings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [disconnectOpen, setDisconnectOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getGoogleDriveSettings()
+      .then((r) => {
+        if (!cancelled) setDrive(r);
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err instanceof ApiError ? err.message : 'Could not load Google Drive status.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Back from Google's consent screen: ?drive=connected or ?drive=error&message=…
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('drive');
+    if (!result) return;
+    if (result === 'connected') onToast({ tone: 'success', message: 'Google Drive connected.' });
+    else setError(params.get('message') || 'Could not connect Google Drive.');
+    params.delete('drive');
+    params.delete('message');
+    const qs = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`);
+    // onToast is stable for this purpose; run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function connect() {
+    if (connecting) return;
+    setConnecting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const r = await withPin('Connect a Google account for PDF uploads.', (pin) => startGoogleDriveConnect(pin));
+      // A full-page navigation (not a pop-up), so browsers never block it.
+      window.location.assign(r.url);
+    } catch (err) {
+      setConnecting(false);
+      if (err instanceof PinCancelled) return;
+      setError(err instanceof ApiError ? err.message : 'Could not start the Google sign-in. Try again.');
+    }
+  }
+
+  async function test() {
+    if (testing) return;
+    setTesting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const r = await testGoogleDriveUpload();
+      setMessage(`Upload test passed: a test file was saved to "${r.folderName}" and removed again.`);
+      setDrive((d) => (d ? { ...d, lastError: '', needsReconnect: false } : d));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'The upload test failed. Try again.');
+      getGoogleDriveSettings()
+        .then(setDrive)
+        .catch(() => {});
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function disconnect() {
+    if (disconnecting) return;
+    setDisconnecting(true);
+    try {
+      const r = await withPin('Disconnect Google Drive.', (pin) => disconnectGoogleDrive(pin));
+      setDrive(r);
+      setDisconnectOpen(false);
+      onToast({ tone: 'success', message: 'Google Drive disconnected.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      onToast({ tone: 'error', message: err instanceof ApiError ? err.message : 'Could not disconnect. Try again.' });
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  const status: { tone: 'teal' | 'amber' | 'red' | 'slate'; label: string } | null =
+    drive === null
+      ? null
+      : !drive.clientConfigured
+        ? { tone: 'amber', label: 'Not set up' }
+        : drive.needsReconnect
+          ? { tone: 'red', label: 'Reconnect needed' }
+          : drive.connected
+            ? { tone: 'teal', label: 'Connected' }
+            : { tone: 'amber', label: 'Not connected' };
+
+  return (
+    <>
+      <motion.section
+        id="google-drive"
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.135 }}
+        className={panel}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-xl">
+            <CardHeading
+              title="Google Drive"
+              description="Exported PDFs are saved to a Drive folder and the link is emailed to the superadmin and anyone picked during export. Files stay private: only people they are shared with can open them."
+            />
+          </div>
+          <div className="flex items-center gap-2.5">
+            {toggling && <LoaderCircle size={17} className="animate-spin text-slate-400" aria-hidden />}
+            {drive === null ? (
+              <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
+            ) : status && status.label !== 'Connected' ? (
+              <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            ) : null}
+            {enabled !== undefined && (
+              <>
+                <StatusPill tone={enabled ? 'teal' : 'slate'}>{enabled ? 'On' : 'Off'}</StatusPill>
+                <Toggle
+                  checked={enabled}
+                  disabled={toggling}
+                  label="Upload exported PDFs to Google Drive"
+                  onChange={onToggle}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {enabled === false && (
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+            Drive uploads are off. PDFs still download, but they are not saved to Drive and no links are emailed.
+          </p>
+        )}
+        {loadError && <InlineNotice className="mt-4">{loadError}</InlineNotice>}
+        {error && <InlineNotice className="mt-4">{error}</InlineNotice>}
+        {message && <SuccessNote className="mt-4">{message}</SuccessNote>}
+        {drive?.needsReconnect && (
+          <InlineNotice className="mt-4">
+            Google ended the connection (apps in &ldquo;Testing&rdquo; mode expire after 7 days). Click Reconnect.
+          </InlineNotice>
+        )}
+        {drive && !drive.clientConfigured && (
+          <InlineNotice className="mt-4">
+            Add DEFAULT_GOOGLE_DRIVE_CLIENT_ID and DEFAULT_GOOGLE_DRIVE_CLIENT_SECRET to the server .env, then restart
+            the server.
+          </InlineNotice>
+        )}
+
+        {drive && drive.clientConfigured && (
+          <ConfigureSection
+            id="drive-config"
+            label="Connection & folder"
+            defaultOpen={!drive.connected || drive.needsReconnect}
+            summary={
+              drive.connected ? (
+                <span className="truncate">{drive.accountEmail || 'Connected account'}</span>
+              ) : (
+                <span>No account connected</span>
+              )
+            }
+          >
+            <div className="space-y-4">
+              <dl className="grid gap-3 text-[12.5px] sm:grid-cols-2">
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Google account</dt>
+                  <dd className="mt-1 break-all text-slate-700">
+                    {drive.connected ? drive.accountEmail || 'Connected' : 'Not connected'}
+                  </dd>
+                  {drive.connectedAt && (
+                    <dd className="mt-0.5 text-[11.5px] text-slate-500">Since {formatDateTime(drive.connectedAt)}</dd>
+                  )}
+                </div>
+                <div className="rounded-xl bg-white px-3.5 py-3 ring-1 ring-inset ring-slate-200">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Upload folder</dt>
+                  <dd className="mt-1 text-slate-700">
+                    {drive.folderUrl ? (
+                      <a
+                        href={drive.folderUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-teal-700 underline-offset-4 hover:underline"
+                      >
+                        {drive.folderName || 'Open folder'}
+                      </a>
+                    ) : (
+                      'Chosen when you connect'
+                    )}
+                  </dd>
+                  {drive.lastUploadAt && (
+                    <dd className="mt-0.5 text-[11.5px] text-slate-500">
+                      Last upload {formatDateTime(drive.lastUploadAt)}
+                    </dd>
+                  )}
+                </div>
+              </dl>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={connect} disabled={connecting} className={primaryButton}>
+                  {connecting ? (
+                    <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                  ) : (
+                    <KeyRound size={16} aria-hidden />
+                  )}
+                  {connecting
+                    ? 'Opening Google…'
+                    : drive.needsReconnect
+                      ? 'Reconnect Google Drive'
+                      : drive.connected
+                        ? 'Switch account'
+                        : 'Connect Google Drive'}
+                </button>
+                {drive.connected && (
+                  <button
+                    type="button"
+                    onClick={test}
+                    disabled={testing || drive.needsReconnect}
+                    className={secondaryButton}
+                  >
+                    {testing ? (
+                      <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                    ) : (
+                      <RefreshCw size={16} aria-hidden />
+                    )}
+                    {testing ? 'Testing…' : 'Test upload'}
+                  </button>
+                )}
+                {drive.connected && (
+                  <button type="button" onClick={() => setDisconnectOpen(true)} className={secondaryButton}>
+                    <RotateCcw size={16} aria-hidden /> Disconnect
+                  </button>
+                )}
+              </div>
+
+              <p className="text-[12px] leading-5 text-slate-500">
+                Sign in with the Google account that should own the PDFs (ideally the superadmin&apos;s). HealthCentria
+                only gets access to files it creates, never the rest of the Drive. If it can&apos;t use the folder set
+                in .env, it creates its own &ldquo;HealthCentria Reports&rdquo; folder, which you can move anywhere in
+                Drive.
+              </p>
+            </div>
+          </ConfigureSection>
+        )}
+      </motion.section>
+
+      {disconnectOpen && (
+        <ResetDialog
+          title="Disconnect Google Drive?"
+          description={
+            <>
+              New PDFs will no longer be saved to Drive or emailed until an account is connected again. Files already
+              in Drive are not deleted.
+            </>
+          }
+          busy={disconnecting}
+          onCancel={() => setDisconnectOpen(false)}
+          onConfirm={disconnect}
         />
       )}
     </>
@@ -1014,6 +1170,28 @@ function AdminSettings() {
     }
   }
 
+  async function setDriveEnabled(next: boolean) {
+    if (!settings || saving) return;
+    const previous = settings;
+    setSaving(true);
+    try {
+      const r = await withPin(`Turn Google Drive uploads ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAuthSettings({ googleDriveEnabled: next }, pin),
+      );
+      setSettings(r.settings);
+      setToast({ tone: 'success', message: `Google Drive uploads ${next ? 'turned on' : 'turned off'}.` });
+    } catch (err) {
+      setSettings(previous);
+      if (err instanceof PinCancelled) return;
+      setToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not save the Google Drive setting. Try again.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function setSheetsEnabled(next: boolean) {
     if (!settings || saving) return;
     const previous = settings;
@@ -1297,6 +1475,7 @@ function AdminSettings() {
           settings.recaptchaEnabled,
           settings.notificationEmailsEnabled,
           settings.googleSheetsEnabled,
+          settings.googleDriveEnabled,
         ]
       : []),
     ...(calendar ? [calendar.enabled] : []),
@@ -1907,7 +2086,7 @@ function AdminSettings() {
                     spellCheck={false}
                     value={emailFrom}
                     onChange={(e) => setEmailFrom(e.target.value)}
-                    placeholder={email.fromAddress || 'E-Kalinga <clinic@your-domain.com>'}
+                    placeholder={email.fromAddress || 'HealthCentria <clinic@your-domain.com>'}
                     className={cn(inputClass, 'font-mono text-[12.5px]')}
                   />
                   <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
@@ -2104,6 +2283,14 @@ function AdminSettings() {
           enabled={settings?.googleSheetsEnabled}
           toggling={saving}
           onToggle={setSheetsEnabled}
+        />
+
+        <GoogleDriveCard
+          withPin={withPin}
+          onToast={setToast}
+          enabled={settings?.googleDriveEnabled}
+          toggling={saving}
+          onToggle={setDriveEnabled}
         />
 
         <SectionLabel>Tools</SectionLabel>

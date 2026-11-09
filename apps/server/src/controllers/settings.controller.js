@@ -22,6 +22,7 @@ async function present(doc) {
     recaptchaEnabled: doc?.recaptchaEnabled !== false,
     notificationEmailsEnabled: doc?.notificationEmailsEnabled !== false,
     googleSheetsEnabled: doc?.googleSheetsEnabled !== false,
+    googleDriveEnabled: doc?.googleDriveEnabled !== false,
     googleConfigured: isGoogleConfigured(credentials),
     updatedAt: doc?.updatedAt ?? null,
   };
@@ -57,6 +58,7 @@ const updateSchema = z
     recaptchaEnabled: z.boolean().optional(),
     notificationEmailsEnabled: z.boolean().optional(),
     googleSheetsEnabled: z.boolean().optional(),
+    googleDriveEnabled: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0);
 
@@ -134,6 +136,19 @@ export const updateSettings = asyncHandler(async (req, res) => {
       target: { type: 'settings', id: SETTINGS_KEY, label: 'Google Sheets export' },
       changes: [['googleSheetsEnabled', previous?.googleSheetsEnabled !== false, parsed.data.googleSheetsEnabled]],
       detail: `Google Sheets export ${parsed.data.googleSheetsEnabled ? 'enabled' : 'disabled'}.`,
+    });
+  }
+
+  if (
+    parsed.data.googleDriveEnabled !== undefined &&
+    (previous?.googleDriveEnabled !== false) !== parsed.data.googleDriveEnabled
+  ) {
+    await logActivity({
+      req,
+      action: 'integration.update',
+      target: { type: 'settings', id: SETTINGS_KEY, label: 'Google Drive uploads' },
+      changes: [['googleDriveEnabled', previous?.googleDriveEnabled !== false, parsed.data.googleDriveEnabled]],
+      detail: `Google Drive uploads ${parsed.data.googleDriveEnabled ? 'enabled' : 'disabled'}.`,
     });
   }
 

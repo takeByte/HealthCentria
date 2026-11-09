@@ -23,6 +23,8 @@ const appSettingsSchema = new mongoose.Schema(
     googleSheetsSpreadsheetId: { type: String, default: '' },
     // Google Sheets export on/off. Off blocks new exports; existing tabs stay.
     googleSheetsEnabled: { type: Boolean, default: true },
+    // Google Drive uploads of exported PDFs (and the emails with their links).
+    googleDriveEnabled: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

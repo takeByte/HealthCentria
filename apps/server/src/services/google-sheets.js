@@ -110,7 +110,7 @@ export async function testSheetsAccess(spreadsheetId) {
   requireConfigured({ ...config, spreadsheetId: id });
   const meta = await sheetsRequest('GET', `/${id}`, { query: { fields: 'properties.title' } });
   const added = await sheetsRequest('POST', `/${id}:batchUpdate`, {
-    body: { requests: [{ addSheet: { properties: { title: `E-Kalinga test ${Date.now()}` } } }] },
+    body: { requests: [{ addSheet: { properties: { title: `HealthCentria test ${Date.now()}` } } }] },
   });
   const sheetId = added?.replies?.[0]?.addSheet?.properties?.sheetId;
   if (sheetId !== undefined) {

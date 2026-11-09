@@ -152,7 +152,7 @@ function LoginComponent() {
             <div className="flex flex-col items-center text-center">
               <img
                 src={appLogo}
-                alt="E-Kalinga logo"
+                alt="HealthCentria logo"
                 className="size-12 rounded-full border border-slate-200 bg-white object-cover"
               />
               <p className="mt-2 text-lg font-bold tracking-tight text-slate-900">HealthCentria</p>

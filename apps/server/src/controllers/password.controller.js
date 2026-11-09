@@ -98,25 +98,25 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     const firstPassword = !user.passwordHash;
     await sendEmail(
       email,
-      firstPassword ? 'Set a password for your E-Kalinga account' : 'E-Kalinga password reset code',
+      firstPassword ? 'Set a password for your HealthCentria account' : 'HealthCentria password reset code',
       firstPassword
         ? [
-            `Your E-Kalinga code is ${code}.`,
+            `Your HealthCentria code is ${code}.`,
             '',
             'Your account uses Google sign-in. Enter this code in the app within ' +
               `${RESET_CODE_TTL_MINUTES} minutes to also set a password.`,
             'You can keep using "Continue with Google" either way.',
             "If you didn't ask for this, you can ignore this email — nothing changes.",
             '',
-            '— E-Kalinga Barangay Health Center',
+            '— HealthCentria Barangay Health Center',
           ].join('\n')
         : [
-            `Your E-Kalinga password reset code is ${code}.`,
+            `Your HealthCentria password reset code is ${code}.`,
             '',
             `Enter it in the app within ${RESET_CODE_TTL_MINUTES} minutes.`,
             "If you didn't ask to reset your password, you can ignore this email — your password stays the same.",
             '',
-            '— E-Kalinga Barangay Health Center',
+            '— HealthCentria Barangay Health Center',
           ].join('\n'),
     );
 

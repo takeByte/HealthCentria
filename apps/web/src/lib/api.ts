@@ -374,6 +374,23 @@ export function getMyPatientProfile(): Promise<{ patient: PatientDetail }> {
 }
 
 /** Staff/admin corrections to a patient chart. */
+/**
+ * Admin only, superadmin PIN required. The account is anonymized: personal
+ * data and login are removed, upcoming visits cancelled, past visits kept for
+ * reports without clinical notes.
+ */
+export function deletePatientAccount(
+  id: string,
+  confirmName: string,
+  pin: string,
+): Promise<{ success: true; cancelled: number; keptVisits: number }> {
+  return apiFetch(`/api/patients/${id}/delete`, {
+    method: 'POST',
+    body: { confirmName },
+    headers: pinHeader(pin),
+  });
+}
+
 export function updatePatientRecord(
   id: string,
   input: PatientRecordInput,
@@ -432,11 +449,89 @@ export async function downloadVisitsCsv(days = 30): Promise<void> {
   const disposition = res.headers.get('Content-Disposition') ?? '';
   const match = /filename="([^"]+)"/.exec(disposition);
   link.href = url;
-  link.download = match?.[1] ?? `e-kalinga-visits-${days}-days.csv`;
+  link.download = match?.[1] ?? `healthcentria-visits-${days}-days.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+export interface ExportRecipient {
+  id: string;
+  name: string;
+  email: string;
+  role: 'staff' | 'admin';
+}
+
+export interface ExportRecipientOptions {
+  success: true;
+  recipients: ExportRecipient[];
+  /** SU_EMAIL is set on the server, so the superadmin always gets the link. */
+  superadminNotified: boolean;
+  driveReady: boolean;
+  /** Why Drive can't be used right now ('' when ready). */
+  driveMessage: string;
+}
+
+/** Active staff and admins that can be picked to receive a PDF's Drive link. */
+export function listExportRecipients(): Promise<ExportRecipientOptions> {
+  return apiFetch('/api/reports/export-recipients');
+}
+
+export interface PdfExportResult {
+  fileName: string;
+  driveStatus: 'uploaded' | 'skipped' | 'failed';
+  driveLink: string;
+  driveMessage: string;
+  emailedCount: number;
+}
+
+/** POSTs, downloads the returned PDF, and reports what happened with Drive and email. */
+async function downloadPdf(path: string, recipients: string[]): Promise<PdfExportResult> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ recipients }),
+  });
+  if (!res.ok) {
+    let message = `Export failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // keep the status-based message
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'healthcentria-report.pdf';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  const status = res.headers.get('X-Drive-Status');
+  return {
+    fileName,
+    driveStatus: status === 'uploaded' || status === 'failed' ? status : 'skipped',
+    driveLink: res.headers.get('X-Drive-Link') ?? '',
+    driveMessage: decodeURIComponent(res.headers.get('X-Drive-Message') ?? ''),
+    emailedCount: Number(res.headers.get('X-Emailed-Count') ?? 0) || 0,
+  };
+}
+
+/** Visits-per-service PDF: downloads it, uploads to Drive, emails the link. */
+export function exportVisitsPdf(days: number, recipients: string[]): Promise<PdfExportResult> {
+  return downloadPdf(`/api/reports/visits-per-service/pdf?days=${days}`, recipients);
 }
 
 export function overview(): Promise<{
@@ -485,6 +580,8 @@ export interface AuthSettings {
   notificationEmailsEnabled: boolean;
   /** Off blocks new Google Sheets exports; existing tabs stay. */
   googleSheetsEnabled: boolean;
+  /** Off stops PDF uploads to Google Drive (and the emailed links). */
+  googleDriveEnabled: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -663,6 +760,39 @@ export function testGoogleSheetsConnection(): Promise<{ success: true; title: st
   return apiFetch('/api/admin/settings/google-sheets/test', { method: 'POST' });
 }
 
+export interface GoogleDriveSettings {
+  /** Client ID + secret present in the server .env. */
+  clientConfigured: boolean;
+  connected: boolean;
+  /** Google rejected the stored token (e.g. the 7-day limit of a Testing app). */
+  needsReconnect: boolean;
+  accountEmail: string;
+  connectedAt: string | null;
+  folderId: string;
+  folderName: string;
+  folderUrl: string;
+  lastUploadAt: string | null;
+  lastError: string;
+  redirectUri: string;
+}
+
+export function getGoogleDriveSettings(): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive');
+}
+
+/** Returns Google's consent URL; the page then navigates there. */
+export function startGoogleDriveConnect(pin: string): Promise<{ success: true; url: string }> {
+  return apiFetch('/api/admin/settings/google-drive/connect', { method: 'POST', headers: pinHeader(pin) });
+}
+
+export function disconnectGoogleDrive(pin: string): Promise<{ success: true } & GoogleDriveSettings> {
+  return apiFetch('/api/admin/settings/google-drive/connection', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export function testGoogleDriveUpload(): Promise<{ success: true; folderName: string; folderUrl: string }> {
+  return apiFetch('/api/admin/settings/google-drive/test', { method: 'POST' });
+}
+
 /**
  * Public: the login button reads the active client ID at runtime. The client ID
  * is public by design; the secret is never returned by this endpoint.
@@ -694,7 +824,14 @@ export function getAuthSettings(): Promise<{ settings: AuthSettings }> {
 
 export function updateAuthSettings(
   input: Partial<
-    Pick<AuthSettings, 'googleSignInEnabled' | 'recaptchaEnabled' | 'notificationEmailsEnabled' | 'googleSheetsEnabled'>
+    Pick<
+      AuthSettings,
+      | 'googleSignInEnabled'
+      | 'recaptchaEnabled'
+      | 'notificationEmailsEnabled'
+      | 'googleSheetsEnabled'
+      | 'googleDriveEnabled'
+    >
   >,
   pin: string,
 ): Promise<{ settings: AuthSettings }> {
@@ -828,6 +965,11 @@ export function purgeActivity(): Promise<{
 }
 
 /** Downloads the current filtered view as CSV through the authenticated API. */
+/** Admin: activity log PDF for the current filters (max 2,000 rows), uploaded to Drive and emailed. */
+export function exportActivityPdf(filters: ActivityFilters, recipients: string[]): Promise<PdfExportResult> {
+  return downloadPdf(`/api/activity/export/pdf${activityQuery(filters)}`, recipients);
+}
+
 /** Admin: writes the filtered activity log to a new tab in the export spreadsheet. */
 export function exportActivityToSheets(filters: ActivityFilters = {}): Promise<SheetsExportResult> {
   return apiFetch(`/api/activity/export/sheets${activityQuery(filters)}`, { method: 'POST' });

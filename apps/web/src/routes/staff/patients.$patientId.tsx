@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, CalendarCheck, ClipboardList, FileText, LoaderCircle, Pencil, Pill } from 'lucide-react';
@@ -18,7 +18,9 @@ import {
   secondaryButton,
   selectClass,
 } from '../../components/app-ui';
+import { DeletePatientSection, PATIENTS_FLASH_KEY } from '../../components/delete-patient';
 import { RecordMeta } from '../../components/record-meta';
+import { useSuperPin } from '../../components/super-pin';
 import { Toast, type ToastMessage } from '../../components/toast';
 import { getSession } from '../../lib/auth';
 import {
@@ -162,6 +164,8 @@ function PatientDetailPage() {
   const [fieldErrors, setFieldErrors] = useState<RecordErrors>({});
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  const navigate = useNavigate();
+  const { withPin, dialog: pinDialog } = useSuperPin();
 
   useEffect(() => {
     let cancelled = false;
@@ -654,9 +658,31 @@ function PatientDetailPage() {
                 </div>
               </motion.section>
             </div>
+
+            {session?.role === 'admin' && patient && (
+              <DeletePatientSection
+                patientId={patient.id}
+                patientName={patient.name || patient.email}
+                withPin={withPin}
+                onDeleted={(r) => {
+                  try {
+                    // Shown once on the patient list after the redirect.
+                    sessionStorage.setItem(
+                      PATIENTS_FLASH_KEY,
+                      `Patient account deleted. ${r.cancelled} upcoming appointment(s) cancelled; ${r.keptVisits} past visit(s) kept anonymously for reports.`,
+                    );
+                  } catch {
+                    // Storage blocked: the redirect still happens.
+                  }
+                  void navigate({ to: '/staff/patients' });
+                }}
+              />
+            )}
           </>
         )}
       </DashboardShell>
+
+      {pinDialog}
 
       <AnimatePresence>
         {toast && <Toast key={`${toast.tone}-${toast.message}`} toast={toast} onDone={() => setToast(null)} />}

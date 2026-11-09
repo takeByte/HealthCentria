@@ -9,10 +9,12 @@ import {
   InlineNotice,
   StatTile,
   StatusPill,
+  SuccessNote,
   inputClass,
   panel,
   primaryButton,
 } from '../../components/app-ui';
+import { PATIENTS_FLASH_KEY } from '../../components/delete-patient';
 import { getSession } from '../../lib/auth';
 import { listPatients, type PatientSummary } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -37,6 +39,16 @@ function PatientsList() {
   const [search, setSearch] = useState('');
   const [list, setList] = useState<PatientSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // One-time note after a redirect here (e.g. a deleted account).
+  const [flash] = useState<string | null>(() => {
+    try {
+      const value = sessionStorage.getItem(PATIENTS_FLASH_KEY);
+      sessionStorage.removeItem(PATIENTS_FLASH_KEY);
+      return value;
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +155,7 @@ function PatientsList() {
         </div>
       </motion.div>
 
+      {flash && <SuccessNote>{flash}</SuccessNote>}
       {error && <InlineNotice>{error}</InlineNotice>}
       {list === null && !error && <EmptyNote>Loading patients…</EmptyNote>}
       {list !== null && list.length === 0 && !error && (

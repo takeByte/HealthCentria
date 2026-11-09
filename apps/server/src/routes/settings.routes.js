@@ -16,6 +16,7 @@ const SWITCH_LABELS = {
   recaptchaEnabled: 'reCAPTCHA protection',
   notificationEmailsEnabled: 'Notification emails',
   googleSheetsEnabled: 'Google Sheets export',
+  googleDriveEnabled: 'Google Drive uploads',
 };
 
 function switchLabel(req) {

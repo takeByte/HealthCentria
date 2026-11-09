@@ -28,12 +28,12 @@ export function googleCalendarAddUrl(input: {
 }): string {
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: `${input.serviceName} visit (E-Kalinga health center)`,
+    text: `${input.serviceName} visit (HealthCentria)`,
     dates: `${compact(input.day)}/${nextDay(input.day)}`,
     details: [
       `Confirmed ${input.serviceName} appointment at the health center.`,
       `Preferred time: ${TIME_LABEL[input.timePreference]}.`,
-      'Manage or cancel it in E-Kalinga under My Appointments.',
+      'Manage or cancel it in HealthCentria under My Appointments.',
     ].join('\n'),
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

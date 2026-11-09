@@ -13,6 +13,7 @@ import {
   ACTIVITY_CATEGORY_LABELS,
   ApiError,
   downloadActivityCsv,
+  exportActivityPdf,
   exportActivityToSheets,
   listActivity,
   listMyActivity,
@@ -34,6 +35,7 @@ import {
   panel,
   secondaryButton,
 } from './app-ui';
+import { PdfExportButton, PdfExportDialog, PdfExportNote, usePdfExport } from './pdf-export';
 import { SheetsExportButton, SheetsExportNote, useSheetsExport } from './sheets-export';
 import { formatDateTime } from './record-meta';
 import { cn } from '../lib/utils';
@@ -96,6 +98,11 @@ const ACTION_LABELS: Record<string, string> = {
   'settings.sheets.reset': 'Google Sheets reset to default',
   'report.export_sheets': 'Report exported to Google Sheets',
   'activity.export_sheets': 'Activity log exported to Google Sheets',
+  'settings.drive.connect': 'Google Drive connected',
+  'report.export_pdf': 'Report exported as PDF',
+  'activity.export_pdf': 'Activity log exported as PDF',
+  'patient.delete': 'Patient account deleted',
+  'settings.drive.disconnect': 'Google Drive disconnected',
   'activity.purge': 'Activity log purged',
 };
 
@@ -175,6 +182,9 @@ export function ActivityFeed({
   const [exportError, setExportError] = useState<string | null>(null);
   const sheets = useSheetsExport(() =>
     exportActivityToSheets({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }),
+  );
+  const pdf = usePdfExport((recipients) =>
+    exportActivityPdf({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }, recipients),
   );
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purging, setPurging] = useState(false);
@@ -341,6 +351,9 @@ export function ActivityFeed({
                   className={`${secondaryButton} h-11 px-4 text-[13px]`}
                 />
               )}
+              {showExport && (
+                <PdfExportButton onClick={pdf.start} className={`${secondaryButton} h-11 px-4 text-[13px]`} />
+              )}
               {showPurge && (
                 <button
                   type="button"
@@ -437,6 +450,15 @@ export function ActivityFeed({
 
       {exportError && <InlineNotice>{exportError}</InlineNotice>}
       <SheetsExportNote result={sheets.result} error={sheets.error} />
+      <PdfExportNote result={pdf.result} error={pdf.error} />
+      {pdf.open && (
+        <PdfExportDialog
+          title="Export PDF"
+          subtitle="Activity log · current filters (up to 2,000 entries)"
+          onCancel={pdf.close}
+          onGenerate={pdf.run}
+        />
+      )}
       {purgeResult && <SuccessNote>{purgeResult}</SuccessNote>}
       {error && <InlineNotice>{error}</InlineNotice>}
 

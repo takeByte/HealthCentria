@@ -56,14 +56,14 @@ export async function issueEmailVerification(user, { force = false } = {}) {
 
   const result = await sendEmail(
     email,
-    'Verify your E-Kalinga email',
+    'Verify your HealthCentria email',
     [
-      `Your E-Kalinga verification code is ${code}.`,
+      `Your HealthCentria verification code is ${code}.`,
       '',
       `Enter it in the app within ${VERIFY_CODE_TTL_MINUTES} minutes to confirm this address.`,
       'You can keep using your account while it is unverified — this just confirms we can reach you.',
       '',
-      '— E-Kalinga Barangay Health Center',
+      '— HealthCentria Barangay Health Center',
     ].join('\n'),
   );
 

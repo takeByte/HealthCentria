@@ -206,7 +206,7 @@ function buildEvent(appointment) {
       `Time preference: ${appointment.timePreference ?? 'any'}`,
       `Status: ${appointment.status ?? 'confirmed'}`,
       `Appointment ID: ${appointment._id}`,
-      'Managed by E-Kalinga',
+      'Managed by HealthCentria',
     ].join('\n'),
     // All-day event. The end date is exclusive, as required by Google Calendar.
     // The time zone is informational; a date-only event is not shifted by DST.

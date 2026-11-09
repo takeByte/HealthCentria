@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import {
   exportVisitsPerServiceCsv,
+  exportVisitsPerServicePdf,
   exportVisitsPerServiceSheets,
+  listExportRecipients,
   overview,
   visitsPerService,
 } from '../controllers/report.controller.js';
@@ -21,6 +23,13 @@ reportRouter.post(
   requireRole('staff', 'admin'),
   exportVisitsPerServiceSheets,
 );
+reportRouter.post(
+  '/visits-per-service/pdf',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  exportVisitsPerServicePdf,
+);
+reportRouter.get('/export-recipients', requireAuth, requireRole('staff', 'admin'), listExportRecipients);
 reportRouter.get(
   '/visits-per-service',
   requireAuth,

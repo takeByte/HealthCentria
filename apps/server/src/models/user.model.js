@@ -60,6 +60,10 @@ const userSchema = new mongoose.Schema(
     // Last staff/admin account to edit this chart (patients editing their own
     // profile leave it null). Shown as "Updated by" on the patient record.
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Set when an admin deletes a patient account. The row stays as an
+    // anonymous "Deleted patient" placeholder so past visits keep counting in
+    // reports; every personal field is wiped and sign-in is impossible.
+    deletedAt: { type: Date, default: null, index: true },
   },
   { timestamps: true },
 );

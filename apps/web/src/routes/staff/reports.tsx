@@ -18,11 +18,13 @@ import {
   panel,
   secondaryButton,
 } from '../../components/app-ui';
+import { PdfExportButton, PdfExportDialog, PdfExportNote, usePdfExport } from '../../components/pdf-export';
 import { SheetsExportButton, SheetsExportNote, useSheetsExport } from '../../components/sheets-export';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
   downloadVisitsCsv,
+  exportVisitsPdf,
   exportVisitsToSheets,
   visitsPerService,
   type VisitsPerServiceRow,
@@ -46,6 +48,7 @@ function Reports() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const sheets = useSheetsExport(() => exportVisitsToSheets(Number(range)));
+  const pdf = usePdfExport((recipients) => exportVisitsPdf(Number(range), recipients));
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +123,7 @@ function Reports() {
             onClick={sheets.start}
             className={secondaryButton}
           />
+          <PdfExportButton onClick={pdf.start} disabled={rows === null} className={secondaryButton} />
           <Segmented
             ariaLabel="Report range"
             value={range}
@@ -134,6 +138,15 @@ function Reports() {
 
       {exportError && <InlineNotice>{exportError}</InlineNotice>}
       <SheetsExportNote result={sheets.result} error={sheets.error} />
+      <PdfExportNote result={pdf.result} error={pdf.error} />
+      {pdf.open && (
+        <PdfExportDialog
+          title="Export PDF"
+          subtitle={`Visits per service · last ${range} days`}
+          onCancel={pdf.close}
+          onGenerate={pdf.run}
+        />
+      )}
 
       <motion.div
         {...rise}

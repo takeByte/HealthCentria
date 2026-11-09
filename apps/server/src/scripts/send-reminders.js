@@ -39,8 +39,8 @@ async function main() {
       });
       await notifyEmail(
         a.patient.email,
-        `E-Kalinga: reminder — ${a.service.name} tomorrow`,
-        `Reminder: your ${a.service.name} appointment is tomorrow (${a.day}).\n\nPlease arrive on time and bring a valid ID.\n\n— E-Kalinga Barangay Health Center`,
+        `HealthCentria: reminder — ${a.service.name} tomorrow`,
+        `Reminder: your ${a.service.name} appointment is tomorrow (${a.day}).\n\nPlease arrive on time and bring a valid ID.\n\n— HealthCentria Barangay Health Center`,
       );
       reminded += 1;
     }

@@ -71,6 +71,16 @@ const envSchema = z.object({
   // Clinic name in the header of every export. Optional: falls back to
   // GOOGLE_CALENDAR_LOCATION, then "Barangay 11 Health Center".
   CLINIC_NAME: z.string().optional(),
+
+  // Google Drive (PDF uploads). OAuth client of type "Web application"; an
+  // admin clicks "Connect Google Drive" in Settings and PDFs are uploaded as
+  // that Google account. Set as DEFAULT_GOOGLE_DRIVE_* in .env.
+  GOOGLE_DRIVE_CLIENT_ID: z.string().optional(),
+  GOOGLE_DRIVE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_DRIVE_FOLDER_ID: z.string().optional(),
+  // Must match an Authorized redirect URI on that OAuth client. Defaults to
+  // http://localhost:<PORT>/api/admin/settings/google-drive/callback.
+  GOOGLE_DRIVE_REDIRECT_URI: z.string().optional(),
 });
 
 // Integration defaults that an admin can override from Settings are named
@@ -88,6 +98,9 @@ const DEFAULT_ALIASES = {
   RECAPTCHA_SITE_KEY: 'DEFAULT_RECAPTCHA_SITE_KEY',
   RECAPTCHA_SECRET_KEY: 'DEFAULT_RECAPTCHA_SECRET_KEY',
   GOOGLE_SHEETS_SPREADSHEET_ID: 'DEFAULT_GOOGLE_SHEETS_SPREADSHEET_ID',
+  GOOGLE_DRIVE_CLIENT_ID: 'DEFAULT_GOOGLE_DRIVE_CLIENT_ID',
+  GOOGLE_DRIVE_CLIENT_SECRET: 'DEFAULT_GOOGLE_DRIVE_CLIENT_SECRET',
+  GOOGLE_DRIVE_FOLDER_ID: 'DEFAULT_GOOGLE_DRIVE_FOLDER_ID',
 };
 
 const source = { ...process.env };

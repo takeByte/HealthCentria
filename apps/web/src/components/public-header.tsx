@@ -10,7 +10,7 @@ export function PublicHeader({ inner = 'max-w-6xl' }: { inner?: string }) {
         <Link to="/" className="flex items-center gap-2.5" aria-label="HealthCentria home">
           <img
             src={appLogo}
-            alt="E-Kalinga logo"
+            alt="HealthCentria logo"
             className="size-9 rounded-full border border-slate-200 bg-white object-cover"
           />
           <span className="leading-tight">

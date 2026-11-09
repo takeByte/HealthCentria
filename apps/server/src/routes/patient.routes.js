@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  deletePatient,
   getMyProfile,
   getPatient,
   listPatients,
@@ -7,6 +8,7 @@ import {
   updatePatientRecord,
 } from '../controllers/patient.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { requireSuperPin } from '../middleware/requireSuperPin.js';
 
 export const patientRouter = Router();
 
@@ -17,3 +19,11 @@ patientRouter.put('/profile', requireAuth, requireRole('patient'), updateMyProfi
 patientRouter.get('/', requireAuth, requireRole('staff', 'admin'), listPatients);
 patientRouter.get('/:id', requireAuth, requireRole('staff', 'admin'), getPatient);
 patientRouter.patch('/:id', requireAuth, requireRole('staff', 'admin'), updatePatientRecord);
+// Admin only, and the superadmin PIN is required: the account is anonymized.
+patientRouter.post(
+  '/:id/delete',
+  requireAuth,
+  requireRole('admin'),
+  requireSuperPin('Patient account deleted'),
+  deletePatient,
+);

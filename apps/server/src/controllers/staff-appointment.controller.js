@@ -143,8 +143,8 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
   }).catch(() => {});
   notifyEmail(
     appt.patient.email,
-    `E-Kalinga: appointment confirmed (${appt.service.name}, ${appt.day})`,
-    `Good news — your ${appt.service.name} appointment on ${appt.day} is confirmed.\n\nPlease arrive on time and bring a valid ID.\n\n— E-Kalinga Barangay Health Center`,
+    `HealthCentria: appointment confirmed (${appt.service.name}, ${appt.day})`,
+    `Good news — your ${appt.service.name} appointment on ${appt.day} is confirmed.\n\nPlease arrive on time and bring a valid ID.\n\n— HealthCentria Barangay Health Center`,
   ).catch(() => {});
   // Additive side effect: never blocks the response and never throws.
   void syncAppointmentToCalendar(appt).catch(() => {});
@@ -188,8 +188,8 @@ export const declineAppointment = asyncHandler(async (req, res) => {
   }).catch(() => {});
   notifyEmail(
     appt.patient.email,
-    `E-Kalinga: appointment update (${appt.service.name}, ${appt.day})`,
-    `Your ${appt.service.name} appointment on ${appt.day} could not be confirmed.\n\nReason: ${parsed.data.reason}\n\nPlease book another date.\n\n— E-Kalinga Barangay Health Center`,
+    `HealthCentria: appointment update (${appt.service.name}, ${appt.day})`,
+    `Your ${appt.service.name} appointment on ${appt.day} could not be confirmed.\n\nReason: ${parsed.data.reason}\n\nPlease book another date.\n\n— HealthCentria Barangay Health Center`,
   ).catch(() => {});
   // Pending requests normally have no event; this also clears a stale one.
   void removeAppointmentFromCalendar(appt).catch(() => {});

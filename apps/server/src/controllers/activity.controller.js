@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { ACTIVITY_CATEGORIES, AuditLog, categoryForAction } from '../models/audit-log.model.js';
 import { User } from '../models/user.model.js';
-import { exportStamp, exportToSheet } from '../services/google-sheets.js';
+import { exportStamp, exportToSheet, footerTimestamp } from '../services/google-sheets.js';
+import { deliverPdf, describeDelivery, recipientsSchema, sendPdfResponse } from '../services/export-delivery.js';
+import { buildReportPdf } from '../services/pdf-report.js';
+import { env } from '../config/env.js';
 import {
   ACTIVITY_RETENTION_DAYS,
   logActivity,
@@ -353,7 +356,7 @@ export const exportActivitySheets = asyncHandler(async (req, res) => {
   try {
     result = await exportToSheet({
       tabTitle: `Activity ${stamp}`,
-      title: 'E-Kalinga — Activity log',
+      title: 'HealthCentria — Activity log',
       details: `${rows.length} entries${filters ? ` · Filters: ${filters}` : ' · No filters'}${
         rows.length === 10000 ? ' · Capped at 10,000 rows' : ''
       } · Exported by ${actor?.fullName || 'admin'}`,
@@ -387,6 +390,95 @@ export const exportActivitySheets = asyncHandler(async (req, res) => {
     detail: `Exported ${rows.length} entries to Google Sheets tab "${result.tab}"${filters ? ` (filters: ${filters})` : ''}.`,
   });
   res.json({ success: true, url: result.url, tab: result.tab, rows: rows.length });
+});
+
+const PDF_ROW_CAP = 2000;
+
+function pdfTime(date) {
+  if (!date) return '';
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: env.GOOGLE_CALENDAR_TIMEZONE || 'Asia/Manila',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(date));
+}
+
+/**
+ * POST /api/activity/export/pdf — the current filters as a PDF (admin only),
+ * capped at 2,000 rows. Uploaded to Drive and emailed like the reports PDF.
+ */
+export const exportActivityPdf = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const query = parseQuery(req, res);
+  if (!query) return;
+  const body = recipientsSchema.safeParse(req.body ?? {});
+  if (!body.success) return res.status(400).json({ success: false, message: 'Invalid recipients.' });
+
+  const filter = buildFilter(req.user, query);
+  const [entries, total] = await Promise.all([
+    AuditLog.find(filter).sort({ createdAt: -1 }).limit(PDF_ROW_CAP).lean(),
+    AuditLog.countDocuments(filter),
+  ]);
+  const filters = ['category', 'action', 'actor', 'outcome', 'q', 'from', 'to']
+    .filter((k) => query[k])
+    .map((k) => `${k}=${query[k]}`)
+    .join(', ');
+  const actor = await User.findById(req.user.id).select('fullName').lean();
+  const failed = entries.filter((e) => (e.outcome ?? 'success') === 'failed').length;
+  const details = `${filters ? `Filters: ${filters}` : 'All activity (no filters)'}`;
+
+  const buffer = await buildReportPdf({
+    title: 'Activity log',
+    details: `${details} · Exported by ${actor?.fullName || 'admin'}`,
+    summary: [
+      { label: 'Entries in PDF', value: entries.length },
+      { label: 'Matching entries', value: total },
+      { label: 'Failed', value: failed },
+    ],
+    columns: [
+      { header: 'Time', width: 78 },
+      { header: 'Person', width: 92 },
+      { header: 'Action', width: 108 },
+      { header: 'Outcome', width: 44 },
+      { header: 'Target', width: 100 },
+      { header: 'Details' },
+    ],
+    rows: entries.map((e) => {
+      const entry = present(e);
+      return [
+        pdfTime(entry.createdAt),
+        `${entry.actor.name || 'System'}${entry.actor.role ? ` (${entry.actor.role})` : ''}`,
+        entry.action,
+        entry.outcome,
+        entry.target.label || entry.target.type,
+        entry.detail,
+      ];
+    }),
+    note:
+      total > entries.length
+        ? `Showing the latest ${entries.length.toLocaleString('en-PH')} of ${total.toLocaleString('en-PH')} matching entries. Use Export CSV or Export to Sheets for the full log.`
+        : undefined,
+    landscape: true,
+  });
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const fileName = `healthcentria-activity-log-${stamp}.pdf`;
+  const delivery = await deliverPdf({
+    req,
+    buffer,
+    fileName,
+    reportTitle: 'Activity log',
+    details: `${details} · ${entries.length} entries · Generated ${footerTimestamp()}`,
+    recipientIds: body.data.recipients,
+  });
+
+  await logActivity({
+    req,
+    action: 'activity.export_pdf',
+    target: { type: 'activity', id: 'export', label: 'Activity log' },
+    detail: describeDelivery(delivery),
+  });
+  sendPdfResponse(res, { buffer, fileName, delivery });
 });
 
 const purgeSchema = z.object({ confirm: z.literal(true) });

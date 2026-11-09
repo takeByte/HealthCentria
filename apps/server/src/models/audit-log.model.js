@@ -41,6 +41,7 @@ export const ACTIVITY_ACTIONS = [
   'record.update',
   // People
   'patient.create',
+  'patient.delete',
   'staff.create',
   'staff.update',
   // Content
@@ -64,6 +65,10 @@ export const ACTIVITY_ACTIONS = [
   'settings.sheets.reset',
   'report.export_sheets',
   'activity.export_sheets',
+  'report.export_pdf',
+  'activity.export_pdf',
+  'settings.drive.connect',
+  'settings.drive.disconnect',
   // System
   'activity.purge',
 ];
@@ -90,6 +95,7 @@ export const ACTION_CATEGORY = {
   'patient.update': 'clinical',
   'record.update': 'clinical',
   'patient.create': 'people',
+  'patient.delete': 'people',
   'staff.create': 'people',
   'staff.update': 'people',
   'announcement.create': 'content',
@@ -111,6 +117,10 @@ export const ACTION_CATEGORY = {
   'settings.sheets.reset': 'configuration',
   'report.export_sheets': 'system',
   'activity.export_sheets': 'system',
+  'report.export_pdf': 'system',
+  'activity.export_pdf': 'system',
+  'settings.drive.connect': 'configuration',
+  'settings.drive.disconnect': 'configuration',
   'activity.purge': 'system',
 };
 

@@ -25,10 +25,22 @@ import {
   testSheetsSettings,
   updateSheetsSettings,
 } from '../controllers/sheets-settings.controller.js';
+import {
+  disconnectDriveSettings,
+  driveCallback,
+  getDriveSettings,
+  startDriveConnect,
+  testDriveSettings,
+} from '../controllers/drive-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireSuperPin } from '../middleware/requireSuperPin.js';
 
 export const adminSettingsRouter = Router();
+
+// Google redirects the browser here after the Drive consent screen, so it
+// carries no auth header. It must stay above the requireAuth guard below; the
+// single-use `state` from the PIN-protected /connect call is the check instead.
+adminSettingsRouter.get('/google-drive/callback', driveCallback);
 
 // Only admins configure third-party credentials. Patients and staff keep using
 // the normal sign-in buttons, which read the active public client ID.
@@ -77,3 +89,13 @@ adminSettingsRouter.delete(
   resetSheetsSettings,
 );
 adminSettingsRouter.post('/google-sheets/test', testSheetsSettings);
+
+// Google Drive (PDF uploads), connected with a real Google account via OAuth.
+adminSettingsRouter.get('/google-drive', getDriveSettings);
+adminSettingsRouter.post('/google-drive/connect', requireSuperPin('Google Drive connection'), startDriveConnect);
+adminSettingsRouter.delete(
+  '/google-drive/connection',
+  requireSuperPin('Google Drive disconnected'),
+  disconnectDriveSettings,
+);
+adminSettingsRouter.post('/google-drive/test', testDriveSettings);

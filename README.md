@@ -1,4 +1,4 @@
-# E-Kalinga
+# HealthCentria
 
 Monorepo (pnpm workspaces):
 
@@ -70,7 +70,7 @@ settings win when both exist.
 | `DEFAULT_SMTP_PORT` | `587` |
 | `DEFAULT_SMTP_USER` | SMTP login |
 | `DEFAULT_SMTP_PASS` | SMTP password or API key |
-| `DEFAULT_MAIL_FROM` | `E-Kalinga <clinic@your-domain.com>` |
+| `DEFAULT_MAIL_FROM` | `HealthCentria <clinic@your-domain.com>` |
 
 Saving from the admin UI requires `SETTINGS_ENCRYPTION_KEY` (64 hex characters)
 in `apps/server/.env`. Use **Send test email** to verify the connection; the

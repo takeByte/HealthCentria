@@ -91,13 +91,13 @@ export async function sendTestEmail(to) {
   const info = await transport.sendMail({
     from: config.from,
     to,
-    subject: 'E-Kalinga email test',
+    subject: 'HealthCentria email test',
     text: [
-      'This is a test message from your E-Kalinga server.',
+      'This is a test message from your HealthCentria server.',
       '',
       'If you received it, password reset codes and announcements will be delivered.',
       '',
-      '— E-Kalinga Barangay Health Center',
+      '— HealthCentria Barangay Health Center',
     ].join('\n'),
   });
 
@@ -110,5 +110,5 @@ export async function sendTestEmail(to) {
 }
 
 export function announcementEmailText(a) {
-  return `${a.title}\n\n${a.body}\n\n— E-Kalinga Barangay Health Center`;
+  return `${a.title}\n\n${a.body}\n\n— HealthCentria Barangay Health Center`;
 }
