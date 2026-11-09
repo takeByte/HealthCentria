@@ -136,6 +136,9 @@ export interface PatientProfileInput {
   address: string;
   barangay: string;
   contactNumber: string;
+  householdNumber?: string;
+  emergencyName?: string;
+  emergencyNumber?: string;
 }
 
 export interface PatientProfileUser {
@@ -515,12 +518,20 @@ export interface MyAccount {
   name: string;
   email: string;
   role: 'staff' | 'admin';
+  contactNumber: string;
   authProvider: 'local' | 'google';
   permissions: string[];
   avatarUrl?: string;
 }
 
-export function updateMyAccount(input: { fullName: string }): Promise<{ user: MyAccount }> {
+export function getMyAccount(): Promise<{ user: MyAccount }> {
+  return apiFetch('/api/auth/me');
+}
+
+export function updateMyAccount(input: {
+  fullName?: string;
+  contactNumber?: string;
+}): Promise<{ user: MyAccount }> {
   return apiFetch('/api/auth/me', { method: 'PATCH', body: input });
 }
 

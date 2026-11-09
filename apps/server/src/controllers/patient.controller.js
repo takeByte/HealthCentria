@@ -30,6 +30,8 @@ function isValidPastBirthdate(value) {
   return date < today;
 }
 
+const optionalText = (max, message) => z.string().trim().max(max, message).optional();
+
 const profileSchema = z.object({
   fullName: z.string().trim().min(1, 'Full name is required.').max(120, 'Full name is too long.'),
   birthdate: z
@@ -47,11 +49,13 @@ const profileSchema = z.object({
       (value) => PROFILE_PHONE_REGEX.test(value),
       'Enter a valid Philippine contact number (09XXXXXXXXX or +639XXXXXXXXX).',
     ),
+  // Optional details the patient can maintain themselves.
+  householdNumber: optionalText(60, 'Household number is too long.'),
+  emergencyName: optionalText(120, 'Emergency contact name is too long.'),
+  emergencyNumber: optionalText(60, 'Emergency contact number is too long.'),
 });
 
 const SEX_VALUES = ['Female', 'Male', 'Other', 'Prefer not to say'];
-
-const optionalText = (max, message) => z.string().trim().max(max, message).optional();
 
 /** Staff/admin corrections to a patient chart. Account fields are intentionally absent. */
 const staffProfileSchema = z.object({
@@ -295,12 +299,18 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
     address: user.address,
     barangay: user.barangay,
     contactNumber: user.contactNumber,
+    householdNumber: user.householdNumber,
+    emergencyName: user.emergencyName,
+    emergencyNumber: user.emergencyNumber,
   };
   user.fullName = data.fullName;
   user.birthdate = new Date(`${data.birthdate}T00:00:00`);
   user.address = data.address;
   user.barangay = data.barangay;
   user.contactNumber = data.contactNumber;
+  if (data.householdNumber !== undefined) user.householdNumber = data.householdNumber;
+  if (data.emergencyName !== undefined) user.emergencyName = data.emergencyName;
+  if (data.emergencyNumber !== undefined) user.emergencyNumber = data.emergencyNumber;
   // Google does not provide sex, and the completion form intentionally does
   // not ask for it. Keep the schema's complete-patient requirement satisfied.
   if (!user.sex) user.sex = 'Prefer not to say';

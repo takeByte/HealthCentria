@@ -1,7 +1,7 @@
 import { createFileRoute, redirect, Link } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
-import { LoaderCircle, Pencil, UserRound } from 'lucide-react';
+import { KeyRound, LoaderCircle, Pencil, UserRound } from 'lucide-react';
 import { DashboardShell } from '../../../components/dashboard-shell';
 import { patientNav } from '../../../components/patient-nav';
 import {
@@ -16,9 +16,10 @@ import {
   secondaryButton,
 } from '../../../components/app-ui';
 import { Toast, type ToastMessage } from '../../../components/toast';
-import { getSession, setSession } from '../../../lib/auth';
+import { getSession, isValidPassword, PASSWORD_ERROR_MESSAGE, setSession } from '../../../lib/auth';
 import {
   ApiError,
+  changeMyPassword,
   completePatientProfile,
   getMyPatientProfile,
   type PatientDetail,
@@ -44,6 +45,9 @@ type FormState = {
   address: string;
   barangay: string;
   contactNumber: string;
+  householdNumber: string;
+  emergencyName: string;
+  emergencyNumber: string;
 };
 
 type Errors = Partial<Record<keyof FormState, string>>;
@@ -54,6 +58,9 @@ const PROFILE_FIELDS: Array<keyof FormState> = [
   'address',
   'barangay',
   'contactNumber',
+  'householdNumber',
+  'emergencyName',
+  'emergencyNumber',
 ];
 const PROFILE_PHONE_REGEX = /^(?:09\d{9}|\+639\d{9})$/;
 const EMPTY_FORM: FormState = {
@@ -62,6 +69,23 @@ const EMPTY_FORM: FormState = {
   address: '',
   barangay: '',
   contactNumber: '',
+  householdNumber: '',
+  emergencyName: '',
+  emergencyNumber: '',
+};
+
+type PasswordForm = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+type PasswordErrors = Partial<Record<keyof PasswordForm, string>>;
+
+const EMPTY_PASSWORD_FORM: PasswordForm = {
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
 };
 
 function todayYMD(): string {
@@ -110,6 +134,9 @@ function formFromPatient(patient: PatientDetail): FormState {
     address: patient.address ?? '',
     barangay: patient.barangay ?? '',
     contactNumber: patient.contactNumber ?? '',
+    householdNumber: patient.householdNumber ?? '',
+    emergencyName: patient.emergencyName ?? '',
+    emergencyNumber: patient.emergencyNumber ?? '',
   };
 }
 
@@ -143,6 +170,10 @@ function MyProfilePage() {
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
+  const [password, setPassword] = useState<PasswordForm>(EMPTY_PASSWORD_FORM);
+  const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({});
+  const [savingPassword, setSavingPassword] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -164,6 +195,52 @@ function MyProfilePage() {
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
     setFieldErrors((current) => (current[key] ? { ...current, [key]: undefined } : current));
+  }
+
+  function setPasswordField(field: keyof PasswordForm, value: string) {
+    setPassword((current) => ({ ...current, [field]: value }));
+    setPasswordErrors((current) => ({ ...current, [field]: undefined }));
+  }
+
+  function validatePassword(form: PasswordForm): PasswordErrors {
+    const errors: PasswordErrors = {};
+    if (!form.currentPassword) errors.currentPassword = 'Enter your current password.';
+    if (!form.newPassword) errors.newPassword = 'Enter a new password.';
+    else if (!isValidPassword(form.newPassword)) errors.newPassword = PASSWORD_ERROR_MESSAGE;
+    if (form.confirmPassword !== form.newPassword) errors.confirmPassword = 'Passwords do not match.';
+    return errors;
+  }
+
+  async function savePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const errors = validatePassword(password);
+    setPasswordErrors(errors);
+    if (Object.values(errors).some(Boolean)) {
+      setToast({ tone: 'error', message: 'Please fix the highlighted fields and try again.' });
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await changeMyPassword({
+        currentPassword: password.currentPassword,
+        newPassword: password.newPassword,
+      });
+      setPassword(EMPTY_PASSWORD_FORM);
+      setToast({ tone: 'success', message: 'Password changed.' });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const errors = err.errors ?? {};
+        setPasswordErrors({
+          currentPassword: errors.currentPassword?.[0],
+          newPassword: errors.newPassword?.[0],
+        });
+        setToast({ tone: 'error', message: err.message || 'Could not change your password.' });
+      } else {
+        setToast({ tone: 'error', message: 'Could not change your password. Try again.' });
+      }
+    } finally {
+      setSavingPassword(false);
+    }
   }
 
   function startEdit() {
@@ -196,6 +273,9 @@ function MyProfilePage() {
         address: form.address.trim(),
         barangay: form.barangay.trim(),
         contactNumber: normalizePhone(form.contactNumber),
+        householdNumber: form.householdNumber.trim(),
+        emergencyName: form.emergencyName.trim(),
+        emergencyNumber: form.emergencyNumber.trim(),
       });
 
       const normalized: FormState = {
@@ -204,6 +284,9 @@ function MyProfilePage() {
         address: form.address.trim(),
         barangay: form.barangay.trim(),
         contactNumber: normalizePhone(form.contactNumber),
+        householdNumber: form.householdNumber.trim(),
+        emergencyName: form.emergencyName.trim(),
+        emergencyNumber: form.emergencyNumber.trim(),
       };
       setForm(normalized);
       setPatient((current) =>
@@ -215,6 +298,9 @@ function MyProfilePage() {
               address: normalized.address,
               barangay: normalized.barangay,
               contactNumber: normalized.contactNumber,
+              householdNumber: normalized.householdNumber,
+              emergencyName: normalized.emergencyName,
+              emergencyNumber: normalized.emergencyNumber,
               profileCompleted: true,
             }
           : current,
@@ -447,6 +533,62 @@ function MyProfilePage() {
                       />
                       <FieldError id="my-profile-barangay-error" message={fieldErrors.barangay} />
                     </div>
+
+                    <div className="sm:col-span-2">
+                      <label htmlFor="my-profile-emergency-name" className={fieldLabel}>
+                        Emergency contact name
+                      </label>
+                      <input
+                        id="my-profile-emergency-name"
+                        autoComplete="name"
+                        placeholder="Optional"
+                        value={form.emergencyName}
+                        onChange={(event) => set('emergencyName', event.target.value)}
+                        aria-invalid={Boolean(fieldErrors.emergencyName)}
+                        aria-describedby={
+                          fieldErrors.emergencyName ? 'my-profile-emergency-name-error' : undefined
+                        }
+                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                      />
+                      <FieldError id="my-profile-emergency-name-error" message={fieldErrors.emergencyName} />
+                    </div>
+
+                    <div>
+                      <label htmlFor="my-profile-household" className={fieldLabel}>
+                        Household number
+                      </label>
+                      <input
+                        id="my-profile-household"
+                        placeholder="Optional"
+                        value={form.householdNumber}
+                        onChange={(event) => set('householdNumber', event.target.value)}
+                        aria-invalid={Boolean(fieldErrors.householdNumber)}
+                        aria-describedby={fieldErrors.householdNumber ? 'my-profile-household-error' : undefined}
+                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                      />
+                      <FieldError id="my-profile-household-error" message={fieldErrors.householdNumber} />
+                    </div>
+
+                    <div>
+                      <label htmlFor="my-profile-emergency-number" className={fieldLabel}>
+                        Emergency contact number
+                      </label>
+                      <input
+                        id="my-profile-emergency-number"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        placeholder="Optional"
+                        value={form.emergencyNumber}
+                        onChange={(event) => set('emergencyNumber', event.target.value)}
+                        aria-invalid={Boolean(fieldErrors.emergencyNumber)}
+                        aria-describedby={
+                          fieldErrors.emergencyNumber ? 'my-profile-emergency-number-error' : undefined
+                        }
+                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                      />
+                      <FieldError id="my-profile-emergency-number-error" message={fieldErrors.emergencyNumber} />
+                    </div>
                   </div>
 
                   <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:justify-end">
@@ -516,11 +658,99 @@ function MyProfilePage() {
                   </div>
                 </dl>
                 <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] leading-5 text-slate-500">
-                  Email and password changes are not available here yet. Contact the health center if your email
-                  needs to be updated.
+                  Your email is read-only. Contact the health center if it needs to be updated.
                 </p>
               </motion.section>
             </div>
+
+            <motion.section
+              {...rise}
+              transition={{ ...riseTransition, delay: 0.12 }}
+              className={panel}
+              aria-labelledby="profile-password-heading"
+            >
+              <h3
+                id="profile-password-heading"
+                className="font-display text-[16px] font-semibold tracking-[-0.01em] text-slate-900"
+              >
+                Change password
+              </h3>
+
+              {patient.authProvider === 'google' ? (
+                <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] leading-5 text-slate-500">
+                  You sign in with Google, so this account has no password to change here.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-1 text-[12.5px] leading-5 text-slate-500">
+                    Use at least 8 characters with two of: letters, numbers, special characters.
+                  </p>
+                  <form onSubmit={savePassword} className="mt-4 grid gap-3.5 sm:grid-cols-3" noValidate>
+                    <div>
+                      <label htmlFor="my-profile-current" className={fieldLabel}>
+                        Current password
+                      </label>
+                      <input
+                        id="my-profile-current"
+                        type="password"
+                        autoComplete="current-password"
+                        value={password.currentPassword}
+                        onChange={(event) => setPasswordField('currentPassword', event.target.value)}
+                        aria-invalid={Boolean(passwordErrors.currentPassword)}
+                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                      />
+                      {passwordErrors.currentPassword && (
+                        <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.currentPassword}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor="my-profile-new" className={fieldLabel}>
+                        New password
+                      </label>
+                      <input
+                        id="my-profile-new"
+                        type="password"
+                        autoComplete="new-password"
+                        value={password.newPassword}
+                        onChange={(event) => setPasswordField('newPassword', event.target.value)}
+                        aria-invalid={Boolean(passwordErrors.newPassword)}
+                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                      />
+                      {passwordErrors.newPassword && (
+                        <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.newPassword}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label htmlFor="my-profile-confirm" className={fieldLabel}>
+                        Confirm new password
+                      </label>
+                      <input
+                        id="my-profile-confirm"
+                        type="password"
+                        autoComplete="new-password"
+                        value={password.confirmPassword}
+                        onChange={(event) => setPasswordField('confirmPassword', event.target.value)}
+                        aria-invalid={Boolean(passwordErrors.confirmPassword)}
+                        className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                      />
+                      {passwordErrors.confirmPassword && (
+                        <p className="mt-1 text-[11.5px] text-red-700">{passwordErrors.confirmPassword}</p>
+                      )}
+                    </div>
+                    <div className="sm:col-span-3">
+                      <button type="submit" disabled={savingPassword} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
+                        {savingPassword ? (
+                          <LoaderCircle size={15} className="animate-spin" aria-hidden />
+                        ) : (
+                          <KeyRound size={15} aria-hidden />
+                        )}
+                        Change password
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </motion.section>
           </motion.div>
         )}
       </DashboardShell>

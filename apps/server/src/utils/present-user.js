@@ -13,6 +13,7 @@ export function presentUser(user) {
     name: user.fullName,
     email: user.email,
     role: user.role,
+    contactNumber: user.contactNumber ?? '',
     authProvider: user.provider,
     profileCompleted: user.role === 'patient' ? user.profileComplete !== false : true,
     avatarUrl: user.avatarUrl ?? '',

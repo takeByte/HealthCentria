@@ -194,16 +194,35 @@ export const me = asyncHandler(async (req, res) => {
   res.json({ success: true, user: presentUser(user) });
 });
 
-const updateMeSchema = z.object({
-  fullName: z.string().trim().min(1, 'Full name is required.').max(120, 'Name is too long.'),
-});
+const updateMeSchema = z
+  .object({
+    fullName: z
+      .string()
+      .trim()
+      .min(1, 'Full name is required.')
+      .max(120, 'Name is too long.')
+      .optional(),
+    // An empty string clears the number; anything else must look like a phone.
+    contactNumber: z
+      .string()
+      .trim()
+      .refine(
+        (value) => value === '' || /^[\d+][\d\s\-()]{6,}$/.test(value),
+        'Enter a valid contact number.',
+      )
+      .optional(),
+  })
+  .refine((data) => data.fullName !== undefined || data.contactNumber !== undefined, {
+    message: 'No changes provided.',
+  });
 
 /**
- * PATCH /api/auth/me — let staff and admin edit their own display name.
+ * PATCH /api/auth/me — let staff and admin edit their own display name and
+ * contact number.
  *
- * Role, permissions and active state remain admin-managed in Staff Accounts;
- * this endpoint deliberately accepts only the name so a staff account can never
- * escalate its own access.
+ * Role, permissions, email and active state remain admin-managed in Staff
+ * Accounts; this endpoint accepts only what an account may safely change about
+ * itself, so a staff account can never escalate its own access.
  */
 export const updateMe = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
@@ -222,15 +241,27 @@ export const updateMe = asyncHandler(async (req, res) => {
   if (!user || !user.active) {
     return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
   }
-  const before = user.fullName;
-  user.fullName = parsed.data.fullName;
+
+  const changes = [];
+  if (parsed.data.fullName !== undefined && parsed.data.fullName !== user.fullName) {
+    changes.push(['fullName', user.fullName, parsed.data.fullName]);
+    user.fullName = parsed.data.fullName;
+  }
+  if (parsed.data.contactNumber !== undefined && parsed.data.contactNumber !== user.contactNumber) {
+    changes.push(['contactNumber', user.contactNumber ?? '', parsed.data.contactNumber]);
+    user.contactNumber = parsed.data.contactNumber;
+  }
+  if (changes.length === 0) {
+    return res.json({ success: true, user: presentUser(user) });
+  }
+
   await user.save();
   await logActivity({
     req,
     action: 'profile.update',
     target: { type: 'staff', id: user._id, label: user.fullName, role: user.role },
-    changes: [['fullName', before, user.fullName]],
-    detail: 'Updated their own profile.',
+    changes,
+    detail: `Updated their own profile: ${changes.map(([field]) => field).join(', ')}.`,
   });
   res.json({ success: true, user: presentUser(user) });
 });
@@ -240,14 +271,9 @@ const changePasswordSchema = z.object({
   newPassword: z.string().refine(isValidPassword, PASSWORD_ERROR_MESSAGE),
 });
 
-/** POST /api/auth/change-password — self-service password change for staff/admin. */
+/** POST /api/auth/change-password — self-service password change for every role. */
 export const changePassword = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
-  if (req.user.role === 'patient') {
-    return res
-      .status(403)
-      .json({ success: false, message: 'Use the patient profile page to manage your password.' });
-  }
   const parsed = changePasswordSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
     return res
@@ -277,7 +303,12 @@ export const changePassword = asyncHandler(async (req, res) => {
   await logActivity({
     req,
     action: 'auth.password_change',
-    target: { type: 'staff', id: user._id, label: user.fullName, role: user.role },
+    target: {
+      type: user.role === 'patient' ? 'patient' : 'staff',
+      id: user._id,
+      label: user.fullName,
+      role: user.role,
+    },
     detail: 'Changed their own password.',
   });
   res.json({ success: true });

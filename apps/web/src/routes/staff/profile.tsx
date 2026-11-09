@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { KeyRound, LoaderCircle, Pencil, ShieldCheck, UserRound, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
@@ -20,7 +20,7 @@ import {
   PASSWORD_ERROR_MESSAGE,
   setSession,
 } from '../../lib/auth';
-import { ApiError, changeMyPassword, updateMyAccount } from '../../lib/api';
+import { ApiError, changeMyPassword, getMyAccount, updateMyAccount } from '../../lib/api';
 import { PERMISSION_OPTIONS } from '../../lib/permissions';
 import { getTodayService } from '../../lib/schedule';
 import { cn } from '../../lib/utils';
@@ -57,6 +57,8 @@ const EMPTY_PASSWORD_FORM: PasswordForm = {
   confirmPassword: '',
 };
 
+const CONTACT_REGEX = /^[\d+][\d\s\-()]{6,}$/;
+
 function MyProfilePage() {
   const reduceMotion = useReducedMotion();
   const session = getSession();
@@ -64,9 +66,12 @@ function MyProfilePage() {
   const isAdmin = session?.role === 'admin';
 
   const [name, setName] = useState(session?.name ?? '');
-  const [editingName, setEditingName] = useState(false);
+  const [contact, setContact] = useState('');
+  const [savedContact, setSavedContact] = useState('');
+  const [editingProfile, setEditingProfile] = useState(false);
   const [nameError, setNameError] = useState('');
-  const [savingName, setSavingName] = useState(false);
+  const [contactError, setContactError] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const [password, setPassword] = useState<PasswordForm>(EMPTY_PASSWORD_FORM);
   const [passwordErrors, setPasswordErrors] = useState<PasswordErrors>({});
@@ -77,23 +82,50 @@ function MyProfilePage() {
   const displayName = session?.name?.trim() || name.trim() || session?.email || '';
   const granted = session?.permissions ?? [];
 
-  async function saveName(event: FormEvent<HTMLFormElement>) {
+  // Read the account from the server so the form reflects saved values even
+  // after a sign-in on another device.
+  useEffect(() => {
+    let cancelled = false;
+    getMyAccount()
+      .then(({ user }) => {
+        if (cancelled) return;
+        setName(user.name);
+        setContact(user.contactNumber ?? '');
+        setSavedContact(user.contactNumber ?? '');
+      })
+      .catch(() => {
+        // Keep the session values as the fallback.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const next = name.trim();
-    if (!next) {
+    const nextName = name.trim();
+    const nextContact = contact.trim();
+    if (!nextName) {
       setNameError('Enter your full name.');
       return;
     }
+    if (nextContact && !CONTACT_REGEX.test(nextContact)) {
+      setContactError('Enter a valid contact number.');
+      return;
+    }
     setNameError('');
-    setSavingName(true);
+    setContactError('');
+    setSavingProfile(true);
     try {
-      const result = await updateMyAccount({ fullName: next });
+      const result = await updateMyAccount({ fullName: nextName, contactNumber: nextContact });
       const current = getSession();
       if (current) {
         setSession({ ...current, name: result.user.name, permissions: result.user.permissions });
       }
       setName(result.user.name);
-      setEditingName(false);
+      setContact(result.user.contactNumber ?? '');
+      setSavedContact(result.user.contactNumber ?? '');
+      setEditingProfile(false);
       setToast({ tone: 'success', message: 'Profile updated.' });
     } catch (err) {
       setToast({
@@ -101,7 +133,7 @@ function MyProfilePage() {
         message: err instanceof ApiError ? err.message : 'Could not save your profile. Try again.',
       });
     } finally {
-      setSavingName(false);
+      setSavingProfile(false);
     }
   }
 
@@ -188,17 +220,18 @@ function MyProfilePage() {
               </div>
             </div>
           </div>
-          {!editingName && (
+          {!editingProfile && (
             <button
               type="button"
               onClick={() => {
                 setName(session?.name ?? '');
                 setNameError('');
-                setEditingName(true);
+                setContactError('');
+                setEditingProfile(true);
               }}
               className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
             >
-              <Pencil size={14} aria-hidden /> Edit name
+              <Pencil size={14} aria-hidden /> Edit profile
             </button>
           )}
         </div>
@@ -211,39 +244,68 @@ function MyProfilePage() {
             description="Your name appears on every action you record in the activity log."
           />
 
-          {editingName ? (
-            <form onSubmit={saveName} className="mt-4" noValidate>
-              <label htmlFor="my-profile-name" className={fieldLabel}>
-                Full name
-              </label>
-              <input
-                id="my-profile-name"
-                autoComplete="name"
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setNameError('');
-                }}
-                aria-invalid={Boolean(nameError)}
-                aria-describedby={nameError ? 'my-profile-name-error' : undefined}
-                className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
-              />
-              {nameError && (
-                <p id="my-profile-name-error" className="mt-1 text-[11.5px] text-red-700">
-                  {nameError}
-                </p>
-              )}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="submit" disabled={savingName} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
-                  {savingName ? <LoaderCircle size={15} className="animate-spin" aria-hidden /> : null}
-                  Save name
+          {editingProfile ? (
+            <form onSubmit={saveProfile} className="mt-4 space-y-3.5" noValidate>
+              <div>
+                <label htmlFor="my-profile-name" className={fieldLabel}>
+                  Full name
+                </label>
+                <input
+                  id="my-profile-name"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setNameError('');
+                  }}
+                  aria-invalid={Boolean(nameError)}
+                  aria-describedby={nameError ? 'my-profile-name-error' : undefined}
+                  className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                />
+                {nameError && (
+                  <p id="my-profile-name-error" className="mt-1 text-[11.5px] text-red-700">
+                    {nameError}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="my-profile-contact" className={fieldLabel}>
+                  Contact number
+                </label>
+                <input
+                  id="my-profile-contact"
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  placeholder="09XXXXXXXXX"
+                  value={contact}
+                  onChange={(event) => {
+                    setContact(event.target.value);
+                    setContactError('');
+                  }}
+                  aria-invalid={Boolean(contactError)}
+                  aria-describedby={contactError ? 'my-profile-contact-error' : undefined}
+                  className={cn(inputClass, 'aria-[invalid=true]:border-destructive')}
+                />
+                {contactError && (
+                  <p id="my-profile-contact-error" className="mt-1 text-[11.5px] text-red-700">
+                    {contactError}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" disabled={savingProfile} className={`${primaryButton} h-9 px-3.5 text-[13px]`}>
+                  {savingProfile ? <LoaderCircle size={15} className="animate-spin" aria-hidden /> : null}
+                  Save profile
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setEditingName(false);
+                    setEditingProfile(false);
                     setNameError('');
+                    setContactError('');
                     setName(session?.name ?? '');
+                    setContact(savedContact);
                   }}
                   className={`${secondaryButton} h-9 px-3.5 text-[13px]`}
                 >
@@ -256,6 +318,12 @@ function MyProfilePage() {
               <div>
                 <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Full name</dt>
                 <dd className="mt-0.5 text-[13.5px] text-slate-800">{displayName}</dd>
+              </div>
+              <div>
+                <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  Contact number
+                </dt>
+                <dd className="mt-0.5 text-[13.5px] text-slate-800">{contact || '—'}</dd>
               </div>
               <div>
                 <dt className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-slate-500">Email</dt>
