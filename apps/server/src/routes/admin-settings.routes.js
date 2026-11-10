@@ -15,6 +15,11 @@ import {
   updateEmailSettings,
 } from '../controllers/email-settings.controller.js';
 import {
+  deleteUploadThingSettings,
+  getUploadThingSettings,
+  updateUploadThingSettings,
+} from '../controllers/uploadthing-settings.controller.js';
+import {
   deleteRecaptchaSettings,
   getRecaptchaSettings,
   updateRecaptchaSettings,
@@ -65,6 +70,15 @@ adminSettingsRouter.delete('/google', requireSuperPin('Google sign-in credential
 adminSettingsRouter.get('/recaptcha', getRecaptchaSettings);
 adminSettingsRouter.put('/recaptcha', requireSuperPin('reCAPTCHA keys'), updateRecaptchaSettings);
 adminSettingsRouter.delete('/recaptcha', requireSuperPin('reCAPTCHA keys (reset to default)'), deleteRecaptchaSettings);
+
+// Upload Image (UploadThing) token, encrypted at rest.
+adminSettingsRouter.get('/uploadthing', getUploadThingSettings);
+adminSettingsRouter.put('/uploadthing', requireSuperPin('Upload Image token'), updateUploadThingSettings);
+adminSettingsRouter.delete(
+  '/uploadthing',
+  requireSuperPin('Upload Image token (reset to default)'),
+  deleteUploadThingSettings,
+);
 
 // Email delivery (SMTP). Password reset codes and announcements use it, so an
 // admin can fix mail delivery without editing .env and restarting the API.

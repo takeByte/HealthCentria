@@ -199,15 +199,25 @@ export function completeAppointment(
 
 export type AnnouncementCategory = 'schedule-change' | 'vaccination-day' | 'health-advisory' | 'general';
 
+export interface AnnouncementImage {
+  url: string;
+  alt: string;
+  /** UploadThing file key; only sent when saving. */
+  key?: string;
+}
+
 export interface Announcement {
   id: string;
   title: string;
   body: string;
   category: AnnouncementCategory;
+  images: AnnouncementImage[];
   pinned: boolean;
   publishedAt: string;
   createdAt?: string;
   updatedAt?: string;
+  authorName?: string;
+  authorRole?: 'admin' | 'staff' | '';
   updatedByName?: string;
 }
 
@@ -227,13 +237,21 @@ export function createAnnouncement(input: {
   body: string;
   category: AnnouncementCategory;
   pinned: boolean;
+  images?: AnnouncementImage[];
 }): Promise<{ announcement: Announcement }> {
   return apiFetch('/api/announcements', { method: 'POST', body: input });
 }
 
 export function updateAnnouncement(
   id: string,
-  input: Partial<{ title: string; body: string; category: AnnouncementCategory; pinned: boolean; active: boolean }>,
+  input: Partial<{
+    title: string;
+    body: string;
+    category: AnnouncementCategory;
+    pinned: boolean;
+    active: boolean;
+    images: AnnouncementImage[];
+  }>,
 ): Promise<{ announcement: Announcement }> {
   return apiFetch(`/api/announcements/${id}`, { method: 'PATCH', body: input });
 }
@@ -623,6 +641,10 @@ export interface AuthSettings {
   googleSheetsEnabled: boolean;
   /** Off stops PDF uploads to Google Drive (and the emailed links). */
   googleDriveEnabled: boolean;
+  /** Off blocks new announcement image uploads; existing images keep showing. */
+  uploadthingEnabled: boolean;
+  /** False when the server has no upload token. */
+  uploadthingConfigured: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -678,6 +700,30 @@ export function updateRecaptchaIntegrationSettings(
 
 export function resetRecaptchaIntegrationSettings(pin: string): Promise<{ success: true } & RecaptchaIntegrationSettings> {
   return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export interface UploadThingIntegrationSettings {
+  tokenMasked: string;
+  source: 'custom' | 'default';
+  /** False when neither the database nor the server defaults have a token. */
+  configured: boolean;
+}
+
+export function getUploadThingIntegrationSettings(): Promise<{ success: true } & UploadThingIntegrationSettings> {
+  return apiFetch('/api/admin/settings/uploadthing');
+}
+
+export function updateUploadThingIntegrationSettings(
+  input: { token: string },
+  pin: string,
+): Promise<{ success: true } & UploadThingIntegrationSettings> {
+  return apiFetch('/api/admin/settings/uploadthing', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetUploadThingIntegrationSettings(
+  pin: string,
+): Promise<{ success: true } & UploadThingIntegrationSettings> {
+  return apiFetch('/api/admin/settings/uploadthing', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
 export interface EmailIntegrationSettings {
@@ -872,6 +918,7 @@ export async function getGoogleAuthConfig(): Promise<{ clientId: string }> {
 export async function getPublicSettings(): Promise<{
   googleSignInEnabled: boolean;
   recaptchaEnabled: boolean;
+  uploadthingEnabled: boolean;
   /** Public site key; empty when the server has none configured. */
   recaptchaSiteKey: string;
 }> {
@@ -893,6 +940,7 @@ export function updateAuthSettings(
       | 'notificationEmailsEnabled'
       | 'googleSheetsEnabled'
       | 'googleDriveEnabled'
+      | 'uploadthingEnabled'
     >
   >,
   pin: string,

@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { LoaderCircle, Plus, Search } from 'lucide-react';
 import { AnnouncementFeed } from '../../components/announcement-feed';
+import { ImageUploader } from '../../components/image-uploader';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
@@ -28,6 +29,7 @@ import {
   listAnnouncements,
   updateAnnouncement,
   type Announcement,
+  type AnnouncementImage,
   type AnnouncementCategory,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -49,9 +51,10 @@ interface ComposerState {
   body: string;
   category: AnnouncementCategory;
   pinned: boolean;
+  images: AnnouncementImage[];
 }
 
-const emptyComposer: ComposerState = { title: '', body: '', category: 'general', pinned: false };
+const emptyComposer: ComposerState = { title: '', body: '', category: 'general', pinned: false, images: [] };
 
 function StaffAnnouncements() {
   const reduceMotion = useReducedMotion();
@@ -106,6 +109,7 @@ function StaffAnnouncements() {
           body: composer.body.trim(),
           category: composer.category,
           pinned: composer.pinned,
+          images: composer.images,
         });
         setItems((l) => (l ?? []).map((x) => (x.id === r.announcement.id ? r.announcement : x)));
       } else {
@@ -114,6 +118,7 @@ function StaffAnnouncements() {
           body: composer.body.trim(),
           category: composer.category,
           pinned: composer.pinned,
+          images: composer.images,
         });
         setItems((l) => [r.announcement, ...(l ?? [])]);
       }
@@ -231,7 +236,14 @@ function StaffAnnouncements() {
                   type="button"
                   onClick={() => {
                     setFormError(null);
-                    setComposer({ id: a.id, title: a.title, body: a.body, category: a.category, pinned: a.pinned });
+                    setComposer({
+                      id: a.id,
+                      title: a.title,
+                      body: a.body,
+                      category: a.category,
+                      pinned: a.pinned,
+                      images: a.images ?? [],
+                    });
                   }}
                   className={chipButton}
                 >
@@ -281,7 +293,7 @@ function StaffAnnouncements() {
               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-              className="fixed inset-x-4 bottom-4 top-auto z-50 mx-auto max-w-lg rounded-2xl border border-white/70 bg-white/95 p-6 shadow-2xl backdrop-blur-xl sm:inset-0 sm:m-auto sm:h-fit"
+              className="fixed inset-x-4 bottom-4 top-auto z-50 mx-auto max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-white/70 bg-white/95 p-6 shadow-2xl backdrop-blur-xl sm:inset-0 sm:m-auto sm:h-fit"
             >
               <h2 className="font-display text-[17px] font-semibold tracking-[-0.02em] text-slate-900">
                 {composer.id ? 'Edit post' : 'New post'}
@@ -334,6 +346,11 @@ function StaffAnnouncements() {
                     className={textareaClass}
                   />
                 </div>
+                <ImageUploader
+                  images={composer.images}
+                  onChange={(images) => setComposer((c) => (c ? { ...c, images } : c))}
+                  disabled={pending}
+                />
                 <label htmlFor="ann-pinned" className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-slate-700">
                   <input
                     id="ann-pinned"
