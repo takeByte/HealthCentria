@@ -11,12 +11,14 @@ import {
   StatTile,
   StatusChip,
   StatusPill,
+  chipButton,
   fieldLabel,
   inputClass,
   panel,
   primaryButton,
   secondaryButton,
   selectClass,
+  textareaClass,
 } from '../../components/app-ui';
 import { DeletePatientSection, PATIENTS_FLASH_KEY } from '../../components/delete-patient';
 import { RecordMeta } from '../../components/record-meta';
@@ -26,6 +28,7 @@ import { getSession } from '../../lib/auth';
 import {
   ApiError,
   getPatient,
+  updateAppointmentRecord,
   updatePatientRecord,
   type PatientDetail,
   type PatientVisit,
@@ -168,6 +171,13 @@ function PatientDetailPage() {
   const [form, setForm] = useState<RecordForm>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<RecordErrors>({});
   const [pending, setPending] = useState(false);
+  const [recordEdit, setRecordEdit] = useState<{
+    id: string;
+    diagnosis: string;
+    prescription: string;
+    visitNotes: string;
+  } | null>(null);
+  const [recordSaving, setRecordSaving] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const navigate = useNavigate();
   const { withPin, dialog: pinDialog } = useSuperPin();
@@ -265,6 +275,59 @@ function PatientDetailPage() {
       }
     } finally {
       setPending(false);
+    }
+  }
+
+  function startRecordEdit(visit: PatientVisit) {
+    setRecordEdit({
+      id: visit.id,
+      diagnosis: visit.diagnosis ?? '',
+      prescription: visit.prescription ?? '',
+      visitNotes: visit.visitNotes ?? '',
+    });
+  }
+
+  function cancelRecordEdit() {
+    setRecordEdit(null);
+  }
+
+  async function saveRecordEdit() {
+    if (!recordEdit) return;
+    setRecordSaving(true);
+    try {
+      const result = await updateAppointmentRecord(recordEdit.id, {
+        diagnosis: recordEdit.diagnosis.trim(),
+        prescription: recordEdit.prescription.trim(),
+        visitNotes: recordEdit.visitNotes.trim(),
+      });
+      setVisits((list) =>
+        list
+          ? list.map((visit) =>
+              visit.id === result.appointment.id
+                ? {
+                    ...visit,
+                    diagnosis: result.appointment.diagnosis,
+                    prescription: result.appointment.prescription,
+                    visitNotes: result.appointment.visitNotes,
+                    updatedAt: result.appointment.updatedAt,
+                    updatedByName: result.appointment.updatedByName,
+                  }
+                : visit,
+            )
+          : list,
+      );
+      setRecordEdit(null);
+      setToast({ tone: 'success', message: 'Visit record updated.' });
+    } catch (err) {
+      setToast({
+        tone: 'error',
+        message:
+          err instanceof ApiError
+            ? err.message || 'Could not update the visit record.'
+            : 'Could not update the visit record. Try again.',
+      });
+    } finally {
+      setRecordSaving(false);
     }
   }
 
@@ -626,9 +689,91 @@ function PatientDetailPage() {
                             className="mt-1"
                           />
                         </div>
-                        <StatusChip status={v.status} />
+                        <div className="flex shrink-0 items-center gap-2">
+                          <StatusChip status={v.status} />
+                          {v.status === 'completed' && recordEdit?.id !== v.id && (
+                            <button
+                              type="button"
+                              onClick={() => startRecordEdit(v)}
+                              className={chipButton}
+                              aria-label={`Edit clinical record for ${serviceName(v)} on ${formatDay(v.day)}`}
+                            >
+                              <Pencil size={13} aria-hidden /> Edit record
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {v.status === 'completed' && (v.diagnosis || v.prescription || v.visitNotes) ? (
+                      {recordEdit && recordEdit.id === v.id ? (
+                        <form
+                          className="mt-3 space-y-3 border-t border-slate-200/70 pt-3"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void saveRecordEdit();
+                          }}
+                        >
+                          <div>
+                            <label htmlFor={`visit-diagnosis-${v.id}`} className={fieldLabel}>
+                              Diagnosis
+                            </label>
+                            <textarea
+                              id={`visit-diagnosis-${v.id}`}
+                              rows={2}
+                              maxLength={1000}
+                              value={recordEdit.diagnosis}
+                              onChange={(event) =>
+                                setRecordEdit({ ...recordEdit, diagnosis: event.target.value })
+                              }
+                              className={textareaClass}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`visit-prescription-${v.id}`} className={fieldLabel}>
+                              Prescription
+                            </label>
+                            <textarea
+                              id={`visit-prescription-${v.id}`}
+                              rows={2}
+                              maxLength={1000}
+                              value={recordEdit.prescription}
+                              onChange={(event) =>
+                                setRecordEdit({ ...recordEdit, prescription: event.target.value })
+                              }
+                              className={textareaClass}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`visit-notes-${v.id}`} className={fieldLabel}>
+                              Visit notes
+                            </label>
+                            <textarea
+                              id={`visit-notes-${v.id}`}
+                              rows={3}
+                              maxLength={2000}
+                              value={recordEdit.visitNotes}
+                              onChange={(event) =>
+                                setRecordEdit({ ...recordEdit, visitNotes: event.target.value })
+                              }
+                              className={textareaClass}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={cancelRecordEdit}
+                              className={secondaryButton}
+                              disabled={recordSaving}
+                            >
+                              Cancel
+                            </button>
+                            <button type="submit" className={primaryButton} disabled={recordSaving}>
+                              {recordSaving && (
+                                <LoaderCircle size={16} className="animate-spin" aria-hidden />
+                              )}
+                              {recordSaving ? 'Saving…' : 'Save record'}
+                            </button>
+                          </div>
+                        </form>
+                      ) : v.status === 'completed' && (v.diagnosis || v.prescription || v.visitNotes) ? (
                         <dl className="mt-3 space-y-2 border-t border-slate-200/70 pt-3 text-[12.5px] leading-5">
                           {v.diagnosis && (
                             <div>

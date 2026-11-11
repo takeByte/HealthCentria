@@ -17,6 +17,7 @@ const SWITCH_LABELS = {
   notificationEmailsEnabled: 'Notification emails',
   googleSheetsEnabled: 'Google Sheets export',
   googleDriveEnabled: 'Google Drive uploads',
+  uploadthingEnabled: 'UploadThing image uploads',
 };
 
 function switchLabel(req) {

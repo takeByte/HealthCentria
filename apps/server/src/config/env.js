@@ -81,6 +81,12 @@ const envSchema = z.object({
   // Must match an Authorized redirect URI on that OAuth client. Defaults to
   // http://localhost:<PORT>/api/admin/settings/google-drive/callback.
   GOOGLE_DRIVE_REDIRECT_URI: z.string().optional(),
+
+  // Automatic data backups (Admin → Backups). BACKUP_DIR defaults to
+  // apps/server/backups; a relative value is resolved from the API's cwd.
+  // BACKUP_TIMEZONE decides which wall clock the schedule hours refer to.
+  BACKUP_DIR: z.string().optional(),
+  BACKUP_TIMEZONE: z.string().default('Asia/Manila'),
 });
 
 // Integration defaults that an admin can override from Settings are named

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { createApp } from './app.js';
 import { connectDB } from './config/db.js';
 import { env } from './config/env.js';
+import { startBackupScheduler, stopBackupScheduler } from './services/backup-scheduler.js';
 
 const RETRY_DELAYS_MS = [1000, 2000, 5000, 10000, 15000];
 
@@ -46,8 +47,11 @@ async function main() {
     console.log(`API listening on http://localhost:${env.PORT}`);
   });
 
+  startBackupScheduler();
+
   const shutdown = async () => {
     console.log('Shutting down...');
+    stopBackupScheduler();
     server.close(async () => {
       if (mongoose.connection.readyState === 1) await mongoose.disconnect();
       process.exit(0);

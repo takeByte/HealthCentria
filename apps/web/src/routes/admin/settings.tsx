@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import ReCAPTCHA from 'react-google-recaptcha';
 import {
   ChevronDown,
-  Download,
   Info,
   KeyRound,
   LoaderCircle,
@@ -23,7 +22,6 @@ import {
   CardHeading,
   InlineNotice,
   PageHero,
-  Segmented,
   StatusPill,
   SuccessNote,
   fieldLabel,
@@ -36,7 +34,6 @@ import { PinCancelled, PinDialog, type PinRequest, type WithPin } from '../../co
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
-  downloadVisitsCsv,
   getAuthSettings,
   getEmailIntegrationSettings,
   getGoogleCalendarSettings,
@@ -55,6 +52,10 @@ import {
   type GoogleSheetsSettings,
   getPublicSettings,
   getRecaptchaIntegrationSettings,
+  getUploadThingIntegrationSettings,
+  resetUploadThingIntegrationSettings,
+  updateUploadThingIntegrationSettings,
+  type UploadThingIntegrationSettings,
   resetEmailIntegrationSettings,
   resetGoogleIntegrationSettings,
   resetRecaptchaIntegrationSettings,
@@ -526,6 +527,210 @@ function GoogleSheetsCard({
  * disconnecting need the superadmin PIN; the token is stored encrypted on the
  * server and never reaches the browser.
  */
+function UploadThingCard({
+  withPin,
+  onToast,
+  enabled,
+  toggling,
+  onToggle,
+}: {
+  withPin: WithPin;
+  onToast: (t: ToastMessage) => void;
+  enabled: boolean | undefined;
+  toggling: boolean;
+  onToggle: (next: boolean) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [info, setInfo] = useState<UploadThingIntegrationSettings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getUploadThingIntegrationSettings()
+      .then((r) => {
+        if (!cancelled) setInfo({ tokenMasked: r.tokenMasked, source: r.source, configured: r.configured });
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError('Could not load the upload settings. Reload the page to try again.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const token = tokenDraft.trim();
+    if (saving || !token) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await withPin('Save the Upload Image token.', (pin) =>
+        updateUploadThingIntegrationSettings({ token }, pin),
+      );
+      setInfo({ tokenMasked: r.tokenMasked, source: r.source, configured: r.configured });
+      setTokenDraft('');
+      onToast({ tone: 'success', message: 'Upload Image token verified and saved.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      setError(
+        err instanceof ApiError
+          ? (err.errors?.token?.[0] ?? err.message)
+          : 'Could not save the token. Try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reset() {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      const r = await withPin('Reset the Upload Image token to the default.', (pin) =>
+        resetUploadThingIntegrationSettings(pin),
+      );
+      setInfo({ tokenMasked: r.tokenMasked, source: r.source, configured: r.configured });
+      setTokenDraft('');
+      setError(null);
+      setResetOpen(false);
+      onToast({ tone: 'success', message: 'Upload Image token reset to the default.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      onToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not reset the token. Try again.',
+      });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <>
+      <motion.section
+        id="upload-image"
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.14 }}
+        className={panel}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-xl">
+            <CardHeading
+              title="Upload Image"
+              description="Stores the photos staff attach to announcements. Photos upload straight to the image storage service and show in the patient and staff feeds."
+            />
+          </div>
+          <div className="flex items-center gap-2.5">
+            {toggling && <LoaderCircle size={17} className="animate-spin text-slate-400" aria-hidden />}
+            {info === null ? (
+              <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
+            ) : !info.configured ? (
+              <StatusPill tone="amber">Not set up</StatusPill>
+            ) : null}
+            {enabled !== undefined && (
+              <>
+                <StatusPill tone={enabled ? 'teal' : 'slate'}>{enabled ? 'On' : 'Off'}</StatusPill>
+                <Toggle
+                  checked={enabled}
+                  disabled={toggling}
+                  label="Allow announcement image uploads"
+                  onChange={onToggle}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {enabled === false && (
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+            Image uploads are off. Staff can still post text announcements, and photos already attached keep
+            showing, but nobody can add new photos.
+          </p>
+        )}
+        {loadError && <InlineNotice className="mt-4">{loadError}</InlineNotice>}
+        {info && !info.configured && (
+          <InlineNotice className="mt-4">
+            No upload token is set yet. Open Configure and add one, or photo uploads will fail.
+          </InlineNotice>
+        )}
+
+        {info && (
+          <ConfigureSection
+            id="upload-image-config"
+            label="Configure"
+            defaultOpen={!info.configured}
+            summary={
+              <span className="truncate">
+                {info.configured ? (info.source === 'custom' ? 'Custom token' : 'Default token') : 'No token'}
+              </span>
+            }
+          >
+            <form onSubmit={save} className="space-y-4">
+              <div>
+                <label htmlFor="upload-image-token" className={fieldLabel}>
+                  API token
+                </label>
+                <input
+                  id="upload-image-token"
+                  type="password"
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  value={tokenDraft}
+                  onChange={(e) => {
+                    setTokenDraft(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder={compactMask(info.tokenMasked) || 'No token configured'}
+                  className={cn(inputClass, 'font-mono text-[12.5px]')}
+                />
+                <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                  Current: <span className="text-slate-700">{compactMask(info.tokenMasked) || 'Not set'}</span>
+                </p>
+              </div>
+
+              <p className="text-[12px] leading-5 text-slate-500">
+                Leave blank to keep the current token. The token is checked with the storage service before it is
+                saved, encrypted on the server, and never sent back to this page.
+              </p>
+
+              {error && <InlineNotice>{error}</InlineNotice>}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="submit" disabled={saving || !tokenDraft.trim()} className={primaryButton}>
+                  {saving && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                  Verify &amp; save
+                </button>
+                {info.source === 'custom' && (
+                  <button type="button" onClick={() => setResetOpen(true)} className={secondaryButton}>
+                    Reset to default
+                  </button>
+                )}
+              </div>
+            </form>
+          </ConfigureSection>
+        )}
+      </motion.section>
+
+      {resetOpen && (
+        <ResetDialog
+          title="Reset the upload token?"
+          description="The custom token will be deleted. Photo uploads will immediately use the default token configured on the server."
+          busy={resetting}
+          onCancel={() => setResetOpen(false)}
+          onConfirm={reset}
+        />
+      )}
+    </>
+  );
+}
+
 function GoogleDriveCard({
   withPin,
   onToast,
@@ -1004,11 +1209,6 @@ function AdminSettings() {
   const [calendarActionError, setCalendarActionError] = useState<string | null>(null);
   const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
 
-  const [reportRange, setReportRange] = useState<'30' | '90'>('30');
-  const [reportExporting, setReportExporting] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [reportMessage, setReportMessage] = useState<string | null>(null);
-
   const dismissToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
@@ -1322,6 +1522,28 @@ function AdminSettings() {
     }
   }
 
+  async function setUploadThingEnabled(next: boolean) {
+    if (!settings || saving) return;
+    const previous = settings;
+    setSaving(true);
+    try {
+      const r = await withPin(`Turn UploadThing image uploads ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAuthSettings({ uploadthingEnabled: next }, pin),
+      );
+      setSettings(r.settings);
+      setToast({ tone: 'success', message: `UploadThing image uploads ${next ? 'turned on' : 'turned off'}.` });
+    } catch (err) {
+      setSettings(previous);
+      if (err instanceof PinCancelled) return;
+      setToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not save the UploadThing setting. Try again.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function setSheetsEnabled(next: boolean) {
     if (!settings || saving) return;
     const previous = settings;
@@ -1580,21 +1802,6 @@ function AdminSettings() {
     }
   }
 
-  async function exportReportCsv() {
-    if (reportExporting) return;
-    setReportExporting(true);
-    setReportError(null);
-    setReportMessage(null);
-    try {
-      await downloadVisitsCsv(Number(reportRange));
-      setReportMessage(`Visits report for the last ${reportRange} days downloaded.`);
-    } catch (err) {
-      setReportError(err instanceof ApiError ? err.message : 'Could not generate the report. Try again.');
-    } finally {
-      setReportExporting(false);
-    }
-  }
-
   const googleOn = settings?.googleSignInEnabled ?? false;
   // Every on/off switch on the page counts toward the header summary — add
   // future toggles to this list and the "x of y active" pill follows.
@@ -1606,6 +1813,7 @@ function AdminSettings() {
           settings.notificationEmailsEnabled,
           settings.googleSheetsEnabled,
           settings.googleDriveEnabled,
+          settings.uploadthingEnabled,
         ]
       : []),
     ...(calendar ? [calendar.enabled] : []),
@@ -2423,61 +2631,13 @@ function AdminSettings() {
           onToggle={setDriveEnabled}
         />
 
-        <SectionLabel>Tools</SectionLabel>
-
-        <motion.section
-          id="reports-export"
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-          animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-          transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.14 }}
-          className={panel}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-xl">
-              <CardHeading
-                title="Reports export"
-                description="Download the visits-per-service report as a CSV file. The same report staff see under Reports — date range, each service, completed visits, and the total."
-              />
-            </div>
-            <StatusPill tone="teal">CSV</StatusPill>
-          </div>
-
-          {reportError && <InlineNotice className="mt-4">{reportError}</InlineNotice>}
-          {reportMessage && <SuccessNote className="mt-4">{reportMessage}</SuccessNote>}
-
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-inset ring-slate-200">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-[13px] font-medium text-slate-700">Report window</span>
-              <Segmented
-                ariaLabel="Report window"
-                value={reportRange}
-                onChange={setReportRange}
-                options={[
-                  { key: '30', label: '30 days' },
-                  { key: '90', label: '90 days' },
-                ]}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={exportReportCsv}
-              disabled={reportExporting}
-              className={primaryButton}
-            >
-              {reportExporting ? (
-                <LoaderCircle size={16} className="animate-spin" aria-hidden />
-              ) : (
-                <Download size={16} aria-hidden />
-              )}
-              {reportExporting ? 'Generating…' : 'Generate CSV'}
-            </button>
-          </div>
-
-          <p className="mt-3 text-[12px] leading-5 text-slate-500">
-            Only completed appointments are counted. The CSV opens in Excel or Google Sheets and includes a UTF-8
-            BOM so service names render correctly.
-          </p>
-        </motion.section>
+        <UploadThingCard
+          withPin={withPin}
+          onToast={setToast}
+          enabled={settings?.uploadthingEnabled}
+          toggling={saving}
+          onToggle={setUploadThingEnabled}
+        />
       </DashboardShell>
 
       <AnimatePresence>

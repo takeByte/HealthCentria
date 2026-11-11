@@ -25,6 +25,9 @@ const appSettingsSchema = new mongoose.Schema(
     googleSheetsEnabled: { type: Boolean, default: true },
     // Google Drive uploads of exported PDFs (and the emails with their links).
     googleDriveEnabled: { type: Boolean, default: true },
+    // UploadThing image uploads for announcements. Off blocks new uploads only;
+    // images already attached to posts keep displaying.
+    uploadthingEnabled: { type: Boolean, default: true },
   },
   { timestamps: true },
 );
@@ -62,6 +65,13 @@ export async function isNotificationEmailEnabled() {
   if (mongoose.connection.readyState !== 1) return true;
   const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
   return doc?.notificationEmailsEnabled !== false;
+}
+
+/** True unless an admin has switched UploadThing uploads off. */
+export async function isUploadThingEnabled() {
+  if (mongoose.connection.readyState !== 1) return true;
+  const doc = await AppSettings.findOne({ key: SETTINGS_KEY }).lean();
+  return doc?.uploadthingEnabled !== false;
 }
 
 /** True unless an admin has switched Google Sheets export off. */

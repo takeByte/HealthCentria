@@ -33,6 +33,14 @@ const completeSchema = z.object({
   visitNotes: z.string().trim().max(2000).optional().default(''),
 });
 
+const recordEditSchema = z
+  .object({
+    diagnosis: z.string().trim().max(1000).optional(),
+    prescription: z.string().trim().max(1000).optional(),
+    visitNotes: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' });
+
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
     res.status(503).json({ success: false, message: 'Database is not connected. Try again later.' });
@@ -288,6 +296,70 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   }
   // Keep the calendar title/description in step with the completed status.
   void syncAppointmentToCalendar(appt).catch(() => {});
+  res.json({ success: true, appointment: present(appt) });
+});
+
+/**
+ * PATCH /api/appointments/:id/record — correct the clinical notes on a visit
+ * that is already completed. Completion is still the only way to create the
+ * record; this only edits it afterward (and logs every changed field).
+ */
+export const updateAppointmentRecord = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = recordEditSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  const before = await Appointment.findById(req.params.id).lean();
+  if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
+  if (before.status !== 'completed') {
+    return res.status(409).json({
+      success: false,
+      code: 'APPOINTMENT_CONFLICT',
+      message: 'Clinical notes can only be edited after the visit is completed.',
+    });
+  }
+
+  const changes = diffChanges(
+    ['diagnosis', 'prescription', 'visitNotes']
+      .filter((field) => parsed.data[field] !== undefined)
+      .map((field) => [field, before[field] ?? '', parsed.data[field]]),
+  );
+
+  const patch = { updatedBy: req.user.id };
+  for (const field of ['diagnosis', 'prescription', 'visitNotes']) {
+    if (parsed.data[field] !== undefined) patch[field] = parsed.data[field];
+  }
+
+  const appt = await Appointment.findOneAndUpdate(
+    { _id: req.params.id, status: 'completed' },
+    { $set: patch, $inc: { __v: 1 } },
+    { new: true },
+  ).populate([
+    { path: 'patient', select: 'fullName email' },
+    { path: 'service', select: 'name' },
+    { path: 'updatedBy', select: 'fullName' },
+  ]);
+  if (!appt) {
+    return appointmentConflict(
+      res,
+      req.params.id,
+      'This visit is no longer completed. Reload the patient record.',
+    );
+  }
+
+  await logAppointment(req, 'record.update', appt, {
+    changes,
+    detail: 'Clinical visit record edited after the visit.',
+  });
+  // Keep the mirrored calendar entry's description in step.
+  void syncAppointmentToCalendar(appt).catch(() => {});
+
   res.json({ success: true, appointment: present(appt) });
 });
 

@@ -3,6 +3,7 @@ import {
   CalendarCheck,
   CalendarDays,
   ClipboardList,
+  DatabaseBackup,
   FileText,
   History,
   LayoutDashboard,
@@ -42,6 +43,7 @@ export const adminNav: ShellNavItem[] = [
   { label: 'Activity log', to: '/admin/activity', icon: History },
   { label: 'Reports', to: '/staff/reports', icon: FileText },
   { label: 'Staff Accounts', to: '/admin/staff-accounts', icon: UserCog },
+  { label: 'Backups', to: '/admin/backups', icon: DatabaseBackup },
   { label: 'Settings', to: '/admin/settings', icon: Settings },
   { label: 'My Profile', to: '/staff/profile', icon: UserRound },
 ];

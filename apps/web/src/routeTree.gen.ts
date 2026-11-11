@@ -18,6 +18,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as StaffRouteRouteImport } from './routes/staff/route'
 import { Route as AdminActivityRouteImport } from './routes/admin/activity'
+import { Route as AdminBackupsRouteImport } from './routes/admin/backups'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminStaffAccountsRouteImport } from './routes/admin/staff-accounts'
@@ -88,6 +89,11 @@ const StaffRouteRoute = StaffRouteRouteImport.update({
 const AdminActivityRoute = AdminActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminBackupsRoute = AdminBackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminDashboardRoute = AdminDashboardRouteImport.update({
@@ -231,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/backups': typeof AdminBackupsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/backups': typeof AdminBackupsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
@@ -305,6 +313,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/backups': typeof AdminBackupsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
@@ -344,6 +353,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/admin/activity'
+    | '/admin/backups'
     | '/admin/dashboard'
     | '/admin/settings'
     | '/admin/staff-accounts'
@@ -381,6 +391,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/admin/activity'
+    | '/admin/backups'
     | '/admin/dashboard'
     | '/admin/settings'
     | '/admin/staff-accounts'
@@ -417,6 +428,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/admin/activity'
+    | '/admin/backups'
     | '/admin/dashboard'
     | '/admin/settings'
     | '/admin/staff-accounts'
@@ -520,6 +532,13 @@ declare module '@tanstack/react-router' {
       path: '/activity'
       fullPath: '/admin/activity'
       preLoaderRoute: typeof AdminActivityRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/backups': {
+      id: '/admin/backups'
+      path: '/backups'
+      fullPath: '/admin/backups'
+      preLoaderRoute: typeof AdminBackupsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/dashboard': {
@@ -709,6 +728,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteRouteChildren {
   AdminActivityRoute: typeof AdminActivityRoute
+  AdminBackupsRoute: typeof AdminBackupsRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffAccountsRoute: typeof AdminStaffAccountsRoute
@@ -716,6 +736,7 @@ interface AdminRouteRouteChildren {
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminActivityRoute: AdminActivityRoute,
+  AdminBackupsRoute: AdminBackupsRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffAccountsRoute: AdminStaffAccountsRoute,

@@ -5,6 +5,7 @@ import { AppSettings, SETTINGS_KEY, isGoogleSignInEnabled } from '../models/app-
 import { logActivity } from '../services/activity.js';
 import { isGoogleConfigured, resolveGoogleCredentials } from '../utils/google-credentials.js';
 import { resolveRecaptchaCredentials } from '../utils/recaptcha-credentials.js';
+import { resolveUploadThingToken } from '../utils/uploadthing-credentials.js';
 
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
@@ -23,6 +24,8 @@ async function present(doc) {
     notificationEmailsEnabled: doc?.notificationEmailsEnabled !== false,
     googleSheetsEnabled: doc?.googleSheetsEnabled !== false,
     googleDriveEnabled: doc?.googleDriveEnabled !== false,
+    uploadthingEnabled: doc?.uploadthingEnabled !== false,
+    uploadthingConfigured: Boolean((await resolveUploadThingToken()).token),
     googleConfigured: isGoogleConfigured(credentials),
     updatedAt: doc?.updatedAt ?? null,
   };
@@ -40,6 +43,8 @@ export const getPublicSettings = asyncHandler(async (req, res) => {
     success: true,
     googleSignInEnabled: doc?.googleSignInEnabled !== false,
     recaptchaEnabled: doc?.recaptchaEnabled !== false,
+    // Public so the announcement composer can hide the photo picker while off.
+    uploadthingEnabled: doc?.uploadthingEnabled !== false,
     // Public by design: the browser needs it to render the widget.
     recaptchaSiteKey: recaptcha.siteKey,
   });
@@ -59,6 +64,7 @@ const updateSchema = z
     notificationEmailsEnabled: z.boolean().optional(),
     googleSheetsEnabled: z.boolean().optional(),
     googleDriveEnabled: z.boolean().optional(),
+    uploadthingEnabled: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0);
 
@@ -149,6 +155,19 @@ export const updateSettings = asyncHandler(async (req, res) => {
       target: { type: 'settings', id: SETTINGS_KEY, label: 'Google Drive uploads' },
       changes: [['googleDriveEnabled', previous?.googleDriveEnabled !== false, parsed.data.googleDriveEnabled]],
       detail: `Google Drive uploads ${parsed.data.googleDriveEnabled ? 'enabled' : 'disabled'}.`,
+    });
+  }
+
+  if (
+    parsed.data.uploadthingEnabled !== undefined &&
+    (previous?.uploadthingEnabled !== false) !== parsed.data.uploadthingEnabled
+  ) {
+    await logActivity({
+      req,
+      action: 'integration.update',
+      target: { type: 'settings', id: SETTINGS_KEY, label: 'UploadThing image uploads' },
+      changes: [['uploadthingEnabled', previous?.uploadthingEnabled !== false, parsed.data.uploadthingEnabled]],
+      detail: `UploadThing image uploads ${parsed.data.uploadthingEnabled ? 'enabled' : 'disabled'}.`,
     });
   }
 

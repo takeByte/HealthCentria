@@ -11,6 +11,7 @@
     "seed:services": "node src/scripts/seed-services.js",
     "seed:announcements": "node src/scripts/seed-announcements.js",
     "seed:demo": "node src/scripts/seed-demo-data.js",
+    "backup": "node src/scripts/run-backup.js",
     "reminders": "node src/scripts/send-reminders.js",
     "sync:calendar": "node src/scripts/sync-google-calendar.js",
     "typecheck": "node --check src/index.js",
@@ -29,6 +30,7 @@
     "pdfkit": "^0.20.2",
     "pdfmake": "^0.2.20",
     "resend": "^6.30.0",
+    "uploadthing": "^7.7.4",
     "zod": "^3.23.8"
   }
 }

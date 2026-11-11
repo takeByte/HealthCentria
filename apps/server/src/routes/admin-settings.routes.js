@@ -15,6 +15,11 @@ import {
   updateEmailSettings,
 } from '../controllers/email-settings.controller.js';
 import {
+  deleteUploadThingSettings,
+  getUploadThingSettings,
+  updateUploadThingSettings,
+} from '../controllers/uploadthing-settings.controller.js';
+import {
   deleteRecaptchaSettings,
   getRecaptchaSettings,
   updateRecaptchaSettings,
@@ -38,6 +43,13 @@ import {
 } from '../controllers/drive-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireSuperPin } from '../middleware/requireSuperPin.js';
+import {
+  downloadBackup,
+  getBackupSettings,
+  removeBackup,
+  runBackupNow,
+  updateBackupSettings,
+} from '../controllers/backup-settings.controller.js';
 
 export const adminSettingsRouter = Router();
 
@@ -65,6 +77,15 @@ adminSettingsRouter.delete('/google', requireSuperPin('Google sign-in credential
 adminSettingsRouter.get('/recaptcha', getRecaptchaSettings);
 adminSettingsRouter.put('/recaptcha', requireSuperPin('reCAPTCHA keys'), updateRecaptchaSettings);
 adminSettingsRouter.delete('/recaptcha', requireSuperPin('reCAPTCHA keys (reset to default)'), deleteRecaptchaSettings);
+
+// Upload Image (UploadThing) token, encrypted at rest.
+adminSettingsRouter.get('/uploadthing', getUploadThingSettings);
+adminSettingsRouter.put('/uploadthing', requireSuperPin('Upload Image token'), updateUploadThingSettings);
+adminSettingsRouter.delete(
+  '/uploadthing',
+  requireSuperPin('Upload Image token (reset to default)'),
+  deleteUploadThingSettings,
+);
 
 // Email delivery (SMTP). Password reset codes and announcements use it, so an
 // admin can fix mail delivery without editing .env and restarting the API.
@@ -119,3 +140,15 @@ adminSettingsRouter.delete(
   requireSuperPin('Google Drive credentials (reset to default)'),
   resetDriveCredentials,
 );
+
+// Automatic data backups. The schedule and destructive actions need the
+// superadmin PIN; listing and downloading only need an admin session.
+adminSettingsRouter.get('/backup', getBackupSettings);
+adminSettingsRouter.put(
+  '/backup',
+  requireSuperPin((req) => `Automatic backup schedule (${req.body?.enabled ? 'enabled' : 'updated'})`),
+  updateBackupSettings,
+);
+adminSettingsRouter.post('/backup/run', requireSuperPin('Manual data backup'), runBackupNow);
+adminSettingsRouter.get('/backup/download/:name', downloadBackup);
+adminSettingsRouter.delete('/backup/:name', requireSuperPin('Backup file deletion'), removeBackup);

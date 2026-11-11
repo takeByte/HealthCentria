@@ -8,3 +8,4 @@ dist-ssr/
 *.tsbuildinfo
 .tanstack/
 screenshots/
+apps/server/backups/

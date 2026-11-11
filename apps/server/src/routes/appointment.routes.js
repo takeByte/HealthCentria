@@ -7,6 +7,7 @@ import {
   declineAppointment,
   lookupPatient,
   queueAppointments,
+  updateAppointmentRecord,
   walkInAppointment,
 } from '../controllers/staff-appointment.controller.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/requireAuth.js';
@@ -65,4 +66,13 @@ appointmentRouter.patch(
   requireRole('staff', 'admin'),
   requirePermission('appointments.manage'),
   completeAppointment,
+);
+// Post-visit corrections: reachable from the appointments queue (appointment
+// permission) or the patient chart (patient permission).
+appointmentRouter.patch(
+  '/:id/record',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('appointments.manage', 'patients.manage'),
+  updateAppointmentRecord,
 );

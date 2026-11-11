@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
 import { requestContext } from './middleware/requestContext.js';
 import { apiRouter } from './routes/index.js';
+import { uploadthingHandler } from './uploadthing/handler.js';
 
 export function createApp() {
   const app = express();
@@ -36,6 +37,9 @@ export function createApp() {
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   // Client IP + user agent for every activity entry written downstream.
   app.use(requestContext);
+
+  // UploadThing handshake + completion webhook. Auth lives in the file router.
+  app.use('/api/uploadthing', uploadthingHandler);
 
   app.use('/api', apiRouter);
 

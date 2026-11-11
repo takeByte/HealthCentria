@@ -59,6 +59,8 @@ export const ACTIVITY_ACTIONS = [
   'settings.email.test',
   'settings.recaptcha.update',
   'settings.recaptcha.reset',
+  'settings.uploadthing.update',
+  'settings.uploadthing.reset',
   'settings.signin.update',
   'integration.update',
   'settings.pin_failed',
@@ -74,7 +76,10 @@ export const ACTIVITY_ACTIONS = [
   'settings.drive.credentials_reset',
   'settings.drive.folder_update',
   'settings.drive.folder_reset',
+  'settings.backup.update',
+  'settings.backup.delete',
   // System
+  'system.backup',
   'activity.purge',
 ];
 
@@ -116,6 +121,8 @@ export const ACTION_CATEGORY = {
   'settings.email.test': 'configuration',
   'settings.recaptcha.update': 'configuration',
   'settings.recaptcha.reset': 'configuration',
+  'settings.uploadthing.update': 'configuration',
+  'settings.uploadthing.reset': 'configuration',
   'settings.signin.update': 'configuration',
   'integration.update': 'configuration',
   'settings.pin_failed': 'configuration',
@@ -131,6 +138,9 @@ export const ACTION_CATEGORY = {
   'settings.drive.credentials_reset': 'configuration',
   'settings.drive.folder_update': 'configuration',
   'settings.drive.folder_reset': 'configuration',
+  'settings.backup.update': 'configuration',
+  'settings.backup.delete': 'configuration',
+  'system.backup': 'system',
   'activity.purge': 'system',
 };
 
@@ -176,7 +186,7 @@ const auditLogSchema = new mongoose.Schema(
     category: { type: String, enum: ACTIVITY_CATEGORIES, required: true, index: true },
     targetType: {
       type: String,
-      enum: ['appointment', 'patient', 'staff', 'announcement', 'service', 'settings', 'integration', 'activity', 'auth', ''],
+      enum: ['appointment', 'patient', 'staff', 'announcement', 'service', 'settings', 'integration', 'activity', 'auth', 'system', ''],
       default: '',
       index: true,
     },

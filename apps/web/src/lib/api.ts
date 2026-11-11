@@ -201,17 +201,35 @@ export function completeAppointment(
   return apiFetch(`/api/appointments/${id}/complete`, { method: 'PATCH', body: clinical });
 }
 
+/** Correct the clinical notes on an already-completed visit. */
+export function updateAppointmentRecord(
+  id: string,
+  clinical: { diagnosis?: string; prescription?: string; visitNotes?: string },
+): Promise<{ appointment: StaffAppointment }> {
+  return apiFetch(`/api/appointments/${id}/record`, { method: 'PATCH', body: clinical });
+}
+
 export type AnnouncementCategory = 'schedule-change' | 'vaccination-day' | 'health-advisory' | 'general';
+
+export interface AnnouncementImage {
+  url: string;
+  alt: string;
+  /** UploadThing file key; only sent when saving. */
+  key?: string;
+}
 
 export interface Announcement {
   id: string;
   title: string;
   body: string;
   category: AnnouncementCategory;
+  images: AnnouncementImage[];
   pinned: boolean;
   publishedAt: string;
   createdAt?: string;
   updatedAt?: string;
+  authorName?: string;
+  authorRole?: 'admin' | 'staff' | '';
   updatedByName?: string;
 }
 
@@ -231,13 +249,21 @@ export function createAnnouncement(input: {
   body: string;
   category: AnnouncementCategory;
   pinned: boolean;
+  images?: AnnouncementImage[];
 }): Promise<{ announcement: Announcement }> {
   return apiFetch('/api/announcements', { method: 'POST', body: input });
 }
 
 export function updateAnnouncement(
   id: string,
-  input: Partial<{ title: string; body: string; category: AnnouncementCategory; pinned: boolean; active: boolean }>,
+  input: Partial<{
+    title: string;
+    body: string;
+    category: AnnouncementCategory;
+    pinned: boolean;
+    active: boolean;
+    images: AnnouncementImage[];
+  }>,
 ): Promise<{ announcement: Announcement }> {
   return apiFetch(`/api/announcements/${id}`, { method: 'PATCH', body: input });
 }
@@ -714,6 +740,10 @@ export interface AuthSettings {
   googleSheetsEnabled: boolean;
   /** Off stops PDF uploads to Google Drive (and the emailed links). */
   googleDriveEnabled: boolean;
+  /** Off blocks new announcement image uploads; existing images keep showing. */
+  uploadthingEnabled: boolean;
+  /** False when the server has no upload token. */
+  uploadthingConfigured: boolean;
   /** False when the server has no Google OAuth credentials — the switch then has no effect. */
   googleConfigured: boolean;
   updatedAt: string | null;
@@ -769,6 +799,30 @@ export function updateRecaptchaIntegrationSettings(
 
 export function resetRecaptchaIntegrationSettings(pin: string): Promise<{ success: true } & RecaptchaIntegrationSettings> {
   return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export interface UploadThingIntegrationSettings {
+  tokenMasked: string;
+  source: 'custom' | 'default';
+  /** False when neither the database nor the server defaults have a token. */
+  configured: boolean;
+}
+
+export function getUploadThingIntegrationSettings(): Promise<{ success: true } & UploadThingIntegrationSettings> {
+  return apiFetch('/api/admin/settings/uploadthing');
+}
+
+export function updateUploadThingIntegrationSettings(
+  input: { token: string },
+  pin: string,
+): Promise<{ success: true } & UploadThingIntegrationSettings> {
+  return apiFetch('/api/admin/settings/uploadthing', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetUploadThingIntegrationSettings(
+  pin: string,
+): Promise<{ success: true } & UploadThingIntegrationSettings> {
+  return apiFetch('/api/admin/settings/uploadthing', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
 export interface EmailIntegrationSettings {
@@ -963,6 +1017,7 @@ export async function getGoogleAuthConfig(): Promise<{ clientId: string }> {
 export async function getPublicSettings(): Promise<{
   googleSignInEnabled: boolean;
   recaptchaEnabled: boolean;
+  uploadthingEnabled: boolean;
   /** Public site key; empty when the server has none configured. */
   recaptchaSiteKey: string;
 }> {
@@ -984,6 +1039,7 @@ export function updateAuthSettings(
       | 'notificationEmailsEnabled'
       | 'googleSheetsEnabled'
       | 'googleDriveEnabled'
+      | 'uploadthingEnabled'
     >
   >,
   pin: string,
@@ -1148,6 +1204,106 @@ export async function downloadActivityCsv(filters: ActivityFilters = {}): Promis
   const link = document.createElement('a');
   link.href = url;
   link.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* --------------------------------------------------------------- backups --- */
+
+export interface BackupRun {
+  startedAt: string;
+  finishedAt: string | null;
+  ok: boolean;
+  trigger: 'manual' | 'schedule';
+  fileName: string;
+  bytes: number;
+  collections: number;
+  documents: number;
+  durationMs: number;
+  error: string;
+}
+
+export interface BackupFile {
+  name: string;
+  bytes: number;
+  createdAt: string;
+}
+
+export interface BackupSettings {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly';
+  hour: number;
+  dayOfWeek: number;
+  retention: number;
+  directory: string;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastStatus: '' | 'success' | 'failed';
+  lastError: string;
+  lastFile: string;
+  lastBytes: number;
+  lastDocuments: number;
+  history: BackupRun[];
+  files: BackupFile[];
+}
+
+export function getBackupSettings(): Promise<BackupSettings> {
+  return apiFetch('/api/admin/settings/backup');
+}
+
+export function updateBackupSettings(
+  input: Partial<Pick<BackupSettings, 'enabled' | 'frequency' | 'hour' | 'dayOfWeek' | 'retention'>>,
+  pin: string,
+): Promise<BackupSettings> {
+  return apiFetch('/api/admin/settings/backup', {
+    method: 'PUT',
+    headers: pinHeader(pin),
+    body: input,
+  });
+}
+
+export function runBackupNow(pin: string): Promise<BackupSettings & { run: BackupRun }> {
+  return apiFetch('/api/admin/settings/backup/run', {
+    method: 'POST',
+    headers: pinHeader(pin),
+  });
+}
+
+export function deleteBackupFile(
+  name: string,
+  pin: string,
+): Promise<{ success: true; deleted: string; files: BackupFile[] }> {
+  return apiFetch(`/api/admin/settings/backup/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+    headers: pinHeader(pin),
+  });
+}
+
+/** Streams one snapshot through the authenticated API and saves it locally. */
+export async function downloadBackupFile(name: string): Promise<void> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}/api/admin/settings/backup/download/${encodeURIComponent(name)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Download failed (${res.status}).`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data?.message) message = data.message;
+    } catch {
+      // keep the status-based message
+    }
+    throw new ApiError(res.status, message);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const match = /filename="([^"]+)"/.exec(disposition);
+  link.href = url;
+  link.download = match?.[1] ?? name;
   document.body.appendChild(link);
   link.click();
   link.remove();

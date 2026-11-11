@@ -101,6 +101,31 @@ The seed is idempotent — re-running it updates the demo records instead of
 duplicating them, and it never resets an existing account's password. New demo
 accounts created by the script use the password `Demo1234!`.
 
+## Backups
+
+Admins can schedule automatic data backups in **Admin → Backups**. The server
+writes a gzipped JSON snapshot of every collection, keeps the number of files
+the admin chooses, and deletes older ones after each successful run. Saving the
+schedule, running a backup by hand and deleting a file all need the superadmin
+PIN; listing and downloading only need an admin session.
+
+Snapshots contain password hashes and encrypted integration secrets, so treat
+the files as sensitive. They live on the API host's disk:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BACKUP_DIR` | `apps/server/backups` | Where snapshots are written (relative paths resolve from the API's cwd). Point it at a persistent volume in production. |
+| `BACKUP_TIMEZONE` | `Asia/Manila` | Timezone the schedule hours refer to. |
+
+The API runs the schedule in-process (a check every minute, so it works without
+a cron dependency). If the host restarts during the chosen hour, the run still
+happens; `lastScheduledOn` prevents duplicates. For hosts that prefer an
+external scheduler, the same snapshot can be written from a job:
+
+```bash
+pnpm --filter @healthcentria/server backup
+```
+
 ## Build
 
 ```bash
