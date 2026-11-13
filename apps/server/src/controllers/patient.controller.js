@@ -432,7 +432,7 @@ export const deletePatient = asyncHandler(async (req, res) => {
   await logActivity({
     req,
     action: 'patient.delete',
-    target: { type: 'patient', id: patient._id, label: expected },
+    target: { type: 'patient', id: patient._id, label: patient.fullName || patient.email },
     detail: `Patient account deleted and anonymized. ${upcoming.length} upcoming appointment(s) cancelled; ${kept} past visit(s) kept for reports without clinical notes.`,
   });
 
