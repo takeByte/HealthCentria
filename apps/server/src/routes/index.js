@@ -11,6 +11,7 @@ import { authRouter } from './auth.routes.js';
 import { healthRouter } from './health.routes.js';
 import { serviceRouter } from './service.routes.js';
 import { settingsRouter } from './settings.routes.js';
+import { approvalRouter } from './su-approval.routes.js';
 
 export const apiRouter = Router();
 
@@ -24,5 +25,6 @@ apiRouter.use('/staff-accounts', staffRouter);
 apiRouter.use('/services', serviceRouter);
 apiRouter.use('/admin/settings', adminSettingsRouter);
 apiRouter.use('/settings', settingsRouter);
+apiRouter.use('/approvals', approvalRouter);
 apiRouter.use('/appointments', appointmentRouter);
 apiRouter.use('/health', healthRouter);

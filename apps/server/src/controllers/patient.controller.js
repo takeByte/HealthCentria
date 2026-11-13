@@ -346,17 +346,8 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   res.json({ success: true, user: presentUser(user) });
 });
 
-const deleteSchema = z.object({
-  confirmName: z.string().trim().min(1, 'Type the patient\'s full name to confirm.').max(200),
-});
-
-function sameName(a, b) {
-  const norm = (v) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
-  return norm(a) !== '' && norm(a) === norm(b);
-}
-
 /**
- * POST /api/patients/:id/delete — admin only, superadmin PIN (route).
+ * POST /api/patients/:id/delete — admin only, superadmin PIN + email approval (route).
  *
  * The account becomes an anonymous "Deleted patient" placeholder instead of
  * disappearing, so appointments that reference it (and the report counts built
@@ -375,23 +366,9 @@ export const deletePatient = asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
-  const parsed = deleteSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
-  }
   const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null }).lean();
   if (!patient) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
-  }
-  const expected = patient.fullName || patient.email;
-  if (!sameName(parsed.data.confirmName, expected)) {
-    return res.status(400).json({
-      success: false,
-      message: 'The name you typed does not match this patient.',
-      errors: { confirmName: ['Type the name exactly as shown on the record.'] },
-    });
   }
 
   const today = todayYMD();
