@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { LoaderCircle, Trash2 } from 'lucide-react';
-import { CardHeading, dangerChipButton, fieldLabel, inputClass, panel, secondaryButton } from './app-ui';
+import { CardHeading, dangerChipButton, panel, secondaryButton } from './app-ui';
 import { PinCancelled, type WithPin } from './super-pin';
 import { ApiError, deletePatientAccount } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -12,15 +12,10 @@ const destructiveButton =
 /** One-time message shown on the patient list after an account is deleted. */
 export const PATIENTS_FLASH_KEY = 'ekalinga.patients.flash';
 
-function sameName(a: string, b: string) {
-  const norm = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
-  return norm(a) !== '' && norm(a) === norm(b);
-}
-
 /**
- * Admin-only "Delete account" section for the patient record. Confirming needs
- * the patient's name typed exactly, then the superadmin PIN; the server checks
- * both again.
+ * Admin-only "Delete account" section for the patient record. Confirming asks
+ * for the superadmin PIN, then waits for the superadmin to approve the emailed
+ * link; the server enforces both.
  */
 export function DeletePatientSection({
   patientId,
@@ -78,14 +73,10 @@ function DeleteDialog({
   onClose: () => void;
   onDeleted: (result: { cancelled: number; keptVisits: number }) => void;
 }) {
-  const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const matches = sameName(typed, patientName);
 
   useEffect(() => {
-    inputRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !busy) onClose();
     };
@@ -95,12 +86,12 @@ function DeleteDialog({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!matches || busy) return;
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
       const r = await withPin(`Permanently delete the account of ${patientName}.`, (pin) =>
-        deletePatientAccount(patientId, typed.trim(), pin),
+        deletePatientAccount(patientId, pin),
       );
       onDeleted({ cancelled: r.cancelled, keptVisits: r.keptVisits });
     } catch (err) {
@@ -108,7 +99,7 @@ function DeleteDialog({
       if (err instanceof PinCancelled) return;
       setError(
         err instanceof ApiError
-          ? (err.errors?.confirmName?.[0] ?? err.message)
+          ? err.message
           : 'Could not delete the account. Try again.',
       );
     }
@@ -144,22 +135,10 @@ function DeleteDialog({
           This cannot be undone.
         </p>
 
-        <label htmlFor="confirm-patient-name" className={cn(fieldLabel, 'mt-4')}>
-          Type <span className="font-bold text-slate-900">{patientName}</span> to confirm
-        </label>
-        <input
-          ref={inputRef}
-          id="confirm-patient-name"
-          value={typed}
-          onChange={(e) => {
-            setTyped(e.target.value);
-            if (error) setError(null);
-          }}
-          autoComplete="off"
-          disabled={busy}
-          aria-invalid={error ? true : undefined}
-          className={inputClass}
-        />
+        <p className="mt-3 text-[12.5px] leading-5 text-slate-600">
+          You will be asked for the superadmin PIN, then the superadmin must approve the link emailed to them before
+          the account is deleted.
+        </p>
         {error && (
           <p role="alert" className="mt-2 text-[12.5px] font-medium text-destructive">
             {error}
@@ -170,7 +149,7 @@ function DeleteDialog({
           <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
             Cancel
           </button>
-          <button type="submit" disabled={!matches || busy} className={destructiveButton}>
+          <button type="submit" disabled={busy} className={destructiveButton}>
             {busy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
             {busy ? 'Deleting…' : 'Delete account'}
           </button>

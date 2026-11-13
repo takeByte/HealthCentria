@@ -479,12 +479,10 @@ export function getMyPatientProfile(): Promise<{ patient: PatientDetail }> {
  */
 export function deletePatientAccount(
   id: string,
-  confirmName: string,
   pin: string,
 ): Promise<{ success: true; cancelled: number; keptVisits: number }> {
   return apiFetch(`/api/patients/${id}/delete`, {
     method: 'POST',
-    body: { confirmName },
     headers: pinHeader(pin),
   });
 }
