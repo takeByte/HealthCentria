@@ -434,6 +434,27 @@ export interface PatientVisit {
   updatedByName?: string;
 }
 
+export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
+
+export interface Immunization {
+  name: string;
+  /** YYYY-MM-DD, or empty when unknown. */
+  date: string;
+  note: string;
+}
+
+/** Clinical background entered by staff; patients see it read-only. */
+export interface MedicalProfile {
+  bloodType: '' | (typeof BLOOD_TYPES)[number];
+  allergies: string[];
+  conditions: string[];
+  medications: string[];
+  immunizations: Immunization[];
+  recordedAt: string | null;
+}
+
+export type MedicalProfileInput = Omit<MedicalProfile, 'recordedAt'>;
+
 export interface PatientDetail {
   id: string;
   name: string;
@@ -451,6 +472,7 @@ export interface PatientDetail {
   authProvider: 'local' | 'google';
   profileCompleted: boolean;
   avatarUrl: string;
+  medical: MedicalProfile;
   createdAt: string;
   updatedAt?: string;
   updatedByName?: string;
@@ -504,6 +526,14 @@ export function updatePatientRecord(
   input: PatientRecordInput,
 ): Promise<{ patient: PatientDetail }> {
   return apiFetch(`/api/patients/${id}`, { method: 'PATCH', body: input });
+}
+
+/** Staff/admin: replace a patient's medical profile. */
+export function updatePatientMedical(
+  id: string,
+  input: MedicalProfileInput,
+): Promise<{ patient: PatientDetail }> {
+  return apiFetch(`/api/patients/${id}/medical`, { method: 'PATCH', body: input });
 }
 
 export type ReportRange = 'today' | 'week' | 'month';

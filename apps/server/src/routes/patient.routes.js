@@ -5,6 +5,7 @@ import {
   getPatient,
   listPatients,
   updateMyProfile,
+  updatePatientMedical,
   updatePatientRecord,
 } from '../controllers/patient.controller.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/requireAuth.js';
@@ -36,6 +37,13 @@ patientRouter.patch(
   requireRole('staff', 'admin'),
   requirePermission('patients.manage'),
   updatePatientRecord,
+);
+patientRouter.patch(
+  '/:id/medical',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('patients.manage'),
+  updatePatientMedical,
 );
 // Admin only, and the superadmin PIN is required: the account is anonymized.
 patientRouter.post(

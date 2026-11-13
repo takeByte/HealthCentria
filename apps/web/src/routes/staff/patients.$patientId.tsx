@@ -21,6 +21,7 @@ import {
   textareaClass,
 } from '../../components/app-ui';
 import { DeletePatientSection, PATIENTS_FLASH_KEY } from '../../components/delete-patient';
+import { MedicalProfileCard } from '../../components/medical-profile';
 import { RecordMeta } from '../../components/record-meta';
 import { useSuperPin } from '../../components/super-pin';
 import { Toast, type ToastMessage } from '../../components/toast';
@@ -29,7 +30,9 @@ import {
   ApiError,
   getPatient,
   updateAppointmentRecord,
+  updatePatientMedical,
   updatePatientRecord,
+  type MedicalProfileInput,
   type PatientDetail,
   type PatientVisit,
 } from '../../lib/api';
@@ -656,6 +659,19 @@ function PatientDetailPage() {
                   </dl>
                 )}
               </motion.section>
+
+              {patient && (
+                <motion.div {...rise} transition={{ ...riseTransition, delay: 0.1 }} className="lg:col-span-3">
+                  <MedicalProfileCard
+                    medical={patient.medical}
+                    onSave={async (input: MedicalProfileInput) => {
+                      const result = await updatePatientMedical(patient.id, input);
+                      setPatient(result.patient);
+                      setToast({ tone: 'success', message: 'Medical profile saved.' });
+                    }}
+                  />
+                </motion.div>
+              )}
 
               <motion.section
                 {...rise}
