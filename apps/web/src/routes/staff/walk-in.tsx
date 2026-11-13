@@ -132,7 +132,6 @@ function WalkIn() {
       todayService={`${today.name} — ${today.detail}`}
       nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
-      mainClassName="max-w-3xl"
     >
       <motion.div
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
@@ -169,7 +168,7 @@ function WalkIn() {
         className={panel}
       >
         <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#0f766e]/10 text-[#0f766e]">
             <CalendarCheck size={18} aria-hidden />
           </span>
           <div className="min-w-0">
@@ -236,7 +235,7 @@ function WalkIn() {
                 </p>
               )}
               {found && (
-                <p role="status" className="mt-1.5 text-[12.5px] font-semibold text-teal-800">
+                <p role="status" className="mt-1.5 text-[12.5px] font-semibold text-[#115e59]">
                   Found: {found.name} ({found.email})
                 </p>
               )}

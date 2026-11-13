@@ -16,6 +16,7 @@ import {
   panel,
   primaryButton,
   secondaryButton,
+  chipButton,
   selectClass,
   textareaClass,
 } from '../../components/app-ui';
@@ -33,7 +34,15 @@ import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
 import { cn } from '../../lib/utils';
 
+const SERVICE_FILTERS = ['all', 'active', 'inactive'] as const;
+type ServiceFilter = (typeof SERVICE_FILTERS)[number];
+
 export const Route = createFileRoute('/staff/services')({
+  validateSearch: (search: Record<string, unknown>): { filter?: ServiceFilter } => ({
+    filter: SERVICE_FILTERS.includes(search.filter as ServiceFilter)
+      ? (search.filter as ServiceFilter)
+      : undefined,
+  }),
   beforeLoad: () => {
     const session = getSession();
     if (!sessionCan(session, 'services.manage')) throw redirect({ to: '/staff/dashboard' });
@@ -99,7 +108,7 @@ function ScheduleFields({
                   className={cn(
                     'h-9 min-w-12 rounded-lg border px-3 text-[12.5px] font-semibold transition-colors active:scale-[0.97]',
                     on
-                      ? 'border-teal-600/40 bg-teal-600/10 text-teal-900'
+                      ? 'border-[#0f766e]/40 bg-[#0f766e]/10 text-[#134e4a]'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
                   )}
                 >
@@ -152,7 +161,14 @@ function ServicesManage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const { filter: filterParam } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const [filter, setFilter] = useState<ServiceFilter>(filterParam ?? 'all');
+
+  // Keeps the filter in sync when the URL changes (deep link or back button).
+  useEffect(() => {
+    setFilter(filterParam ?? 'all');
+  }, [filterParam]);
 
   const [cName, setCName] = useState('');
   const [cDesc, setCDesc] = useState('');
@@ -250,7 +266,7 @@ function ServicesManage() {
       nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
-      <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-3">
+      <motion.div {...rise} transition={riseTransition} className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
         <StatTile
           icon={Layers}
           label="Services"
@@ -270,6 +286,7 @@ function ServicesManage() {
           value={list === null ? '—' : summary.inactive}
           hint="Hidden from patients"
           tone="slate"
+          className="col-span-2 sm:col-span-1"
         />
       </motion.div>
 
@@ -281,7 +298,10 @@ function ServicesManage() {
         <Segmented
           ariaLabel="Filter services"
           value={filter}
-          onChange={setFilter}
+          onChange={(next) => {
+            setFilter(next);
+            void navigate({ search: next === 'all' ? {} : { filter: next }, replace: true });
+          }}
           options={[
             { key: 'all', label: 'All' },
             { key: 'active', label: 'Active' },
@@ -328,59 +348,75 @@ function ServicesManage() {
       <motion.div
         {...rise}
         transition={{ ...riseTransition, delay: 0.08 }}
-        className="grid gap-3.5"
+        className="grid items-start gap-3.5 md:grid-cols-2"
       >
         {(filtered ?? []).map((s) => (
-          <article key={s.id} className={panel}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-slate-900">{s.name}</h3>
-                <p className="mt-1 inline-flex items-center rounded-full bg-teal-600/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-teal-800">
+          <article key={s.id} className={`${panel} flex flex-col`}>
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#e9f7f4] text-[#0f766e] ring-1 ring-inset ring-[#0f766e]/12">
+                <CalendarDays size={18} aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-display text-[15px] font-semibold tracking-[-0.015em] text-[#042f2e]">
+                    {s.name}
+                  </h3>
+                  <StatusPill tone={s.active ? 'teal' : 'slate'} className="shrink-0">
+                    {s.active ? 'Active' : 'Inactive'}
+                  </StatusPill>
+                </div>
+                <p className="mt-1 inline-flex items-center rounded-full bg-[#0f766e]/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-[#115e59]">
                   {s.scheduleText}
                 </p>
-                {s.description && <p className="mt-2 text-[12.5px] leading-5 text-slate-600">{s.description}</p>}
-                <RecordMeta
-                  createdAt={s.createdAt}
-                  updatedAt={s.updatedAt}
-                  updatedByName={s.updatedByName}
-                  className="mt-1.5"
-                />
               </div>
-              <StatusPill tone={s.active ? 'teal' : 'slate'} className="shrink-0">
-                {s.active ? 'Active' : 'Inactive'}
-              </StatusPill>
             </div>
-            {editingId === s.id ? (
-              <form onSubmit={(e) => handleUpdate(e, s.id)} className="mt-4 grid gap-4 border-t border-slate-200/70 pt-4">
-                <div>
-                  <label htmlFor={`edit-name-${s.id}`} className={fieldLabel}>Name *</label>
-                  <input id={`edit-name-${s.id}`} value={eName} onChange={(e) => setEName(e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label htmlFor={`edit-desc-${s.id}`} className={fieldLabel}>Description</label>
-                  <textarea id={`edit-desc-${s.id}`} rows={2} value={eDesc} onChange={(e) => setEDesc(e.target.value)} className={textareaClass} />
-                </div>
-                <ScheduleFields schedule={eSched} set={setESched} prefix={`edit-${s.id}`} />
-                <label htmlFor={`edit-active-${s.id}`} className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-slate-700">
-                  <input id={`edit-active-${s.id}`} type="checkbox" checked={eActive} onChange={(e) => setEActive(e.target.checked)} className="size-5 accent-teal-700" />
-                  Active (visible for booking)
-                </label>
-                {eError && <InlineNotice>{eError}</InlineNotice>}
-                <div className="flex gap-2">
-                  <button type="submit" disabled={eBusy} className={`${primaryButton} flex-1`}>
-                    {eBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
-                    Save
-                  </button>
-                  <button type="button" onClick={() => setEditingId(null)} className={`${secondaryButton} flex-1`}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button type="button" onClick={() => startEdit(s)} className={`${secondaryButton} mt-3.5 h-9 px-3.5 text-[13px]`}>
-                Edit
-              </button>
+
+            {s.description && (
+              <p className="mt-3 text-[12.5px] leading-5 text-[#475569]">{s.description}</p>
             )}
+            <RecordMeta
+              createdAt={s.createdAt}
+              updatedAt={s.updatedAt}
+              updatedByName={s.updatedByName}
+              className="mt-2"
+            />
+
+            <div className="mt-auto pt-3.5">
+              {editingId === s.id ? (
+                <form
+                  onSubmit={(e) => handleUpdate(e, s.id)}
+                  className="grid gap-4 border-t border-[#eaf0f6] pt-4"
+                >
+                  <div>
+                    <label htmlFor={`edit-name-${s.id}`} className={fieldLabel}>Name *</label>
+                    <input id={`edit-name-${s.id}`} value={eName} onChange={(e) => setEName(e.target.value)} className={inputClass} />
+                  </div>
+                  <div>
+                    <label htmlFor={`edit-desc-${s.id}`} className={fieldLabel}>Description</label>
+                    <textarea id={`edit-desc-${s.id}`} rows={2} value={eDesc} onChange={(e) => setEDesc(e.target.value)} className={textareaClass} />
+                  </div>
+                  <ScheduleFields schedule={eSched} set={setESched} prefix={`edit-${s.id}`} />
+                  <label htmlFor={`edit-active-${s.id}`} className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-[#1e293b]">
+                    <input id={`edit-active-${s.id}`} type="checkbox" checked={eActive} onChange={(e) => setEActive(e.target.checked)} className="size-5 accent-[#0f766e]" />
+                    Active (visible for booking)
+                  </label>
+                  {eError && <InlineNotice>{eError}</InlineNotice>}
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={eBusy} className={`${primaryButton} flex-1`}>
+                      {eBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setEditingId(null)} className={`${secondaryButton} flex-1`}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button type="button" onClick={() => startEdit(s)} className={chipButton}>
+                  Edit service
+                </button>
+              )}
+            </div>
           </article>
         ))}
       </motion.div>

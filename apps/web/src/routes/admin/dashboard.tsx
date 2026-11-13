@@ -5,23 +5,22 @@ import {
   ArrowRight,
   CalendarCheck,
   Clock3,
-  Megaphone,
+  DatabaseBackup,
   Settings,
   UserCog,
   Users,
 } from 'lucide-react';
+import { AnnouncementList } from '../../components/announcement-list';
 import { ClinicSchedule } from '../../components/clinic-schedule';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
+import { ServiceUtilization } from '../../components/service-utilization';
 import {
   CardHeading,
-  EmptyNote,
-  InlineNotice,
   PageHero,
   StatTile,
   panel,
   primaryButton,
-  secondaryButton,
 } from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import { listAnnouncements, overview, type Announcement } from '../../lib/api';
@@ -42,11 +41,6 @@ function displayFirstName(name?: string): string {
   const parts = name?.trim().split(/\s+/).filter(Boolean) ?? [];
   if (parts.length > 1 && /^(dr\.?|nurse|mr\.?|mrs\.?|ms\.?)$/i.test(parts[0])) return parts[1];
   return parts[0] ?? 'there';
-}
-
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 }
 
 function AdminDashboard() {
@@ -124,7 +118,7 @@ function AdminDashboard() {
       <motion.div
         {...rise}
         transition={{ ...riseTransition, delay: 0.04 }}
-        className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid grid-cols-2 gap-3.5 xl:grid-cols-4"
       >
         <StatTile
           icon={CalendarCheck}
@@ -167,36 +161,18 @@ function AdminDashboard() {
             action={
               <Link
                 to="/staff/announcements"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
               >
                 Manage <ArrowRight size={15} aria-hidden />
               </Link>
             }
           />
           <div className="mt-4">
-            {announcementsError ? (
-              <InlineNotice>Couldn't load announcements right now.</InlineNotice>
-            ) : announcements === null ? (
-              <EmptyNote>Loading announcements…</EmptyNote>
-            ) : announcements.length === 0 ? (
-              <EmptyNote>No announcements yet. Post one and it appears for staff and patients.</EmptyNote>
-            ) : (
-              <ul className="divide-y divide-slate-200/70">
-                {announcements.slice(0, 3).map((a) => (
-                  <li key={a.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-teal-600/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-teal-800">
-                        <Megaphone size={11} aria-hidden />
-                        {a.pinned ? 'Pinned' : 'Announcement'}
-                      </span>
-                      <span className="text-[11.5px] text-slate-400">{formatShortDate(a.publishedAt)}</span>
-                    </div>
-                    <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-slate-900">{a.title}</p>
-                    <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-5 text-slate-600">{a.body}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AnnouncementList
+              announcements={announcements}
+              error={announcementsError}
+              emptyMessage="No announcements yet. Post one and it appears for staff and patients."
+            />
           </div>
         </motion.section>
 
@@ -205,28 +181,65 @@ function AdminDashboard() {
             title="Workspace administration"
             description="Manage who can sign in and how patients reach the center."
           />
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/admin/staff-accounts" className={`${secondaryButton} h-10 px-4 text-[13px]`}>
-              <UserCog size={15} aria-hidden /> Staff accounts
+          <div className="mt-4 grid gap-2">
+            <Link
+              to="/admin/staff-accounts"
+              className="group flex items-center gap-3 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] px-3 py-2.5 transition-colors hover:border-[#c6d8e4] hover:bg-white"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0f766e] ring-1 ring-inset ring-[#e2e8f0]">
+                <UserCog size={15} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold text-[#042f2e]">Staff accounts</span>
+                <span className="block truncate text-[11px] text-[#94a3b8]">Invite, suspend, reset</span>
+              </span>
+              <ArrowRight
+                size={14}
+                aria-hidden
+                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#0f766e]"
+              />
             </Link>
-            <Link to="/admin/settings" className={`${secondaryButton} h-10 px-4 text-[13px]`}>
-              <Settings size={15} aria-hidden /> Settings
+            <Link
+              to="/admin/backups"
+              className="group flex items-center gap-3 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] px-3 py-2.5 transition-colors hover:border-[#c6d8e4] hover:bg-white"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0f766e] ring-1 ring-inset ring-[#e2e8f0]">
+                <DatabaseBackup size={15} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold text-[#042f2e]">Backups</span>
+                <span className="block truncate text-[11px] text-[#94a3b8]">Schedule and restore</span>
+              </span>
+              <ArrowRight
+                size={14}
+                aria-hidden
+                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#0f766e]"
+              />
+            </Link>
+            <Link
+              to="/admin/settings"
+              className="group flex items-center gap-3 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] px-3 py-2.5 transition-colors hover:border-[#c6d8e4] hover:bg-white"
+            >
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0f766e] ring-1 ring-inset ring-[#e2e8f0]">
+                <Settings size={15} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold text-[#042f2e]">Settings</span>
+                <span className="block truncate text-[11px] text-[#94a3b8]">Clinic, email, integrations</span>
+              </span>
+              <ArrowRight
+                size={14}
+                aria-hidden
+                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#0f766e]"
+              />
             </Link>
           </div>
         </motion.section>
       </div>
 
-      <motion.section {...rise} transition={{ ...riseTransition, delay: 0.2 }} className={panel}>
-        <CardHeading
-          title="Service utilization"
-          description="Completed visits per service for the last 30 days."
-          action={
-            <Link to="/staff/reports" className={`${secondaryButton} h-9 px-3.5 text-[13px]`}>
-              Open reports <ArrowRight size={15} aria-hidden />
-            </Link>
-          }
-        />
-      </motion.section>
+      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.2 }}>
+        <ServiceUtilization />
+      </motion.div>
     </DashboardShell>
   );
 }

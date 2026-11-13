@@ -7,22 +7,25 @@ import { cn } from '../lib/utils';
  *
  * Everything here is deliberately tiny: the point is that spacing, radii, type
  * and colour are decided once, so thirteen screens can't drift apart.
+ *
+ * The system is a quiet clinic editorial: paper-white cards on a misty page,
+ * teal actions, one display face for headings, Geist for everything else.
  */
 
-/** The surface every page is built from: translucent white, hairline edge. */
+/** The surface every page is built from: white paper, hairline cool edge. */
 export const panel = 'app-card p-5 sm:p-6';
 
-/** Full-width gradient action — one per screen, same shape as the login button. */
+/** Full-width action — teal, soft lift, one per screen. */
 export const primaryButton =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 px-5 text-sm font-semibold text-white shadow-[0_6px_18px_-8px_rgba(13,148,136,0.7)] transition-transform active:scale-[0.97] disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#0d9488] to-[#115e59] px-5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_10px_22px_-12px_rgba(15,118,110,0.65)] transition-[transform,filter] hover:brightness-[1.06] active:scale-[0.98] disabled:opacity-60';
 
-/** The quieter companion action: white surface, hairline border. */
+/** The quieter companion action: paper surface, hairline edge. */
 export const secondaryButton =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 active:scale-[0.97] disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#dde8f0] bg-white px-5 text-sm font-semibold text-[#1e293b] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-[#c6d8e4] hover:bg-[#f6fafd] active:scale-[0.98] disabled:opacity-60';
 
 /** Small pill action used inside cards and rows. */
 export const chipButton =
-  'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 active:scale-[0.97]';
+  'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#dde8f0] bg-white px-3 text-[13px] font-semibold text-[#1e293b] transition-colors hover:border-[#c6d8e4] hover:bg-[#f6fafd] active:scale-[0.97]';
 
 /** Destructive twin of the chip button — cancels, declines, deactivates. */
 export const dangerChipButton =
@@ -32,46 +35,47 @@ export const cardPadding = 'p-5 sm:p-6';
 
 /* ---------------------------------------------------------------- forms --- */
 
-export const fieldLabel = 'mb-1.5 block text-[12.5px] font-semibold text-slate-700';
+export const fieldLabel = 'mb-1.5 block text-[12.5px] font-semibold text-[#334155]';
 
 export const inputClass =
-  'h-11 w-full rounded-xl border border-slate-200/80 bg-white px-3 text-[13.5px] text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25';
+  'h-11 w-full rounded-xl border border-[#dde8f0] bg-white px-3 text-[13.5px] text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/20';
 
 export const selectClass = inputClass;
 
 export const textareaClass =
-  'w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-[13.5px] leading-6 text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25';
+  'w-full rounded-xl border border-[#dde8f0] bg-white px-3 py-2.5 text-[13.5px] leading-6 text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/20';
 
 /* ----------------------------------------------------------- status pills --- */
 
-const STATUS_STYLE: Record<Appointment['status'], string> = {
-  pending: 'bg-amber-50 text-amber-800 ring-amber-600/20',
-  confirmed: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20',
-  declined: 'bg-red-50 text-red-700 ring-red-600/20',
-  completed: 'bg-slate-100 text-slate-600 ring-slate-500/20',
-  cancelled: 'bg-slate-100 text-slate-500 ring-slate-400/20',
+const STATUS_STYLE: Record<Appointment['status'], { pill: string; dot: string }> = {
+  pending: { pill: 'bg-[#fdf5e4] text-[#8a5a10] ring-[#e2c07a]/50', dot: 'bg-[#c99a3d]' },
+  confirmed: { pill: 'bg-[#e9f7f4] text-[#115e59] ring-[#0f766e]/20', dot: 'bg-[#0f766e]' },
+  declined: { pill: 'bg-red-50 text-red-700 ring-red-600/20', dot: 'bg-red-500' },
+  completed: { pill: 'bg-[#edf3f8] text-[#475569] ring-[#cbd7e2]/70', dot: 'bg-[#64748b]' },
+  cancelled: { pill: 'bg-[#f2f6fa] text-[#64748b] ring-[#d5dee8]/80', dot: 'bg-[#94a3b8]' },
 };
 
 export function StatusChip({ status, className }: { status: Appointment['status']; className?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ring-1 ring-inset',
-        STATUS_STYLE[status],
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ring-1 ring-inset',
+        STATUS_STYLE[status].pill,
         className,
       )}
     >
+      <span aria-hidden className={cn('size-1.5 rounded-full', STATUS_STYLE[status].dot)} />
       {status}
     </span>
   );
 }
 
 const TONE_STYLE = {
-  teal: 'bg-teal-600/10 text-teal-800 ring-teal-600/20',
+  teal: 'bg-[#e9f7f4] text-[#115e59] ring-[#0f766e]/20',
   sky: 'bg-sky-600/10 text-sky-800 ring-sky-600/20',
-  amber: 'bg-amber-500/10 text-amber-800 ring-amber-600/25',
+  amber: 'bg-[#fdf5e4] text-[#8a5a10] ring-[#e2c07a]/50',
   red: 'bg-red-500/10 text-red-700 ring-red-600/20',
-  slate: 'bg-slate-500/10 text-slate-600 ring-slate-500/20',
+  slate: 'bg-[#edf3f8] text-[#475569] ring-[#cbd7e2]/70',
 } as const;
 
 export type PillTone = keyof typeof TONE_STYLE;
@@ -128,21 +132,24 @@ export function PageHero({
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-24 -top-28 -z-10 size-64 rounded-full bg-teal-300/15 blur-3xl"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(20,184,166,0.16),transparent_70%)]"
       />
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           {eyebrow && (
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal-700">{eyebrow}</p>
+            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
+              <span aria-hidden className="h-px w-5 bg-[#0f766e]/45" />
+              {eyebrow}
+            </p>
           )}
           <h2
             id="page-hero-title"
-            className="mt-1.5 font-display text-[24px] font-semibold leading-tight tracking-[-0.025em] text-slate-900 sm:text-[30px]"
+            className="mt-2 font-display text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[#042f2e] sm:text-[32px]"
           >
             {title}
           </h2>
           {description && (
-            <p className="mt-1.5 max-w-2xl text-[13.5px] leading-6 text-slate-600">{description}</p>
+            <p className="mt-2 max-w-2xl text-[13.5px] leading-6 text-[#475569]">{description}</p>
           )}
         </div>
         {action && <div className="shrink-0">{action}</div>}
@@ -164,8 +171,10 @@ export function CardHeading({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-slate-900">{title}</h2>
-        {description && <p className="mt-1 text-[13px] leading-5 text-slate-500">{description}</p>}
+        <h2 className="font-display text-[15.5px] font-semibold tracking-[-0.015em] text-[#042f2e]">
+          {title}
+        </h2>
+        {description && <p className="mt-1 text-[12.5px] leading-5 text-[#64748b]">{description}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -179,34 +188,48 @@ export function StatTile({
   value,
   hint,
   tone = 'teal',
+  className,
 }: {
   icon: ComponentType<{ size?: number | string; className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
   label: string;
   value: string | number;
   hint?: string;
   tone?: 'teal' | 'amber' | 'slate' | 'sky';
+  className?: string;
 }) {
   const toneClass =
     tone === 'amber'
-      ? 'bg-amber-50 text-amber-700'
+      ? 'bg-[#fdf5e4] text-[#a4761a] ring-[#e2c07a]/45'
       : tone === 'slate'
-        ? 'bg-slate-100 text-slate-600'
+        ? 'bg-[#edf3f8] text-[#475569] ring-[#cfdbe5]/70'
         : tone === 'sky'
-          ? 'bg-sky-50 text-sky-700'
-          : 'bg-teal-600/10 text-teal-700';
+          ? 'bg-[#e9f3fb] text-[#2a6f9e] ring-[#bcd8ea]/60'
+          : 'bg-[#e9f7f4] text-[#0f766e] ring-[#0f766e]/15';
 
   return (
-    <div className="app-card flex items-center gap-3.5 p-4">
-      <span className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl', toneClass)}>
-        <Icon size={18} aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
-        <p className="font-display text-xl font-semibold leading-tight tracking-[-0.02em] text-slate-900">
-          {value}
+    <div
+      className={cn(
+        'app-card group relative overflow-hidden p-4.5 transition-shadow duration-200 hover:shadow-[0_1px_2px_rgba(15,23,42,0.05),0_22px_46px_-32px_rgba(15,23,42,0.42)]',
+        className,
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="pt-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#64748b]">
+          {label}
         </p>
-        {hint && <p className="mt-0.5 truncate text-[11.5px] text-slate-500">{hint}</p>}
+        <span
+          className={cn(
+            'flex size-9 shrink-0 items-center justify-center rounded-[0.7rem] ring-1 ring-inset',
+            toneClass,
+          )}
+        >
+          <Icon size={17} aria-hidden />
+        </span>
       </div>
+      <p className="mt-2 font-display text-[27px] font-semibold leading-none tracking-[-0.035em] text-[#042f2e]">
+        {value}
+      </p>
+      {hint && <p className="mt-1.5 truncate text-[11.5px] text-[#64748b]">{hint}</p>}
     </div>
   );
 }
@@ -229,7 +252,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className={cn('flex shrink-0 rounded-xl bg-slate-100/80 p-1', className)}
+      className={cn('flex shrink-0 rounded-xl bg-[#edf4f8] p-1 ring-1 ring-inset ring-[#e1e9f1]', className)}
     >
       {options.map((o) => {
         const Icon = o.icon;
@@ -242,8 +265,8 @@ export function Segmented<T extends string>({
             className={cn(
               'flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 text-[13px] font-semibold transition-all duration-150 active:scale-[0.97]',
               value === o.key
-                ? 'bg-white text-slate-900 shadow-[0_1px_3px_rgba(15,60,90,0.12)]'
-                : 'text-slate-500 hover:text-slate-800',
+                ? 'bg-white text-[#042f2e] shadow-[0_1px_2px_rgba(15,23,42,0.1),0_4px_10px_-6px_rgba(15,23,42,0.28)]'
+                : 'text-[#64748b] hover:text-[#1e293b]',
             )}
           >
             {Icon && <Icon size={15} />}
@@ -260,7 +283,7 @@ export function EmptyNote({ children, className }: { children: ReactNode; classN
   return (
     <p
       className={cn(
-        'rounded-xl border border-dashed border-slate-300/70 bg-white/40 px-4 py-3.5 text-[13px] leading-5 text-slate-600',
+        'rounded-xl border border-dashed border-[#d3e0ea] bg-[#f9fcfe] px-4 py-3.5 text-[13px] leading-5 text-[#64748b]',
         className,
       )}
     >
@@ -280,13 +303,13 @@ export function InlineNotice({ children, className }: { children: ReactNode; cla
   );
 }
 
-/** Teal confirmation, the counterpart to InlineNotice. */
+/** Green confirmation, the counterpart to InlineNotice. */
 export function SuccessNote({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
       role="status"
       className={cn(
-        'rounded-xl bg-teal-600/8 px-4 py-3 text-[13px] leading-5 text-teal-900 ring-1 ring-inset ring-teal-600/15',
+        'rounded-xl bg-[#e9f7f4] px-4 py-3 text-[13px] leading-5 text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/15',
         className,
       )}
     >

@@ -26,7 +26,7 @@ export function ImageGallery({ images }: { images: AnnouncementImage[] }) {
             onClick={() => setActive(i)}
             aria-label={`View image ${i + 1} of ${shown.length}${img.alt ? `: ${img.alt}` : ''}`}
             className={cn(
-              'relative block min-h-0 overflow-hidden bg-slate-200 focus-visible:outline-2 focus-visible:outline-teal-600',
+              'relative block min-h-0 overflow-hidden bg-slate-200 focus-visible:outline-2 focus-visible:outline-[#0f766e]',
               // With three images the first one spans both rows on the left.
               shown.length === 3 && i === 0 && 'row-span-2',
               shown.length === 1 && 'max-h-[26rem]',

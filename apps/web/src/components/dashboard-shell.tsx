@@ -1,7 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type ComponentType } from 'react';
-import { CalendarCheck, ChevronDown, LogOut, Menu, UserRound, X } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronDown, LogOut, Menu, UserRound, X } from 'lucide-react';
 import { clearSession, getSession } from '../lib/auth';
 import { listNotifications, logoutRequest, type NotificationItem } from '../lib/api';
 import { AppBackdrop } from './app-backdrop';
@@ -15,6 +15,8 @@ export interface ShellNavItem {
   /** Omitted while the destination screen is not built yet — rendered disabled with a "soon" hint. */
   to?: string;
   icon: ComponentType<{ size?: number | string; className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
+  /** Sidebar section this item belongs to. Items keep their array order inside a group. */
+  group?: string;
 }
 
 interface DashboardShellProps {
@@ -39,86 +41,188 @@ function splitToday(todayService: string): { name: string; detail: string } {
   return { name: todayService.slice(0, i), detail: todayService.slice(i + 3) };
 }
 
+/** Short date for the top bar, e.g. "Thu, Nov 12". */
+function todayChipLabel(): string {
+  return new Intl.DateTimeFormat('en-PH', { weekday: 'short', month: 'short', day: 'numeric' }).format(
+    new Date(),
+  );
+}
+
+function groupNav(nav: ShellNavItem[]): Array<{ label: string; items: ShellNavItem[] }> {
+  const groups: Array<{ label: string; items: ShellNavItem[] }> = [];
+  for (const item of nav) {
+    const label = item.group ?? 'Menu';
+    const existing = groups.find((g) => g.label === label);
+    if (existing) existing.items.push(item);
+    else groups.push({ label, items: [item] });
+  }
+  return groups;
+}
+
 function SidebarBody({
   nav,
   roleLabel,
   todayService,
-}: Pick<DashboardShellProps, 'nav' | 'roleLabel' | 'todayService'>) {
+  userName,
+  userEmail,
+  avatarUrl,
+  profileTo,
+  onLogout,
+  onClose,
+}: {
+  nav: ShellNavItem[];
+  roleLabel: string;
+  todayService: string;
+  userName?: string;
+  userEmail: string;
+  avatarUrl?: string;
+  /** Profile route the signed-in identity card links to, when the nav has one. */
+  profileTo?: string;
+  onLogout: () => void | Promise<void>;
+  /** Drawer-only: renders a close control inside the brand card. */
+  onClose?: () => void;
+}) {
   const today = splitToday(todayService);
+  const groups = groupNav(nav);
+  const initial = userName?.trim()?.charAt(0) ?? userEmail.trim().charAt(0).toUpperCase();
+
+  const identity = (
+    <>
+      <span
+        aria-hidden
+        className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#14b8a6] text-[12px] font-bold text-white ring-1 ring-white/25"
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
+        ) : (
+          initial
+        )}
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-[12px] font-semibold text-white">{userName ?? 'Signed in'}</span>
+        <span className="block truncate text-[10px] text-white/65">{userEmail}</span>
+      </span>
+    </>
+  );
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Brand lockup — the HealthCentria seal is the app's anchor top-left. */}
-      <div className="px-4 pb-4 pt-5">
-        <div className="flex items-center gap-3">
-          <img
-            src={appLogo}
-            alt=""
-            className="size-10 shrink-0 rounded-xl border border-slate-200/80 bg-white object-cover shadow-[0_2px_8px_rgba(15,60,90,0.10)]"
-          />
-          <div className="min-w-0">
-            <p className="font-display text-[15px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
-              HealthCentria
+    <div className="flex h-full flex-col px-3 py-3.5">
+      <div className="-mx-1 flex-1 overflow-y-auto px-1">
+        {/* Brand lockup — the E-Kalinga seal on a paper card anchors the top-left. */}
+        <div className="flex items-center gap-3 rounded-2xl bg-white/96 p-2.5 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/40">
+          <img src={appLogo} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-[15px] font-semibold leading-tight tracking-[-0.02em] text-[#134e4a]">
+              E-Kalinga
             </p>
-            <p className="mt-1 truncate text-[11px] font-medium leading-none text-slate-500">
+            <p className="mt-0.5 truncate text-[10.5px] font-medium leading-tight text-[#64748b]">
               Brgy. 11 Health Center
             </p>
           </div>
-        </div>
-        <span className="mt-3 inline-flex items-center rounded-full bg-teal-600/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-teal-800">
-          {roleLabel}
-        </span>
-      </div>
-
-      {/* Today's schedule, quiet enough to sit above the nav without shouting. */}
-      <div className="mx-3 mb-4 rounded-xl border border-teal-600/15 bg-teal-50/80 px-3 py-2.5">
-        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-teal-700">
-          <CalendarCheck size={12} aria-hidden />
-          Today
-        </p>
-        <p className="mt-1 text-[13px] font-semibold leading-snug text-teal-950">{today.name}</p>
-        {today.detail && (
-          <p className="mt-0.5 text-[11px] leading-snug text-teal-800/70">{today.detail}</p>
-        )}
-      </div>
-
-      <p className="px-5 pb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Menu</p>
-      <nav aria-label="Primary" className="flex-1 space-y-0.5 overflow-y-auto px-2.5 pb-4">
-        {nav.map((item) => {
-          const Icon = item.icon;
-          if (!item.to) {
-            return (
-              <span
-                key={item.label}
-                aria-disabled="true"
-                title="Coming next"
-                className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] text-slate-400"
-              >
-                <Icon size={17} aria-hidden />
-                {item.label}
-                <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide">soon</span>
-              </span>
-            );
-          }
-          return (
-            <Link
-              key={item.label}
-              to={item.to}
-              /* Exact: /app/appointments/new must not also light up
-                 /app/appointments in the sidebar. */
-              activeOptions={{ exact: true }}
-              activeProps={{
-                className:
-                  'bg-white font-semibold text-teal-900 shadow-[0_1px_2px_rgba(15,60,90,0.08)] ring-1 ring-teal-600/15 [&>svg]:text-teal-600',
-              }}
-              className="group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium text-slate-600 transition-colors hover:bg-white/80 hover:text-slate-900 active:scale-[0.99] [&>svg]:text-slate-400"
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[#64748b] transition-colors hover:bg-[#eef4f8] hover:text-[#134e4a]"
             >
-              <Icon size={17} aria-hidden />
-              {item.label}
+              <X size={17} />
+            </button>
+          )}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#14b8a6]/22 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-[#99f6e4] ring-1 ring-inset ring-[#5eead4]/25">
+            <span aria-hidden className="size-1.5 rounded-full bg-[#5eead4]" />
+            {roleLabel}
+          </span>
+        </div>
+
+        {/* Today's schedule, quiet enough to sit above the nav without shouting. */}
+        <div className="mt-3.5 rounded-xl bg-black/15 px-3 py-2.5 ring-1 ring-inset ring-white/10">
+          <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.13em] text-[#99f6e4]">
+            <CalendarCheck size={11} aria-hidden />
+            Today at the clinic
+          </p>
+          <p className="mt-1 text-[12.5px] font-semibold leading-snug text-white">{today.name}</p>
+          {today.detail && <p className="mt-0.5 text-[10.5px] leading-snug text-white/65">{today.detail}</p>}
+        </div>
+
+        <nav aria-label="Primary" className="mt-5 flex flex-col gap-4 pb-2">
+          {groups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-1.5 px-2.5 text-[9.5px] font-bold uppercase tracking-[0.16em] text-white/65">
+                {group.label}
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  if (!item.to) {
+                    return (
+                      <span
+                        key={item.label}
+                        aria-disabled="true"
+                        title="Coming next"
+                        className="flex h-9 cursor-not-allowed items-center gap-2.5 rounded-[0.6rem] px-2.5 text-[12.5px] text-white/35"
+                      >
+                        <Icon size={16} aria-hidden />
+                        {item.label}
+                        <span className="ml-auto text-[9px] font-semibold uppercase tracking-wide">soon</span>
+                      </span>
+                    );
+                  }
+                  return (
+                    <Link
+                      key={item.label}
+                      to={item.to}
+                      /* Exact: /app/appointments/new must not also light up
+                         /app/appointments in the sidebar. */
+                      activeOptions={{ exact: true }}
+                      activeProps={{
+                        className:
+                          'bg-white font-semibold text-[#134e4a] shadow-[0_6px_16px_-6px_rgba(0,0,0,0.45)]',
+                      }}
+                      inactiveProps={{
+                        className: 'font-medium text-white/80 hover:bg-white/10 hover:text-white',
+                      }}
+                      className="group flex h-9 items-center gap-2.5 rounded-[0.6rem] px-2.5 text-[12.5px] transition-colors active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    >
+                      <Icon size={16} aria-hidden className="shrink-0 opacity-80 group-hover:opacity-100" />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Who is signed in, pinned to the bottom; log out never scrolls away. */}
+      <div className="mt-3 shrink-0 rounded-xl bg-white/10 p-2 ring-1 ring-inset ring-white/12 backdrop-blur-sm">
+        <div className="flex items-center gap-1.5">
+          {profileTo ? (
+            <Link
+              to={profileTo}
+              title="Open my profile"
+              className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              {identity}
             </Link>
-          );
-        })}
-      </nav>
+          ) : (
+            <div className="-m-1 flex min-w-0 flex-1 items-center gap-2.5 p-1">{identity}</div>
+          )}
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Log out"
+            title="Log out"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white/65 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <LogOut size={15} aria-hidden />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -189,8 +293,17 @@ export function DashboardShell({
       <AppBackdrop />
 
       {/* Desktop sidebar */}
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-[17rem] border-r border-white/70 lg:block">
-        <SidebarBody nav={nav} roleLabel={roleLabel} todayService={todayService} />
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-[15rem] border-r border-[#042f2e]/40 lg:block">
+        <SidebarBody
+          nav={nav}
+          roleLabel={roleLabel}
+          todayService={todayService}
+          userName={userName}
+          userEmail={userEmail}
+          avatarUrl={avatarUrl}
+          profileTo={profileTo}
+          onLogout={logout}
+        />
       </aside>
 
       {/* Mobile drawer */}
@@ -214,17 +327,19 @@ export function DashboardShell({
               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, x: 0 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -300 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-              className="app-sidebar fixed inset-y-0 left-0 z-50 w-[17rem] max-w-[85vw] shadow-2xl lg:hidden"
+              className="app-sidebar fixed inset-y-0 left-0 z-50 w-[15rem] max-w-[85vw] shadow-2xl lg:hidden"
             >
-              <button
-                type="button"
-                onClick={() => setDrawer(false)}
-                aria-label="Close navigation"
-                className="absolute right-2.5 top-3.5 flex size-10 items-center justify-center rounded-lg text-slate-500 hover:bg-white/70"
-              >
-                <X size={20} />
-              </button>
-              <SidebarBody nav={nav} roleLabel={roleLabel} todayService={todayService} />
+              <SidebarBody
+                nav={nav}
+                roleLabel={roleLabel}
+                todayService={todayService}
+                userName={userName}
+                userEmail={userEmail}
+                avatarUrl={avatarUrl}
+                profileTo={profileTo}
+                onLogout={logout}
+                onClose={() => setDrawer(false)}
+              />
             </motion.aside>
           </>
         )}
@@ -282,7 +397,7 @@ export function DashboardShell({
                 <Link
                   to={notificationsTo}
                   onClick={() => setBellOpen(false)}
-                  className="flex h-11 items-center justify-center rounded-lg text-sm font-medium text-teal-700 hover:bg-teal-50"
+                  className="flex h-11 items-center justify-center rounded-lg text-sm font-medium text-[#0f766e] hover:bg-[#eef4f8]"
                 >
                   View all notifications
                 </Link>
@@ -292,28 +407,32 @@ export function DashboardShell({
         )}
       </AnimatePresence>
 
-      <div className="app-main lg:pl-[17rem]">
-        <header className="app-chrome sticky top-0 z-20 border-b border-white/60">
+      <div className="app-main lg:pl-[15rem]">
+        <header className="app-chrome sticky top-0 z-20 border-b border-[#e2e8f0]">
           <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-7">
             <button
               type="button"
               onClick={() => setDrawer(true)}
               aria-label="Open navigation"
-              className="flex size-10 items-center justify-center rounded-lg text-slate-600 hover:bg-white/80 lg:hidden"
+              className="flex size-10 items-center justify-center rounded-lg text-slate-600 hover:bg-[#eef4f8] lg:hidden"
             >
               <Menu size={20} />
             </button>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-[17px] font-semibold leading-tight tracking-[-0.02em] text-slate-900">
+              <h1 className="truncate font-display text-[17px] font-semibold leading-tight tracking-[-0.02em] text-[#134e4a]">
                 {title}
               </h1>
               {subtitle && (
-                <p className="truncate text-[11.5px] font-medium leading-tight text-slate-500">
+                <p className="truncate text-[11.5px] font-medium leading-tight text-[#64748b]">
                   {subtitle}
                 </p>
               )}
             </div>
             <div className="ml-auto flex items-center gap-1.5">
+              <span className="mr-1 hidden items-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white/70 px-3 py-1.5 text-[11px] font-medium text-[#475569] md:inline-flex">
+                <CalendarDays size={13} aria-hidden className="text-[#0f766e]" />
+                {todayChipLabel()}
+              </span>
               <button
                 type="button"
                 onClick={openBell}
@@ -332,11 +451,11 @@ export function DashboardShell({
                     aria-haspopup="menu"
                     aria-expanded={profileOpen}
                     aria-label="Open profile menu"
-                    className="flex h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:bg-white/80 active:scale-[0.97]"
+                    className="flex h-9 items-center gap-2 rounded-lg px-1.5 transition-colors hover:bg-[#eef4f8] active:scale-[0.97]"
                   >
                     <span
                       aria-hidden
-                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#0f766e] text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {avatarUrl ? (
                         <img
@@ -350,7 +469,7 @@ export function DashboardShell({
                       )}
                     </span>
                     <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
-                      {userEmail}
+                      {userName ?? userEmail}
                     </span>
                     <ChevronDown size={14} aria-hidden className="hidden text-slate-400 sm:block" />
                   </button>
@@ -370,16 +489,21 @@ export function DashboardShell({
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -4 }}
                           transition={{ duration: 0.15 }}
-                          className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+                          className="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-xl border border-[#e2e8f0] bg-white p-1 shadow-xl"
                         >
-                          <p className="truncate px-2.5 py-2 text-[11.5px] font-semibold text-slate-500">
-                            {userName ?? userEmail}
-                          </p>
+                          <div className="px-2.5 py-2">
+                            <p className="truncate text-[12.5px] font-semibold text-[#042f2e]">
+                              {userName ?? userEmail}
+                            </p>
+                            {userName && (
+                              <p className="truncate text-[11px] text-[#94a3b8]">{userEmail}</p>
+                            )}
+                          </div>
                           <Link
                             to={profileTo}
                             role="menuitem"
                             onClick={() => setProfileOpen(false)}
-                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-[#1e293b] hover:bg-[#f2f7fb]"
                           >
                             <UserRound size={16} aria-hidden /> My Profile
                           </Link>
@@ -390,7 +514,7 @@ export function DashboardShell({
                               setProfileOpen(false);
                               void logout();
                             }}
-                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-[#1e293b] hover:bg-[#f2f7fb]"
                           >
                             <LogOut size={16} aria-hidden /> Log out
                           </button>
@@ -404,7 +528,7 @@ export function DashboardShell({
                   <div className="hidden items-center gap-2.5 sm:flex">
                     <span
                       aria-hidden
-                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#0f766e] text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {avatarUrl ? (
                         <img
@@ -418,13 +542,13 @@ export function DashboardShell({
                       )}
                     </span>
                     <span className="hidden max-w-40 truncate text-[13px] font-medium text-slate-700 xl:block">
-                      {userEmail}
+                      {userName ?? userEmail}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={logout}
-                    className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-white/80 active:scale-[0.97]"
+                    className="flex h-9 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-slate-600 transition-colors hover:bg-[#eef4f8] active:scale-[0.97]"
                   >
                     <LogOut size={17} aria-hidden />
                     <span className="hidden sm:inline">Log out</span>
@@ -435,7 +559,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className={cn('app-content mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-7 sm:py-8', mainClassName)}>
+        <main className={cn('app-content mx-auto w-full space-y-5 py-6 sm:py-8', mainClassName)}>
           <EmailVerificationBanner />
           {children}
         </main>

@@ -73,20 +73,32 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return res.json() as Promise<HealthResponse>;
 }
 
+/** A cold API answers 503 before running any handler, so one retry is safe. */
+const DB_UNAVAILABLE_RETRY_MS = 1500;
+
 async function apiFetch<T>(
   path: string,
   options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
   const token = getSession()?.token;
-  const res = await fetch(`${API_URL}${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-  });
+  const send = () =>
+    fetch(`${API_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    });
+
+  let res = await send();
+  // The DB connects in the background on boot; a request that lands in that
+  // window gets 503 without doing any work. Retry once before surfacing it.
+  if (res.status === 503) {
+    await new Promise((resolve) => setTimeout(resolve, DB_UNAVAILABLE_RETRY_MS));
+    res = await send();
+  }
   let data: { message?: string; errors?: Record<string, string[]>; code?: string } | null = null;
   try {
     data = (await res.json()) as { message?: string; errors?: Record<string, string[]>; code?: string };
@@ -482,6 +494,31 @@ export interface PatientReportRow {
   householdNumber: string;
   lastVisit: string | null;
   registeredAt: string | null;
+}
+
+export interface MonthlyTrendMonth {
+  /** `YYYY-MM`, the same prefix stored in an appointment's `day`. */
+  key: string;
+  label: string;
+  year: number;
+  /** Completed visits in this month across every service. */
+  total: number;
+}
+
+export interface MonthlyTrendSeries {
+  serviceId: string;
+  serviceName: string;
+  /** One entry per month, in `months` order. */
+  values: number[];
+  total: number;
+}
+
+/** Completed visits per service for the last six months (top three services). */
+export function monthlyTrends(): Promise<{
+  months: MonthlyTrendMonth[];
+  series: MonthlyTrendSeries[];
+}> {
+  return apiFetch('/api/reports/monthly-trends');
 }
 
 export function patientReport(

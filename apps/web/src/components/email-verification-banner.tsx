@@ -10,7 +10,7 @@ import {
 import { cn } from '../lib/utils';
 
 const primaryButton =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white shadow-[0_6px_18px_-8px_rgba(13,148,136,0.7)] transition-transform active:scale-[0.97] disabled:opacity-60';
+  'inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#0f766e] px-4 text-sm font-semibold text-white shadow-[0_6px_18px_-8px_rgba(17,94,89,0.45)] transition-transform active:scale-[0.97] disabled:opacity-60';
 const secondaryButton =
   'inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.97] disabled:opacity-60';
 
@@ -189,7 +189,7 @@ export function EmailVerificationBanner() {
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="123456"
                     className={cn(
-                      'h-11 w-full rounded-xl border border-input bg-background px-3 text-center font-mono text-lg tracking-[0.35em] outline-none transition-colors placeholder:tracking-[0.2em] placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25',
+                      'h-11 w-full rounded-xl border border-input bg-background px-3 text-center font-mono text-lg tracking-[0.35em] outline-none transition-colors placeholder:tracking-[0.2em] placeholder:text-muted-foreground focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/25',
                       error && 'border-destructive ring-2 ring-destructive/20',
                     )}
                     aria-invalid={error ? true : undefined}
@@ -202,7 +202,7 @@ export function EmailVerificationBanner() {
                   </p>
                 )}
                 {notice && !error && (
-                  <p className="rounded-xl bg-teal-50 px-3 py-2 text-[12.5px] leading-5 text-teal-900 ring-1 ring-inset ring-teal-600/20">
+                  <p className="rounded-xl bg-[#e9f7f4] px-3 py-2 text-[12.5px] leading-5 text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/20">
                     {notice}
                   </p>
                 )}

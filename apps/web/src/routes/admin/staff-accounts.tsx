@@ -1,13 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, LoaderCircle, Plus, Search, ShieldCheck, UserCheck, UserX, X } from 'lucide-react';
+import { Eye, EyeOff, LoaderCircle, Plus, Search, ShieldCheck, UserCheck, Users, UserX, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { adminNav } from '../../components/ops-nav';
 import {
   CardHeading,
   EmptyNote,
   InlineNotice,
+  Segmented,
   StatTile,
   StatusPill,
   dangerChipButton,
@@ -35,7 +36,15 @@ import {
 import { getTodayService } from '../../lib/schedule';
 import { cn } from '../../lib/utils';
 
+const ACCOUNT_VIEWS = ['all', 'active', 'staff', 'admins'] as const;
+type AccountView = (typeof ACCOUNT_VIEWS)[number];
+
 export const Route = createFileRoute('/admin/staff-accounts')({
+  validateSearch: (search: Record<string, unknown>): { view?: AccountView } => ({
+    view: ACCOUNT_VIEWS.includes(search.view as AccountView)
+      ? (search.view as AccountView)
+      : undefined,
+  }),
   component: StaffAccounts,
 });
 
@@ -65,7 +74,7 @@ function PermissionPicker({
         <button
           type="button"
           onClick={() => onChange([...PERMISSION_KEYS])}
-          className="text-[11.5px] font-semibold text-teal-700 hover:underline"
+          className="text-[11.5px] font-semibold text-[#0f766e] hover:underline"
         >
           Select all
         </button>
@@ -85,14 +94,14 @@ function PermissionPicker({
               key={p.key}
               className={cn(
                 'flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors',
-                checked ? 'border-teal-600/30 bg-teal-600/5' : 'border-slate-200 bg-white',
+                checked ? 'border-[#0f766e]/30 bg-[#0f766e]/5' : 'border-slate-200 bg-white',
               )}
             >
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggle(p.key)}
-                className="mt-0.5 size-4 shrink-0 accent-teal-600"
+                className="mt-0.5 size-4 shrink-0 accent-[#0f766e]"
               />
               <span className="min-w-0">
                 <span className="block text-[12.5px] font-semibold text-slate-800">{p.label}</span>
@@ -113,6 +122,14 @@ function StaffAccounts() {
   const [list, setList] = useState<StaffAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const { view: viewParam } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const [view, setView] = useState<AccountView>(viewParam ?? 'all');
+
+  // Keeps the filter in sync when the URL changes (deep link or back button).
+  useEffect(() => {
+    setView(viewParam ?? 'all');
+  }, [viewParam]);
 
   const [cName, setCName] = useState('');
   const [cEmail, setCEmail] = useState('');
@@ -226,15 +243,21 @@ function StaffAccounts() {
   const filtered = useMemo(() => {
     if (!list) return null;
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((a) => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q));
-  }, [list, search]);
+    return list.filter((a) => {
+      if (view === 'active' && !a.active) return false;
+      if (view === 'staff' && a.role !== 'staff') return false;
+      if (view === 'admins' && a.role !== 'admin') return false;
+      if (!q) return true;
+      return a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q);
+    });
+  }, [list, search, view]);
 
   const summary = useMemo(() => {
     const all = list ?? [];
     return {
       total: all.length,
       active: all.filter((a) => a.active).length,
+      staff: all.filter((a) => a.role === 'staff').length,
       admins: all.filter((a) => a.role === 'admin').length,
     };
   }, [list]);
@@ -256,8 +279,13 @@ function StaffAccounts() {
       notificationsTo="/staff/notifications"
       mainClassName="max-w-4xl"
     >
-      <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-3">
-        <StatTile icon={ShieldCheck} label="Accounts" value={list === null ? '—' : summary.total} hint="Staff + admins" />
+      <motion.div {...rise} transition={riseTransition} className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          icon={ShieldCheck}
+          label="Accounts"
+          value={list === null ? '—' : summary.total}
+          hint="Staff + admins"
+        />
         <StatTile
           icon={UserCheck}
           label="Active"
@@ -266,11 +294,18 @@ function StaffAccounts() {
           tone="sky"
         />
         <StatTile
+          icon={Users}
+          label="Staff"
+          value={list === null ? '—' : summary.staff}
+          hint="Limited permissions"
+          tone="slate"
+        />
+        <StatTile
           icon={UserX}
           label="Admins"
           value={list === null ? '—' : summary.admins}
           hint="Full workspace access"
-          tone="slate"
+          tone="teal"
         />
       </motion.div>
 
@@ -303,6 +338,22 @@ function StaffAccounts() {
             {showCreate ? <X size={16} aria-hidden /> : <Plus size={16} aria-hidden />}
             {showCreate ? 'Close' : 'New account'}
           </button>
+        </div>
+        <div className="mt-3">
+          <Segmented
+            ariaLabel="Filter staff accounts"
+            value={view}
+            onChange={(next) => {
+              setView(next);
+              void navigate({ search: next === 'all' ? {} : { view: next }, replace: true });
+            }}
+            options={[
+              { key: 'all', label: 'All' },
+              { key: 'active', label: 'Active' },
+              { key: 'staff', label: 'Staff' },
+              { key: 'admins', label: 'Admins' },
+            ]}
+          />
         </div>
       </motion.div>
 
@@ -385,8 +436,18 @@ function StaffAccounts() {
       {eError && <InlineNotice>{eError}</InlineNotice>}
 
       {list !== null && list.length === 0 && <EmptyNote>No staff accounts yet.</EmptyNote>}
-      {filtered !== null && filtered.length === 0 && list !== null && list.length > 0 && (
-        <EmptyNote>No account matches “{search.trim()}”.</EmptyNote>
+      {filtered !== null && list !== null && list.length > 0 && filtered.length === 0 && (
+        <EmptyNote>
+          {search.trim()
+            ? `No account matches “${search.trim()}”.`
+            : view === 'active'
+              ? 'No active accounts.'
+              : view === 'staff'
+                ? 'No staff accounts.'
+                : view === 'admins'
+                  ? 'No admin accounts.'
+                  : 'No accounts in this view.'}
+        </EmptyNote>
       )}
 
       <motion.div {...rise} transition={{ ...riseTransition, delay: 0.08 }} className="grid gap-3.5">

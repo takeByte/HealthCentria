@@ -103,7 +103,7 @@ export function PinDialog({ request, onClose }: { request: PinRequest; onClose: 
         aria-describedby="pin-dialog-desc"
         className="w-full max-w-sm rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_24px_70px_-28px_rgba(15,60,90,0.45)] sm:p-6"
       >
-        <span className="flex size-10 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
+        <span className="flex size-10 items-center justify-center rounded-xl bg-[#0f766e]/10 text-[#0f766e]">
           <KeyRound size={19} aria-hidden />
         </span>
         <h2 id="pin-dialog-title" className="mt-3 font-display text-lg font-semibold tracking-[-0.02em] text-slate-900">

@@ -22,12 +22,12 @@ export function Toast({ toast, onDone }: { toast: ToastMessage; onDone: () => vo
       className={cn(
         'fixed bottom-4 right-4 z-[60] flex max-w-sm items-start gap-2.5 rounded-xl px-3.5 py-3 text-[13px] font-medium shadow-[0_16px_40px_-20px_rgba(15,60,90,0.5)] ring-1 ring-inset',
         toast.tone === 'success'
-          ? 'bg-teal-50 text-teal-900 ring-teal-600/20'
+          ? 'bg-[#e9f7f4] text-[#134e4a] ring-[#0f766e]/20'
           : 'bg-red-50 text-red-800 ring-red-600/20',
       )}
     >
       {toast.tone === 'success' ? (
-        <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-teal-700" aria-hidden />
+        <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-[#0f766e]" aria-hidden />
       ) : (
         <ShieldAlert size={17} className="mt-0.5 shrink-0 text-red-700" aria-hidden />
       )}

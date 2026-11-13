@@ -102,7 +102,7 @@ function WeekStrip({ day, today }: { day: string; today: string }) {
     (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i),
   );
   return (
-    <div className="mt-4">
+    <div className="mt-4 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] p-2">
       <ol className="grid grid-cols-7 gap-1" aria-label="Week of your visit">
         {week.map((d) => {
           const ymd = toYMD(d);
@@ -119,27 +119,32 @@ function WeekStrip({ day, today }: { day: string; today: string }) {
               className={cn(
                 'flex flex-col items-center rounded-lg py-1.5',
                 isVisit
-                  ? 'bg-teal-700 text-white shadow-[0_2px_8px_rgba(13,148,136,0.35)]'
+                  ? 'bg-gradient-to-b from-[#0d9488] to-[#115e59] text-white shadow-[0_6px_14px_-6px_rgba(15,118,110,0.6)]'
                   : isToday
-                    ? 'ring-1 ring-inset ring-teal-600/50'
-                    : 'bg-slate-50/80',
+                    ? 'bg-white ring-1 ring-inset ring-[#0f766e]/45'
+                    : '',
               )}
             >
               <span
                 className={cn(
                   'text-[10px] font-bold uppercase tracking-[0.06em]',
-                  isVisit ? 'text-white/80' : 'text-slate-400',
+                  isVisit ? 'text-white/80' : 'text-[#94a3b8]',
                 )}
               >
                 {d.toLocaleDateString('en-PH', { weekday: 'narrow' })}
               </span>
-              <span className={cn('text-[13px] font-semibold tabular-nums', isVisit ? 'text-white' : 'text-slate-700')}>
+              <span
+                className={cn(
+                  'text-[13px] font-semibold tabular-nums',
+                  isVisit ? 'text-white' : 'text-[#1e293b]',
+                )}
+              >
                 {d.getDate()}
               </span>
               <span
                 className={cn(
                   'h-3 max-w-full truncate px-0.5 text-[8.5px] font-semibold uppercase leading-3',
-                  isVisit ? 'text-white/85' : 'text-teal-700/70',
+                  isVisit ? 'text-white/85' : 'text-[#0f766e]/70',
                 )}
               >
                 {tag ?? ''}
@@ -148,7 +153,7 @@ function WeekStrip({ day, today }: { day: string; today: string }) {
           );
         })}
       </ol>
-      <p className="mt-2 text-[11px] leading-4 text-slate-400">
+      <p className="mt-2 px-1 text-[10.5px] leading-4 text-[#94a3b8]">
         Clinic days: Mon Consultation · Tue Prenatal · Thu Family Planning · 2nd Wed Immunization
       </p>
     </div>
@@ -217,20 +222,21 @@ function PatientDashboard() {
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-24 -top-28 -z-10 size-64 rounded-full bg-teal-300/15 blur-3xl"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(20,184,166,0.16),transparent_70%)]"
         />
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-teal-700">
+            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
+              <span aria-hidden className="h-px w-5 bg-[#0f766e]/45" />
               {service.name} today
             </p>
             <h2
               id="patient-greeting"
-              className="mt-1.5 font-display text-[26px] font-semibold leading-tight tracking-[-0.025em] text-slate-900 sm:text-[30px]"
+              className="mt-2 font-display text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[#042f2e] sm:text-[32px]"
             >
               {greeting()}, {name}
             </h2>
-            <p className="mt-1.5 text-[13.5px] leading-6 text-slate-600">
+            <p className="mt-2 text-[13.5px] leading-6 text-[#475569]">
               Walk-ins are welcome on service days — booking ahead keeps your wait short.
             </p>
           </div>
@@ -241,7 +247,7 @@ function PatientDashboard() {
         </div>
       </motion.section>
 
-      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.04 }} className="grid gap-3.5 sm:grid-cols-3">
+      <motion.div {...rise} transition={{ ...riseTransition, delay: 0.04 }} className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
         <StatTile
           icon={CalendarDays}
           label="Upcoming"
@@ -261,6 +267,7 @@ function PatientDashboard() {
           value={appointments === null ? '—' : completedCount}
           hint="Shown in My Records"
           tone="slate"
+          className="col-span-2 sm:col-span-1"
         />
       </motion.div>
 
@@ -279,7 +286,7 @@ function PatientDashboard() {
             ) : next ? (
               <>
                 <div className="flex items-start gap-3">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#0f766e]/10 text-[#0f766e]">
                     <CalendarCheck size={20} aria-hidden />
                   </span>
                   <div className="min-w-0">
@@ -319,7 +326,7 @@ function PatientDashboard() {
                   )}
                   <Link
                     to="/app/appointments"
-                    className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
+                    className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
                   >
                     Manage
                     <ArrowRight size={15} aria-hidden />
@@ -356,7 +363,7 @@ function PatientDashboard() {
             action={
               <Link
                 to="/app/announcements"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
               >
                 View all
                 <ArrowRight size={15} aria-hidden />
@@ -371,19 +378,23 @@ function PatientDashboard() {
             ) : announcements.length === 0 ? (
               <EmptyNote>No announcements yet. New posts from the center will show up here.</EmptyNote>
             ) : (
-              <ul className="divide-y divide-slate-200/70">
+              <ul className="divide-y divide-[#eaf0f6]">
                 {announcements.slice(0, 3).map((a) => (
-                  <li key={a.id} className="py-3 first:pt-0 last:pb-0">
+                  <li key={a.id} className="py-3.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-teal-600/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-teal-800">
-                        <Megaphone size={11} aria-hidden />
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#e9f7f4] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#115e59] ring-1 ring-inset ring-[#0f766e]/15">
+                        <Megaphone size={10} aria-hidden />
                         {CATEGORY_LABELS[a.category]}
                       </span>
-                      <span className="text-[11.5px] text-slate-400">{formatShortDate(a.publishedAt)}</span>
-                      {a.pinned && <span className="text-[11.5px] font-semibold text-teal-700">Pinned</span>}
+                      <span className="text-[11px] tabular-nums text-[#94a3b8]">{formatShortDate(a.publishedAt)}</span>
+                      {a.pinned && (
+                        <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#0f766e]">
+                          Pinned
+                        </span>
+                      )}
                     </div>
-                    <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-slate-900">{a.title}</p>
-                    <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-5 text-slate-600">{a.body}</p>
+                    <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-[#042f2e]">{a.title}</p>
+                    <p className="mt-1 line-clamp-2 text-[12.5px] leading-5 text-[#64748b]">{a.body}</p>
                   </li>
                 ))}
               </ul>

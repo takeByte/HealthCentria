@@ -49,7 +49,7 @@ function PatientAnnouncements() {
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-        className="max-w-4xl space-y-3"
+        className="space-y-3"
       >
         {error && <InlineNotice>{error}</InlineNotice>}
         {items === null && !error && <EmptyNote>Loading announcements…</EmptyNote>}

@@ -221,7 +221,6 @@ function StaffAnnouncements() {
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
           transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
-          className="max-w-4xl"
         >
           <AnnouncementFeed
             items={filtered}
@@ -357,7 +356,7 @@ function StaffAnnouncements() {
                     type="checkbox"
                     checked={composer.pinned}
                     onChange={(e) => setComposer({ ...composer, pinned: e.target.checked })}
-                    className="size-5 accent-teal-700"
+                    className="size-5 accent-[#0f766e]"
                   />
                   Pin to the top of the feed
                 </label>

@@ -185,7 +185,7 @@ function CompleteProfile() {
           aria-labelledby="complete-profile-heading"
         >
           <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-teal-600/10 text-teal-700">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#0f766e]/10 text-[#0f766e]">
               <UserRound size={19} aria-hidden />
             </span>
             <div className="min-w-0">
