@@ -194,6 +194,82 @@ async function loadStatusReport({ from, to }) {
   return { rows, totals: { ...totals, serviceName: 'Total' } };
 }
 
+/**
+ * Completed visits per service for the last six calendar months, including
+ * the current one. Returns the three busiest services so the trend chart has
+ * at most three series.
+ */
+async function loadMonthlyTrends() {
+  const today = todayYMD();
+  const [year, month] = today.split('-').map(Number);
+  const months = [];
+
+  for (let i = 5; i >= 0; i -= 1) {
+    const date = new Date(Date.UTC(year, month - 1 - i, 1));
+    months.push({
+      key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+      label: date.toLocaleDateString('en-PH', { month: 'short', timeZone: 'UTC' }),
+      year: date.getUTCFullYear(),
+      total: 0,
+    });
+  }
+
+  const monthIndex = new Map(months.map((entry, index) => [entry.key, index]));
+  const raw = await Appointment.aggregate([
+    { $match: { status: 'completed', day: { $gte: `${months[0].key}-01`, $lte: today } } },
+    {
+      $group: {
+        _id: { service: '$service', month: { $substrBytes: ['$day', 0, 7] } },
+        count: { $sum: 1 },
+      },
+    },
+    {
+      $lookup: {
+        from: 'services',
+        localField: '_id.service',
+        foreignField: '_id',
+        as: 'service',
+      },
+    },
+    { $unwind: { path: '$service', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 0,
+        serviceId: { $toString: '$_id.service' },
+        serviceName: { $ifNull: ['$service.name', 'Service'] },
+        month: '$_id.month',
+        count: 1,
+      },
+    },
+  ]);
+
+  const byService = new Map();
+  for (const item of raw) {
+    const index = monthIndex.get(item.month);
+    if (index === undefined) continue;
+
+    let entry = byService.get(item.serviceId);
+    if (!entry) {
+      entry = {
+        serviceId: item.serviceId,
+        serviceName: item.serviceName,
+        values: months.map(() => 0),
+        total: 0,
+      };
+      byService.set(item.serviceId, entry);
+    }
+    entry.values[index] += item.count;
+    entry.total += item.count;
+    months[index].total += item.count;
+  }
+
+  const series = [...byService.values()]
+    .sort((a, b) => b.total - a.total || a.serviceName.localeCompare(b.serviceName))
+    .slice(0, 3);
+
+  return { months, series };
+}
+
 async function loadPatientRows(to) {
   const patients = await User.find({ role: 'patient', deletedAt: null })
     .select('fullName birthdate sex address barangay contactNumber householdNumber createdAt')
@@ -262,6 +338,14 @@ export const appointmentsByStatus = asyncHandler(async (req, res) => {
 
   const { rows, totals } = await loadStatusReport(meta);
   res.json({ success: true, ...meta, totals, rows });
+});
+
+// Completed visits per service for the last six months (top three services).
+export const monthlyTrends = asyncHandler(async (_req, res) => {
+  if (!requireDB(res)) return;
+
+  const { months, series } = await loadMonthlyTrends();
+  res.json({ success: true, months, series });
 });
 
 // Basic patient register: demographics, contact details and last completed visit.

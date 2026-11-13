@@ -37,7 +37,8 @@ async function main() {
   if (isPlaceholder) {
     console.warn('MONGODB_URI is a placeholder — starting API without DB connection.');
   } else {
-    // Intentionally not awaited: the API must start listening immediately.
+    // Intentionally not awaited: the port must open immediately for platform
+    // probes. Requests that need the DB wait for the handshake in dbGate.
     void connectWithRetry(env.MONGODB_URI);
   }
 

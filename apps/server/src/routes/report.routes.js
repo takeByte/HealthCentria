@@ -6,6 +6,7 @@ import {
   exportVisitsPerServicePdf,
   exportVisitsPerServiceSheets,
   listExportRecipients,
+  monthlyTrends,
   overview,
   patientList,
   visitsPerService,
@@ -18,6 +19,7 @@ const staffOnly = [requireAuth, requireRole('staff', 'admin'), requirePermission
 
 reportRouter.get('/visits-per-service', ...staffOnly, visitsPerService);
 reportRouter.get('/appointments-by-status', ...staffOnly, appointmentsByStatus);
+reportRouter.get('/monthly-trends', ...staffOnly, monthlyTrends);
 reportRouter.get('/patients', ...staffOnly, patientList);
 reportRouter.get('/export.pdf', ...staffOnly, exportReportPdf);
 reportRouter.get('/visits-per-service/export', ...staffOnly, exportVisitsPerServiceCsv);
