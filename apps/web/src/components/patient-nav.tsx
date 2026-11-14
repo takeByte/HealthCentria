@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Megaphone,
   Plus,
+  Settings,
   UserRound,
 } from 'lucide-react';
 import type { ShellNavItem } from './dashboard-shell';
@@ -22,4 +23,5 @@ export const patientNav: ShellNavItem[] = [
   { label: 'Announcements', to: '/app/announcements', icon: Megaphone, group: 'Communication' },
   { label: 'Notifications', to: '/app/notifications', icon: Bell, group: 'Communication' },
   { label: 'My Profile', to: '/app/profile', icon: UserRound, group: 'Account' },
+  { label: 'Settings', to: '/app/settings', icon: Settings, group: 'Account' },
 ];

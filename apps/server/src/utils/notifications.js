@@ -28,6 +28,30 @@ export async function notifyRoles(roles, { type, title, body = '', link = '', ke
   return docs.length;
 }
 
+/** Emails a patient can opt out of from Settings. */
+export const PATIENT_EMAIL_CATEGORIES = ['announcements', 'appointments'];
+
+/** Categories that are opt-in: off until the patient switches them on. */
+const OFF_BY_DEFAULT = new Set(['announcements']);
+
+/** The patient's choice for this category, falling back to its default when never set. */
+export function prefAllows(emailPrefs, category) {
+  const value = emailPrefs?.[category];
+  if (typeof value === 'boolean') return value;
+  return !OFF_BY_DEFAULT.has(category);
+}
+
+/**
+ * notifyEmail for one patient, honouring their Settings. In-app notifications
+ * are unaffected. Not for security codes: those never check preferences.
+ */
+export async function notifyPatientEmail(patientId, category, to, subject, text) {
+  if (!to) return;
+  const patient = await User.findById(patientId).select('emailPrefs').lean();
+  if (!prefAllows(patient?.emailPrefs, category)) return;
+  await notifyEmail(to, subject, text);
+}
+
 /**
  * Best-effort notification email (appointment updates, reminders) — logs and
  * swallows failures so requests never break on email. Skipped while an admin

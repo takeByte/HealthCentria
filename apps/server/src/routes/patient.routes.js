@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import {
   deletePatient,
+  getMyEmailPrefs,
   getMyProfile,
   getPatient,
   listPatients,
+  updateMyEmailPrefs,
   updateMyProfile,
   updatePatientMedical,
   updatePatientRecord,
@@ -16,6 +18,8 @@ export const patientRouter = Router();
 // Patients view and complete their own profile after Google sign-in.
 patientRouter.get('/profile', requireAuth, requireRole('patient'), getMyProfile);
 patientRouter.put('/profile', requireAuth, requireRole('patient'), updateMyProfile);
+patientRouter.get('/email-preferences', requireAuth, requireRole('patient'), getMyEmailPrefs);
+patientRouter.put('/email-preferences', requireAuth, requireRole('patient'), updateMyEmailPrefs);
 
 patientRouter.get(
   '/',

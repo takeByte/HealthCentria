@@ -28,6 +28,7 @@ import { Route as AppDashboardRouteImport } from './routes/app/dashboard'
 import { Route as AppNotificationsRouteImport } from './routes/app/notifications'
 import { Route as AppRecordsRouteImport } from './routes/app/records'
 import { Route as AppServicesRouteImport } from './routes/app/services'
+import { Route as AppSettingsRouteImport } from './routes/app/settings'
 import { Route as ApproveTokenRouteImport } from './routes/approve.$token'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as StaffActivityRouteImport } from './routes/staff/activity'
@@ -142,6 +143,11 @@ const AppServicesRoute = AppServicesRouteImport.update({
   path: '/services',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const ApproveTokenRoute = ApproveTokenRouteImport.update({
   id: '/approve/$token',
   path: '/approve/$token',
@@ -253,6 +259,7 @@ export interface FileRoutesByFullPath {
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
+  '/app/settings': typeof AppSettingsRoute
   '/approve/$token': typeof ApproveTokenRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/staff/activity': typeof StaffActivityRoute
@@ -292,6 +299,7 @@ export interface FileRoutesByTo {
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
+  '/app/settings': typeof AppSettingsRoute
   '/approve/$token': typeof ApproveTokenRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/staff/activity': typeof StaffActivityRoute
@@ -331,6 +339,7 @@ export interface FileRoutesById {
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
+  '/app/settings': typeof AppSettingsRoute
   '/approve/$token': typeof ApproveTokenRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/staff/activity': typeof StaffActivityRoute
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
+    | '/app/settings'
     | '/approve/$token'
     | '/auth/callback'
     | '/staff/activity'
@@ -411,6 +421,7 @@ export interface FileRouteTypes {
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
+    | '/app/settings'
     | '/approve/$token'
     | '/auth/callback'
     | '/staff/activity'
@@ -449,6 +460,7 @@ export interface FileRouteTypes {
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
+    | '/app/settings'
     | '/approve/$token'
     | '/auth/callback'
     | '/staff/activity'
@@ -617,6 +629,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppServicesRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/settings': {
+      id: '/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/approve/$token': {
       id: '/approve/$token'
       path: '/approve/$token'
@@ -773,6 +792,7 @@ interface AppRouteRouteChildren {
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppRecordsRoute: typeof AppRecordsRoute
   AppServicesRoute: typeof AppServicesRoute
+  AppSettingsRoute: typeof AppSettingsRoute
   AppAppointmentsNewRoute: typeof AppAppointmentsNewRoute
   AppProfileCompleteRoute: typeof AppProfileCompleteRoute
   AppAppointmentsIndexRoute: typeof AppAppointmentsIndexRoute
@@ -786,6 +806,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppNotificationsRoute: AppNotificationsRoute,
   AppRecordsRoute: AppRecordsRoute,
   AppServicesRoute: AppServicesRoute,
+  AppSettingsRoute: AppSettingsRoute,
   AppAppointmentsNewRoute: AppAppointmentsNewRoute,
   AppProfileCompleteRoute: AppProfileCompleteRoute,
   AppAppointmentsIndexRoute: AppAppointmentsIndexRoute,

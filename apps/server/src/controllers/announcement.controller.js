@@ -6,7 +6,7 @@ import { isNotificationEmailEnabled } from '../models/app-settings.model.js';
 import { User } from '../models/user.model.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
 import { announcementEmailText, sendEmail } from '../utils/email.js';
-import { notifyRoles } from '../utils/notifications.js';
+import { notifyRoles, prefAllows } from '../utils/notifications.js';
 
 const CATEGORIES = ['schedule-change', 'vaccination-day', 'health-advisory', 'general'];
 
@@ -74,10 +74,20 @@ async function emailPatients(announcement) {
   // Per-post email to registered patients (spec §4.9). Fire-and-forget safe: never throws.
   // Skipped while notification emails are off; the post still shows in the app.
   if (!(await isNotificationEmailEnabled())) return;
-  const patients = await User.find({ role: 'patient', active: true }).select('email').lean();
-  const recipients = patients.map((p) => p.email).filter(Boolean);
+  const patients = await User.find({ role: 'patient', active: true, deletedAt: null })
+    .select('email emailPrefs')
+    .lean();
+  // Patients who switched announcement emails off in Settings are skipped.
+  const recipients = patients.filter((p) => p.email && prefAllows(p.emailPrefs, 'announcements')).map((p) => p.email);
   if (recipients.length === 0) return;
-  await sendEmail(recipients, `HealthCentria: ${announcement.title}`, announcementEmailText(announcement));
+  const subject = `HealthCentria: ${announcement.title}`;
+  const text = announcementEmailText(announcement);
+  // One message per patient so nobody sees anyone else's address. Small batches
+  // keep a big list from opening hundreds of SMTP connections at once.
+  const BATCH = 5;
+  for (let i = 0; i < recipients.length; i += BATCH) {
+    await Promise.all(recipients.slice(i, i + BATCH).map((to) => sendEmail(to, subject, text)));
+  }
 }
 
 export const listAnnouncements = asyncHandler(async (req, res) => {

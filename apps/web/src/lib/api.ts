@@ -500,6 +500,22 @@ export function getPatient(id: string): Promise<{ patient: PatientDetail; visits
   return apiFetch(`/api/patients/${id}`);
 }
 
+/** Optional emails a patient controls from Settings. Verification and reset codes are never affected. */
+export interface EmailPreferences {
+  announcements: boolean;
+  appointments: boolean;
+}
+
+export function getEmailPreferences(): Promise<{ preferences: EmailPreferences }> {
+  return apiFetch('/api/patients/email-preferences');
+}
+
+export function updateEmailPreferences(
+  input: Partial<EmailPreferences>,
+): Promise<{ preferences: EmailPreferences }> {
+  return apiFetch('/api/patients/email-preferences', { method: 'PUT', body: input });
+}
+
 /** The signed-in patient's own chart. */
 export function getMyPatientProfile(): Promise<{ patient: PatientDetail }> {
   return apiFetch('/api/patients/profile');

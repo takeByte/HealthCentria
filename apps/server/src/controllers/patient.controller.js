@@ -11,6 +11,7 @@ import { todayYMD } from '../utils/service-schedule.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
 import { avatarSchema } from '../utils/avatar.js';
+import { prefAllows } from '../utils/notifications.js';
 
 const listQuery = z.object({
   search: z.string().trim().max(100).optional().default(''),
@@ -384,6 +385,58 @@ export const updatePatientMedical = asyncHandler(async (req, res) => {
   }
 
   res.json({ success: true, patient: presentProfile(patient) });
+});
+
+const emailPrefsSchema = z
+  .object({ announcements: z.boolean(), appointments: z.boolean() })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, 'No changes provided.');
+
+function presentEmailPrefs(user) {
+  return {
+    announcements: prefAllows(user.emailPrefs, 'announcements'),
+    appointments: prefAllows(user.emailPrefs, 'appointments'),
+  };
+}
+
+/** GET /api/patients/email-preferences — the signed-in patient's optional-email switches. */
+export const getMyEmailPrefs = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const user = await User.findById(req.user.id).select('emailPrefs active').lean();
+  if (!user || !user.active) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  res.json({ success: true, preferences: presentEmailPrefs(user) });
+});
+
+/**
+ * PUT /api/patients/email-preferences — switch announcement or appointment
+ * emails on or off. Verification and password-reset codes are never affected.
+ */
+export const updateMyEmailPrefs = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = emailPrefsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid preferences.' });
+  }
+  const set = {};
+  for (const [key, value] of Object.entries(parsed.data)) set[`emailPrefs.${key}`] = value;
+  // updateOne: a plain save() would re-run profile validators on older accounts.
+  const result = await User.updateOne({ _id: req.user.id, role: 'patient', active: true }, { $set: set });
+  if (result.matchedCount === 0) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  const user = await User.findById(req.user.id).select('emailPrefs fullName').lean();
+  await logActivity({
+    req,
+    action: 'patient.email_prefs_update',
+    target: { type: 'patient', id: req.user.id, label: user?.fullName ?? '' },
+    detail: `Patient changed email preferences: ${Object.entries(parsed.data)
+      .map(([k, v]) => `${k} ${v ? 'on' : 'off'}`)
+      .join(', ')}.`,
+    patient: req.user.id,
+  });
+  res.json({ success: true, preferences: presentEmailPrefs(user) });
 });
 
 /** PUT /api/patients/profile — patient completes their own profile. */

@@ -62,6 +62,15 @@ const userSchema = new mongoose.Schema(
     philHealthNumber: { type: String, trim: true, default: '' },
     emergencyName: { type: String, default: '', trim: true },
     emergencyNumber: { type: String, default: '', trim: true },
+    // Optional emails controlled from the patient's Settings. Announcements are
+    // opt-in (off by default); appointment updates are on by default. Accounts
+    // that never touched Settings have no stored value and get the same
+    // defaults (see prefAllows). Security emails (verification and reset
+    // codes) ignore these.
+    emailPrefs: {
+      announcements: { type: Boolean, default: false },
+      appointments: { type: Boolean, default: true },
+    },
     // Clinical background entered by center staff (patients see it read-only).
     // Wiped when the account is deleted; see deletePatient.
     medicalProfile: {
