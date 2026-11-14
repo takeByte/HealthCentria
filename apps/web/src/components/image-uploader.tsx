@@ -116,7 +116,7 @@ export function ImageUploader({
         type="button"
         disabled={disabled || uploading || remaining === 0 || uploadsOff}
         onClick={() => inputRef.current?.click()}
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-[13px] font-semibold text-slate-600 transition-colors hover:border-[#0f766e] hover:bg-[#e9f7f4]/50 hover:text-[#115e59] disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 text-[13px] font-semibold text-slate-600 transition-colors hover:border-[#1f55a8] hover:bg-[#eaf3fc]/50 hover:text-[#1a448a] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {uploading ? (
           <>

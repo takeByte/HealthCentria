@@ -18,7 +18,7 @@ export const Route = createFileRoute('/login')({
 });
 
 const inputClass =
-  'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
+  'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-[#1695de] focus:ring-2 focus:ring-[#1695de]/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
 
 // Public by design. When it is absent (a fresh checkout without apps/web/.env)
 // the widget is hidden and the server decides — it skips the check in
@@ -228,7 +228,7 @@ function LoginComponent() {
                     <div className="mt-1.5 flex justify-end">
                       <Link
                         to="/forgot-password"
-                        className="text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
+                        className="text-sm font-medium text-[#1f55a8] underline-offset-4 hover:underline"
                       >
                         Forgot password?
                       </Link>
@@ -265,7 +265,7 @@ function LoginComponent() {
                   <Button
                     type="submit"
                     disabled={pending || (Boolean(siteKey) && recaptchaEnabled && !captchaToken)}
-                    className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
+                    className="h-10 w-full bg-gradient-to-r from-[#1695de] to-blue-600 text-base active:scale-[0.97]"
                   >
                     {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
                     {pending ? 'Logging in…' : 'Log in'}
@@ -297,7 +297,7 @@ function LoginComponent() {
             <div className="mt-4 space-y-1.5 pt-1 text-center text-sm">
               <p className="text-slate-600">
                 New patient?{' '}
-                <Link to="/register" className="font-medium text-teal-700 underline-offset-4 hover:underline">
+                <Link to="/register" className="font-medium text-[#1f55a8] underline-offset-4 hover:underline">
                   Create an account
                 </Link>
               </p>

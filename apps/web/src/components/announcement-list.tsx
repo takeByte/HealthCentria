@@ -41,7 +41,7 @@ export function AnnouncementList({
                 <Pin size={10} aria-hidden /> Pinned
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#e9f7f4] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#115e59] ring-1 ring-inset ring-[#0f766e]/15">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-tint)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--brand-deep-strong)] ring-1 ring-inset ring-[var(--brand-deep)]/15">
                 <Megaphone size={10} aria-hidden /> Announcement
               </span>
             )}
@@ -49,7 +49,7 @@ export function AnnouncementList({
               {formatShortDate(a.publishedAt)}
             </span>
           </div>
-          <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-[#042f2e]">{a.title}</p>
+          <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-[var(--brand-ink-dark)]">{a.title}</p>
           <p className="mt-1 line-clamp-2 text-[12.5px] leading-5 text-[#64748b]">{a.body}</p>
         </li>
       ))}

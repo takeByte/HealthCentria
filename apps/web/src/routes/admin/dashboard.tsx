@@ -161,7 +161,7 @@ function AdminDashboard() {
             action={
               <Link
                 to="/staff/announcements"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#1f55a8] hover:underline hover:underline-offset-4"
               >
                 Manage <ArrowRight size={15} aria-hidden />
               </Link>
@@ -186,51 +186,51 @@ function AdminDashboard() {
               to="/admin/staff-accounts"
               className="group flex items-center gap-3 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] px-3 py-2.5 transition-colors hover:border-[#c6d8e4] hover:bg-white"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0f766e] ring-1 ring-inset ring-[#e2e8f0]">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#1f55a8] ring-1 ring-inset ring-[#e2e8f0]">
                 <UserCog size={15} aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-semibold text-[#042f2e]">Staff accounts</span>
+                <span className="block text-[12.5px] font-semibold text-[#0b2c4f]">Staff accounts</span>
                 <span className="block truncate text-[11px] text-[#94a3b8]">Invite, suspend, reset</span>
               </span>
               <ArrowRight
                 size={14}
                 aria-hidden
-                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#0f766e]"
+                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#1f55a8]"
               />
             </Link>
             <Link
               to="/admin/backups"
               className="group flex items-center gap-3 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] px-3 py-2.5 transition-colors hover:border-[#c6d8e4] hover:bg-white"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0f766e] ring-1 ring-inset ring-[#e2e8f0]">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#1f55a8] ring-1 ring-inset ring-[#e2e8f0]">
                 <DatabaseBackup size={15} aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-semibold text-[#042f2e]">Backups</span>
+                <span className="block text-[12.5px] font-semibold text-[#0b2c4f]">Backups</span>
                 <span className="block truncate text-[11px] text-[#94a3b8]">Schedule and restore</span>
               </span>
               <ArrowRight
                 size={14}
                 aria-hidden
-                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#0f766e]"
+                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#1f55a8]"
               />
             </Link>
             <Link
               to="/admin/settings"
               className="group flex items-center gap-3 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] px-3 py-2.5 transition-colors hover:border-[#c6d8e4] hover:bg-white"
             >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0f766e] ring-1 ring-inset ring-[#e2e8f0]">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#1f55a8] ring-1 ring-inset ring-[#e2e8f0]">
                 <Settings size={15} aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-semibold text-[#042f2e]">Settings</span>
+                <span className="block text-[12.5px] font-semibold text-[#0b2c4f]">Settings</span>
                 <span className="block truncate text-[11px] text-[#94a3b8]">Clinic, email, integrations</span>
               </span>
               <ArrowRight
                 size={14}
                 aria-hidden
-                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#0f766e]"
+                className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5 group-hover:text-[#1f55a8]"
               />
             </Link>
           </div>

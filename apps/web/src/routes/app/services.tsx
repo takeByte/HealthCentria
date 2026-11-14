@@ -56,7 +56,7 @@ function ServiceCard({ service }: { service: Service }) {
           <h3 className="font-display text-[15.5px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
             {service.name}
           </h3>
-          <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[#0f766e]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#115e59]">
+          <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[#1f55a8]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#1a448a]">
             <CalendarDays size={12} aria-hidden />
             {service.scheduleText}
           </p>
@@ -178,7 +178,7 @@ function PatientServices() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search services…"
             aria-label="Search services"
-            className="h-11 w-full rounded-xl border border-slate-200/80 bg-white/80 pl-10 pr-3 text-[14px] outline-none placeholder:text-slate-400 focus:border-[#0f766e] focus:bg-white focus:ring-2 focus:ring-[#0f766e]/25"
+            className="h-11 w-full rounded-xl border border-slate-200/80 bg-white/80 pl-10 pr-3 text-[14px] outline-none placeholder:text-slate-400 focus:border-[#1f55a8] focus:bg-white focus:ring-2 focus:ring-[#1f55a8]/25"
           />
         </div>
         <div role="group" aria-label="View" className="flex rounded-xl bg-slate-100/80 p-1">
@@ -243,12 +243,12 @@ function PatientServices() {
                     <li key={s.id} className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-[13.5px] font-semibold text-slate-900">{s.name}</p>
-                        <p className="mt-0.5 text-[12px] text-[#0f766e]">{s.scheduleText}</p>
+                        <p className="mt-0.5 text-[12px] text-[#1f55a8]">{s.scheduleText}</p>
                       </div>
                       <Link
                         to="/app/appointments/new"
                         search={{ service: s.id }}
-                        className="shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold text-[#0f766e] transition-colors hover:bg-[#0f766e]/10 active:scale-[0.97]"
+                        className="shrink-0 rounded-lg px-3 py-1.5 text-[13px] font-semibold text-[#1f55a8] transition-colors hover:bg-[#1f55a8]/10 active:scale-[0.97]"
                       >
                         Book
                       </Link>

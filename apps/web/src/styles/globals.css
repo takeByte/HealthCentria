@@ -27,6 +27,25 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Source palette (colorhunt.co blues), ordered light to deep. Every brand
+     role below resolves to one of these four stops so the product never drifts
+     onto off-palette blues. */
+  --palette-mist: #e3f2fd;
+  --palette-sky: #90caf9;
+  --palette-bright: #2196f3;
+  --palette-deep: #0d47a1;
+
+  /* Brand ramp. Role names stay because markup and charts reference them;
+     values are pinned to the palette, so re-theming is a four-line edit. */
+  --brand-deep: var(--palette-deep);
+  --brand-deep-strong: var(--palette-deep);
+  --brand-ink: var(--palette-deep);
+  --brand-ink-dark: var(--palette-deep);
+  --brand-bright: var(--palette-bright);
+  --brand-sky: var(--palette-sky);
+  --brand-tint: var(--palette-mist);
+  --brand-chip: var(--palette-sky);
+
   /* Body face for the whole product: Geist. Headings opt into Poppins via
      .font-display, so the two roles never compete for the same text. */
   font-family: 'Geist Variable', system-ui, sans-serif;
@@ -88,15 +107,15 @@
 
 body {
   margin: 0;
-  background: #f3f8fd;
+  background: var(--palette-mist);
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: #ccfbf1;
-  color: #042f2e;
+  background: var(--palette-sky);
+  color: var(--palette-deep);
 }
 
 @theme inline {
@@ -231,7 +250,7 @@ body {
  *
  * Two faces, one rule: Poppins (.font-display) carries headings and only
  * headings; Geist carries every piece of body copy, label and control. Cards
- * are solid white on the pale page so the dark teal shell stays the only
+ * are solid white on the mist page so the deep-blue shell stays the only
  * saturated mass on screen.
  */
 @layer components {
@@ -246,8 +265,8 @@ body {
 
   .app-card-quiet {
     border-radius: 1.25rem;
-    border: 1px solid #e2e8f0;
-    background-color: #f9fcfe;
+    border: 1px solid #d5e6f5;
+    background-color: color-mix(in srgb, var(--palette-mist) 45%, white);
   }
 
   /* Sticky chrome: a softly frosted white bar over the misty page. */
@@ -256,12 +275,21 @@ body {
     backdrop-filter: blur(16px) saturate(150%);
   }
 
-  /* The E-Kalinga shell: deep teal at the top, brand teal at the bottom,
-     with a soft light bloom behind the brand card. */
+  /* Sidebar: the palette's deep stop, lifted by a sky bloom at the top edge. */
   .app-sidebar {
     background-image:
-      radial-gradient(120% 55% at 0% 0%, rgb(94 234 212 / 0.14), transparent 62%),
-      linear-gradient(180deg, #042f2e 0%, #115e59 54%, #0f766e 100%);
+      radial-gradient(120% 55% at 0% 0%, color-mix(in srgb, var(--palette-sky) 16%, transparent), transparent 62%),
+      linear-gradient(180deg, var(--palette-deep) 0%, color-mix(in srgb, var(--palette-deep) 82%, var(--palette-bright)) 100%);
+  }
+
+  /* Landing wash: the mist stop thinned enough that body copy stays crisp. */
+  .landing-wash {
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--palette-mist) 78%, white) 0%,
+      color-mix(in srgb, var(--palette-mist) 52%, white) 38%,
+      color-mix(in srgb, var(--palette-mist) 72%, white) 100%
+    );
   }
 }
 

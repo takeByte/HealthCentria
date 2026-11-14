@@ -60,13 +60,13 @@ const RANGE_OPTIONS = [
 
 const RANGE_DAYS: Record<ReportRange, number> = { today: 1, week: 7, month: 30 };
 
-const SERIES_COLORS = ['#134e4a', '#2dd4bf', '#d9a441'] as const;
-const SERVICE_COLORS = ['#0f766e', '#14b8a6', '#5eead4', '#ccfbf1'] as const;
+const SERIES_COLORS = ['#123c78', '#5ab7f0', '#d9a441'] as const;
+const SERVICE_COLORS = ['#1f55a8', '#1695de', '#a9d8f7', '#d7eafb'] as const;
 
 const AGE_GROUPS = [
-  { label: 'Children (0–17)', min: 0, max: 17, color: '#ccfbf1' },
-  { label: 'Youth (18–35)', min: 18, max: 35, color: '#5eead4' },
-  { label: 'Adults (36–59)', min: 36, max: 59, color: '#0f766e' },
+  { label: 'Children (0–17)', min: 0, max: 17, color: '#d7eafb' },
+  { label: 'Youth (18–35)', min: 18, max: 35, color: '#a9d8f7' },
+  { label: 'Adults (36–59)', min: 36, max: 59, color: '#1f55a8' },
   { label: 'Seniors (60+)', min: 60, max: Number.POSITIVE_INFINITY, color: '#d9a441' },
 ] as const;
 
@@ -241,15 +241,15 @@ function Reports() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#14b8a6]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#1f55a8]">
             Report &amp; Analysis
           </p>
-          <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight tracking-[-0.02em] text-[#134e4a]">
+          <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight tracking-[-0.02em] text-[#123c78]">
             Reports &amp; Analysis
           </h1>
           <p className="mt-1 text-[12.5px] text-slate-500">
             View service trends, patient demographics and appointment outcomes.
-            {loading && <span className="ml-1.5 font-medium text-[#0f766e]">Updating…</span>}
+            {loading && <span className="ml-1.5 font-medium text-[#1f55a8]">Updating…</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 print-hide">
@@ -307,7 +307,7 @@ function Reports() {
           note={`Completed consultations · last ${visits?.days ?? rangeDays} days`}
           delta={busiest ? `Busiest: ${busiest.serviceName}` : 'No completed visits yet'}
           icon={Stethoscope}
-          tone="bg-[#e9f7f4] text-[#0f766e]"
+          tone="bg-[#eaf3fc] text-[#1f55a8]"
         />
         <KpiCard
           label="Services used"
@@ -350,7 +350,7 @@ function Reports() {
           transition={{ ...riseTransition, delay: 0.03 }}
           className={cn(card, 'p-5 xl:col-span-2')}
         >
-          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#134e4a]">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
             Monthly Service Trends
           </h2>
           <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -397,7 +397,7 @@ function Reports() {
           transition={{ ...riseTransition, delay: 0.06 }}
           className={cn(card, 'p-5')}
         >
-          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#134e4a]">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
             Top Services breakdown
           </h2>
           <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -471,7 +471,7 @@ function Reports() {
           className={cn(card, 'overflow-hidden xl:col-span-2')}
         >
           <div className="px-5 pt-5">
-            <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#134e4a]">
+            <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
               Service outcomes
             </h2>
             <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -496,7 +496,7 @@ function Reports() {
           transition={{ ...riseTransition, delay: 0.12 }}
           className={cn(card, 'p-5')}
         >
-          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#134e4a]">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
             Patient Demographics
           </h2>
           <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -568,14 +568,14 @@ function KpiCard({
           <Icon size={15} aria-hidden />
         </span>
       </div>
-      <p className="mt-2 font-display text-[26px] font-semibold leading-none tracking-[-0.02em] text-[#134e4a]">
+      <p className="mt-2 font-display text-[26px] font-semibold leading-none tracking-[-0.02em] text-[#123c78]">
         {value}
       </p>
       <p className="mt-2 text-[11.5px] text-slate-500">{note}</p>
       <p
         className={cn(
           'mt-0.5 text-[11px] font-semibold',
-          deltaTone === 'amber' ? 'text-[#a16a12]' : 'text-[#0f766e]',
+          deltaTone === 'amber' ? 'text-[#a16a12]' : 'text-[#1f55a8]',
         )}
       >
         {delta}
@@ -710,7 +710,7 @@ function OutcomesTable({ rows }: { rows: AppointmentsByStatusRow[] }) {
                       className={cn(
                         'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset',
                         rate >= 60
-                          ? 'bg-[#e6f7f4] text-[#0f766e] ring-[#0f766e]/15'
+                          ? 'bg-[#eaf3fc] text-[#1f55a8] ring-[#1f55a8]/15'
                           : 'bg-amber-50 text-amber-800 ring-amber-600/20',
                       )}
                     >
@@ -723,7 +723,7 @@ function OutcomesTable({ rows }: { rows: AppointmentsByStatusRow[] }) {
                       onClick={() => setOpen(isOpen ? null : row.serviceId)}
                       aria-expanded={isOpen}
                       aria-label={`${isOpen ? 'Hide' : 'View'} the ${row.serviceName} outcome breakdown`}
-                      className="inline-flex size-8 items-center justify-center rounded-lg border border-[#dde9f2] text-slate-500 transition-colors hover:bg-[#eef4f8] hover:text-[#0f766e] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f766e]"
+                      className="inline-flex size-8 items-center justify-center rounded-lg border border-[#dde9f2] text-slate-500 transition-colors hover:bg-[#eef4f8] hover:text-[#1f55a8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f55a8]"
                     >
                       <Eye size={14} aria-hidden />
                     </button>
@@ -787,7 +787,7 @@ function DemographicsDonut({
             />
           );
         })}
-      <text x="60" y="57" textAnchor="middle" fontSize="16" fontWeight="600" fill="#134e4a">
+      <text x="60" y="57" textAnchor="middle" fontSize="16" fontWeight="600" fill="#123c78">
         {total.toLocaleString()}
       </text>
       <text x="60" y="71" textAnchor="middle" fontSize="8" fill="#94a3b8">

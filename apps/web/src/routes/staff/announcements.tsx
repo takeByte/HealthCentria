@@ -356,7 +356,7 @@ function StaffAnnouncements() {
                     type="checkbox"
                     checked={composer.pinned}
                     onChange={(e) => setComposer({ ...composer, pinned: e.target.checked })}
-                    className="size-5 accent-[#0f766e]"
+                    className="size-5 accent-[#1f55a8]"
                   />
                   Pin to the top of the feed
                 </label>

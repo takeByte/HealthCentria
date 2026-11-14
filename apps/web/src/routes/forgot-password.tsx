@@ -24,7 +24,7 @@ export const Route = createFileRoute('/forgot-password')({
 });
 
 const inputClass =
-  'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
+  'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-[#1695de] focus:ring-2 focus:ring-[#1695de]/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
 
 // Fallback only: the active site key comes from the API, so a key an admin
 // saves in Settings takes effect without rebuilding the web app.
@@ -253,7 +253,7 @@ function ForgotPasswordComponent() {
                   <Button
                     type="submit"
                     disabled={pending || captchaRequired}
-                    className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
+                    className="h-10 w-full bg-gradient-to-r from-[#1695de] to-blue-600 text-base active:scale-[0.97]"
                   >
                     {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
                     {pending ? 'Sending code…' : 'Send code'}
@@ -269,7 +269,7 @@ function ForgotPasswordComponent() {
               {step === 'code' && (
                 <form onSubmit={submitNewPassword} noValidate className="flex flex-col gap-4">
                   {notice && (
-                    <p role="status" className="flex items-start gap-2 rounded-xl bg-teal-600/10 px-3 py-2.5 text-sm leading-5 text-teal-900">
+                    <p role="status" className="flex items-start gap-2 rounded-xl bg-[#1695de]/10 px-3 py-2.5 text-sm leading-5 text-[#123c78]">
                       <MailCheck size={17} className="mt-0.5 shrink-0" aria-hidden />
                       {notice}
                     </p>
@@ -302,7 +302,7 @@ function ForgotPasswordComponent() {
                         type="button"
                         onClick={() => void sendCode()}
                         disabled={pending || cooldown > 0 || captchaRequired}
-                        className="text-sm font-medium text-teal-700 underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+                        className="text-sm font-medium text-[#1f55a8] underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
                       >
                         {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
                       </button>
@@ -386,7 +386,7 @@ function ForgotPasswordComponent() {
                   <Button
                     type="submit"
                     disabled={pending}
-                    className="h-10 w-full bg-gradient-to-r from-teal-600 to-blue-600 text-base active:scale-[0.97]"
+                    className="h-10 w-full bg-gradient-to-r from-[#1695de] to-blue-600 text-base active:scale-[0.97]"
                   >
                     {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
                     {pending ? 'Resetting…' : 'Reset password'}
@@ -396,13 +396,13 @@ function ForgotPasswordComponent() {
 
               {step === 'done' && (
                 <div className="flex flex-col items-center gap-4 text-center">
-                  <CheckCircle2 size={40} className="text-teal-600" aria-hidden />
+                  <CheckCircle2 size={40} className="text-[#1695de]" aria-hidden />
                   <p role="status" className="text-[13.5px] leading-6 text-slate-600">
                     {notice || 'Your password has been reset.'}
                   </p>
                   <Link
                     to="/login"
-                    className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 text-base font-medium text-white transition-opacity hover:opacity-95 active:scale-[0.97]"
+                    className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#1695de] to-blue-600 text-base font-medium text-white transition-opacity hover:opacity-95 active:scale-[0.97]"
                   >
                     Back to log in
                   </Link>
@@ -414,7 +414,7 @@ function ForgotPasswordComponent() {
               <div className="mt-4 space-y-1.5 pt-1 text-center text-sm">
                 <p className="text-slate-600">
                   Remembered it?{' '}
-                  <Link to="/login" className="font-medium text-teal-700 underline-offset-4 hover:underline">
+                  <Link to="/login" className="font-medium text-[#1f55a8] underline-offset-4 hover:underline">
                     Log in
                   </Link>
                 </p>

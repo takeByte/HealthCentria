@@ -28,7 +28,7 @@ export const Route = createFileRoute('/app/records')({
 
 /** Text-link action — the quietest way to offer a next step inside a card. */
 const textLink =
-  'inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4';
+  'inline-flex items-center gap-1 text-[13px] font-semibold text-[#1f55a8] hover:underline hover:underline-offset-4';
 
 function serviceName(a: Appointment): string {
   return typeof a.service === 'object' ? a.service.name : 'Service';
@@ -201,9 +201,9 @@ function MyRecords() {
       <motion.p
         {...rise}
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-        className="flex items-start gap-2.5 rounded-xl bg-[#0f766e]/8 px-4 py-3 text-[12.5px] leading-5 text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/12"
+        className="flex items-start gap-2.5 rounded-xl bg-[#1f55a8]/8 px-4 py-3 text-[12.5px] leading-5 text-[#123c78] ring-1 ring-inset ring-[#1f55a8]/12"
       >
-        <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-[#0f766e]" />
+        <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-[#1f55a8]" />
         <span>
           Read-only — these are written by center staff. For corrections, ask the front desk.
         </span>

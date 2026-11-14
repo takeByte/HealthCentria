@@ -8,7 +8,7 @@ import { RecordMeta } from './record-meta';
 
 const CATEGORY_STYLE: Record<Announcement['category'], string> = {
   'schedule-change': 'bg-amber-600/10 text-amber-800',
-  'vaccination-day': 'bg-[#0f766e]/10 text-[#115e59]',
+  'vaccination-day': 'bg-[#1f55a8]/10 text-[#1a448a]',
   'health-advisory': 'bg-sky-600/10 text-sky-800',
   general: 'bg-slate-500/10 text-slate-700',
 };
@@ -76,13 +76,13 @@ export function AnnouncementFeed({
             key={a.id}
             className={cn(
               `app-card ${cardPadding}`,
-              a.pinned && 'ring-1 ring-[#0f766e]/25',
+              a.pinned && 'ring-1 ring-[#1f55a8]/25',
             )}
           >
             <div className="flex items-start gap-3">
               <span
                 aria-hidden
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#14b8a6] to-[#134e4a] text-[13px] font-bold text-white"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1695de] to-[#123c78] text-[13px] font-bold text-white"
               >
                 {initials(a.authorName)}
               </span>
@@ -126,7 +126,7 @@ export function AnnouncementFeed({
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {a.pinned && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-white">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#1f55a8] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-white">
                   <Pin size={11} aria-hidden /> Pinned
                 </span>
               )}

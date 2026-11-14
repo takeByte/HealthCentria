@@ -134,7 +134,7 @@ function QueueCard({
               <Link
                 to="/staff/patients/$patientId"
                 params={{ patientId: linkedPatientId }}
-                className="rounded-sm hover:text-[#0f766e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/30"
+                className="rounded-sm hover:text-[#1f55a8] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f55a8]/30"
               >
                 {patientName(appt)}
               </Link>
@@ -446,9 +446,9 @@ function StaffQueue() {
           list !== null && (
             <p
               role="status"
-              className="flex items-center gap-2 rounded-xl bg-[#0f766e]/8 px-4 py-2.5 text-[12.5px] font-semibold text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/15"
+              className="flex items-center gap-2 rounded-xl bg-[#1f55a8]/8 px-4 py-2.5 text-[12.5px] font-semibold text-[#123c78] ring-1 ring-inset ring-[#1f55a8]/15"
             >
-              <span aria-hidden className="size-2 rounded-full bg-[#0f766e]" />
+              <span aria-hidden className="size-2 rounded-full bg-[#1f55a8]" />
               Queue clear — nothing pending.
             </p>
           )

@@ -9,15 +9,15 @@ import { cn } from '../lib/utils';
  * and colour are decided once, so thirteen screens can't drift apart.
  *
  * The system is a quiet clinic editorial: paper-white cards on a misty page,
- * teal actions, one display face for headings, Geist for everything else.
+ * blue actions, one display face for headings, Geist for everything else.
  */
 
 /** The surface every page is built from: white paper, hairline cool edge. */
 export const panel = 'app-card p-5 sm:p-6';
 
-/** Full-width action — teal, soft lift, one per screen. */
+/** Full-width action — brand blue, soft lift, one per screen. */
 export const primaryButton =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#0d9488] to-[#115e59] px-5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_10px_22px_-12px_rgba(15,118,110,0.65)] transition-[transform,filter] hover:brightness-[1.06] active:scale-[0.98] disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[var(--brand-bright)] to-[var(--brand-deep-strong)] px-5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_10px_22px_-12px_rgba(31,85,168,0.65)] transition-[transform,filter] hover:brightness-[1.06] active:scale-[0.98] disabled:opacity-60';
 
 /** The quieter companion action: paper surface, hairline edge. */
 export const secondaryButton =
@@ -38,18 +38,18 @@ export const cardPadding = 'p-5 sm:p-6';
 export const fieldLabel = 'mb-1.5 block text-[12.5px] font-semibold text-[#334155]';
 
 export const inputClass =
-  'h-11 w-full rounded-xl border border-[#dde8f0] bg-white px-3 text-[13.5px] text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/20';
+  'h-11 w-full rounded-xl border border-[#dde8f0] bg-white px-3 text-[13.5px] text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[var(--brand-deep)] focus:ring-2 focus:ring-[var(--brand-deep)]/20';
 
 export const selectClass = inputClass;
 
 export const textareaClass =
-  'w-full rounded-xl border border-[#dde8f0] bg-white px-3 py-2.5 text-[13.5px] leading-6 text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/20';
+  'w-full rounded-xl border border-[#dde8f0] bg-white px-3 py-2.5 text-[13.5px] leading-6 text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[var(--brand-deep)] focus:ring-2 focus:ring-[var(--brand-deep)]/20';
 
 /* ----------------------------------------------------------- status pills --- */
 
 const STATUS_STYLE: Record<Appointment['status'], { pill: string; dot: string }> = {
   pending: { pill: 'bg-[#fdf5e4] text-[#8a5a10] ring-[#e2c07a]/50', dot: 'bg-[#c99a3d]' },
-  confirmed: { pill: 'bg-[#e9f7f4] text-[#115e59] ring-[#0f766e]/20', dot: 'bg-[#0f766e]' },
+  confirmed: { pill: 'bg-[var(--brand-tint)] text-[var(--brand-deep-strong)] ring-[var(--brand-deep)]/20', dot: 'bg-[var(--brand-deep)]' },
   declined: { pill: 'bg-red-50 text-red-700 ring-red-600/20', dot: 'bg-red-500' },
   completed: { pill: 'bg-[#edf3f8] text-[#475569] ring-[#cbd7e2]/70', dot: 'bg-[#64748b]' },
   cancelled: { pill: 'bg-[#f2f6fa] text-[#64748b] ring-[#d5dee8]/80', dot: 'bg-[#94a3b8]' },
@@ -71,7 +71,7 @@ export function StatusChip({ status, className }: { status: Appointment['status'
 }
 
 const TONE_STYLE = {
-  teal: 'bg-[#e9f7f4] text-[#115e59] ring-[#0f766e]/20',
+  teal: 'bg-[var(--brand-tint)] text-[var(--brand-deep-strong)] ring-[var(--brand-deep)]/20',
   sky: 'bg-sky-600/10 text-sky-800 ring-sky-600/20',
   amber: 'bg-[#fdf5e4] text-[#8a5a10] ring-[#e2c07a]/50',
   red: 'bg-red-500/10 text-red-700 ring-red-600/20',
@@ -132,19 +132,19 @@ export function PageHero({
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(20,184,166,0.16),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(22,149,222,0.16),transparent_70%)]"
       />
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           {eyebrow && (
-            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
-              <span aria-hidden className="h-px w-5 bg-[#0f766e]/45" />
+            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--brand-deep)]">
+              <span aria-hidden className="h-px w-5 bg-[var(--brand-deep)]/45" />
               {eyebrow}
             </p>
           )}
           <h2
             id="page-hero-title"
-            className="mt-2 font-display text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[#042f2e] sm:text-[32px]"
+            className="mt-2 font-display text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[var(--brand-ink-dark)] sm:text-[32px]"
           >
             {title}
           </h2>
@@ -171,7 +171,7 @@ export function CardHeading({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="font-display text-[15.5px] font-semibold tracking-[-0.015em] text-[#042f2e]">
+        <h2 className="font-display text-[15.5px] font-semibold tracking-[-0.015em] text-[var(--brand-ink-dark)]">
           {title}
         </h2>
         {description && <p className="mt-1 text-[12.5px] leading-5 text-[#64748b]">{description}</p>}
@@ -204,7 +204,7 @@ export function StatTile({
         ? 'bg-[#edf3f8] text-[#475569] ring-[#cfdbe5]/70'
         : tone === 'sky'
           ? 'bg-[#e9f3fb] text-[#2a6f9e] ring-[#bcd8ea]/60'
-          : 'bg-[#e9f7f4] text-[#0f766e] ring-[#0f766e]/15';
+          : 'bg-[var(--brand-chip)] text-[var(--brand-deep)] ring-[var(--brand-deep)]/15';
 
   return (
     <div
@@ -226,7 +226,7 @@ export function StatTile({
           <Icon size={17} aria-hidden />
         </span>
       </div>
-      <p className="mt-2 font-display text-[27px] font-semibold leading-none tracking-[-0.035em] text-[#042f2e]">
+      <p className="mt-2 font-display text-[27px] font-semibold leading-none tracking-[-0.035em] text-[var(--brand-ink-dark)]">
         {value}
       </p>
       {hint && <p className="mt-1.5 truncate text-[11.5px] text-[#64748b]">{hint}</p>}
@@ -265,7 +265,7 @@ export function Segmented<T extends string>({
             className={cn(
               'flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 text-[13px] font-semibold transition-all duration-150 active:scale-[0.97]',
               value === o.key
-                ? 'bg-white text-[#042f2e] shadow-[0_1px_2px_rgba(15,23,42,0.1),0_4px_10px_-6px_rgba(15,23,42,0.28)]'
+                ? 'bg-white text-[var(--brand-ink-dark)] shadow-[0_1px_2px_rgba(15,23,42,0.1),0_4px_10px_-6px_rgba(15,23,42,0.28)]'
                 : 'text-[#64748b] hover:text-[#1e293b]',
             )}
           >
@@ -303,13 +303,13 @@ export function InlineNotice({ children, className }: { children: ReactNode; cla
   );
 }
 
-/** Green confirmation, the counterpart to InlineNotice. */
+/** Brand-blue confirmation, the counterpart to InlineNotice. */
 export function SuccessNote({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
       role="status"
       className={cn(
-        'rounded-xl bg-[#e9f7f4] px-4 py-3 text-[13px] leading-5 text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/15',
+        'rounded-xl bg-[var(--brand-tint)] px-4 py-3 text-[13px] leading-5 text-[var(--brand-ink)] ring-1 ring-inset ring-[var(--brand-deep)]/15',
         className,
       )}
     >

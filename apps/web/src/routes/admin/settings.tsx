@@ -104,7 +104,7 @@ function Toggle({
       onClick={() => onChange(!checked)}
       className={cn(
         'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-        checked ? 'bg-[#0f766e]' : 'bg-slate-300',
+        checked ? 'bg-[#1f55a8]' : 'bg-slate-300',
       )}
     >
       <span
@@ -159,7 +159,7 @@ function ConfigureSection({
           aria-expanded={open}
           aria-controls={panelId}
           onClick={() => setOpen((o) => !o)}
-          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 text-[13px] font-semibold text-[#0f766e] transition-colors hover:text-[#115e59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/40"
+          className="inline-flex items-center gap-1.5 rounded-lg py-1.5 text-[13px] font-semibold text-[#1f55a8] transition-colors hover:text-[#1a448a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f55a8]/40"
         >
           {label}
           <ChevronDown
@@ -427,7 +427,7 @@ function GoogleSheetsCard({
                     href={sheets.spreadsheetUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="font-semibold text-[#0f766e] underline-offset-4 hover:underline"
+                    className="font-semibold text-[#1f55a8] underline-offset-4 hover:underline"
                   >
                     Open spreadsheet
                   </a>
@@ -995,7 +995,7 @@ function GoogleDriveCard({
                         href={drive.folderUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="font-semibold text-[#0f766e] underline-offset-4 hover:underline"
+                        className="font-semibold text-[#1f55a8] underline-offset-4 hover:underline"
                       >
                         {drive.folderName || 'Open folder'}
                       </a>
@@ -2106,7 +2106,7 @@ function AdminSettings() {
                   href="https://www.google.com/recaptcha/admin"
                   target="_blank"
                   rel="noreferrer"
-                  className="font-medium text-[#0f766e] underline-offset-2 hover:underline"
+                  className="font-medium text-[#1f55a8] underline-offset-2 hover:underline"
                 >
                   google.com/recaptcha/admin
                 </a>
@@ -2193,7 +2193,7 @@ function AdminSettings() {
                           onExpired={() => setRecaptchaTestToken(null)}
                         />
                         {recaptchaTestToken ? (
-                          <p className="text-[12px] font-medium text-[#0f766e]">Challenge solved. You can save now.</p>
+                          <p className="text-[12px] font-medium text-[#1f55a8]">Challenge solved. You can save now.</p>
                         ) : (
                           <p className="text-[12px] leading-5 text-slate-500">
                             If the box says &ldquo;Invalid domain for site key&rdquo; or &ldquo;Invalid key

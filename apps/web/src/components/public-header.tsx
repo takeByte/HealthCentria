@@ -26,7 +26,7 @@ export function PublicHeader({ inner = 'max-w-6xl' }: { inner?: string }) {
           <Link
             to="/announcements"
             activeOptions={{ exact: true }}
-            activeProps={{ className: 'bg-gradient-to-r from-teal-600 to-blue-600 text-white', 'aria-current': 'page' }}
+            activeProps={{ className: 'bg-gradient-to-r from-[#1695de] to-blue-600 text-white', 'aria-current': 'page' }}
             inactiveProps={{ className: 'text-slate-600' }}
             className="rounded-xl px-3 py-2 font-medium transition-colors hover:bg-slate-100 active:scale-[0.97]"
           >
@@ -35,7 +35,7 @@ export function PublicHeader({ inner = 'max-w-6xl' }: { inner?: string }) {
           <Link
             to="/login"
             activeOptions={{ exact: true }}
-            activeProps={{ className: 'bg-gradient-to-r from-teal-600 to-blue-600 text-white', 'aria-current': 'page' }}
+            activeProps={{ className: 'bg-gradient-to-r from-[#1695de] to-blue-600 text-white', 'aria-current': 'page' }}
             inactiveProps={{ className: 'text-slate-600' }}
             className="rounded-xl px-3 py-2 font-medium transition-colors hover:bg-slate-100 active:scale-[0.97]"
           >
@@ -44,7 +44,7 @@ export function PublicHeader({ inner = 'max-w-6xl' }: { inner?: string }) {
           <Link
             to="/register"
             activeOptions={{ exact: true }}
-            activeProps={{ className: 'bg-gradient-to-r from-teal-600 to-blue-600 text-white', 'aria-current': 'page' }}
+            activeProps={{ className: 'bg-gradient-to-r from-[#1695de] to-blue-600 text-white', 'aria-current': 'page' }}
             inactiveProps={{ className: 'text-slate-600' }}
             className="rounded-xl px-3 py-2 font-medium transition-colors hover:bg-slate-100 active:scale-[0.97]"
           >

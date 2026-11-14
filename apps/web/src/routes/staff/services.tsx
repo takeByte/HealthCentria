@@ -108,7 +108,7 @@ function ScheduleFields({
                   className={cn(
                     'h-9 min-w-12 rounded-lg border px-3 text-[12.5px] font-semibold transition-colors active:scale-[0.97]',
                     on
-                      ? 'border-[#0f766e]/40 bg-[#0f766e]/10 text-[#134e4a]'
+                      ? 'border-[#1f55a8]/40 bg-[#1f55a8]/10 text-[#123c78]'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
                   )}
                 >
@@ -353,19 +353,19 @@ function ServicesManage() {
         {(filtered ?? []).map((s) => (
           <article key={s.id} className={`${panel} flex flex-col`}>
             <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#e9f7f4] text-[#0f766e] ring-1 ring-inset ring-[#0f766e]/12">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf3fc] text-[#1f55a8] ring-1 ring-inset ring-[#1f55a8]/12">
                 <CalendarDays size={18} aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-[15px] font-semibold tracking-[-0.015em] text-[#042f2e]">
+                  <h3 className="font-display text-[15px] font-semibold tracking-[-0.015em] text-[#0b2c4f]">
                     {s.name}
                   </h3>
                   <StatusPill tone={s.active ? 'teal' : 'slate'} className="shrink-0">
                     {s.active ? 'Active' : 'Inactive'}
                   </StatusPill>
                 </div>
-                <p className="mt-1 inline-flex items-center rounded-full bg-[#0f766e]/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-[#115e59]">
+                <p className="mt-1 inline-flex items-center rounded-full bg-[#1f55a8]/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-[#1a448a]">
                   {s.scheduleText}
                 </p>
               </div>
@@ -397,7 +397,7 @@ function ServicesManage() {
                   </div>
                   <ScheduleFields schedule={eSched} set={setESched} prefix={`edit-${s.id}`} />
                   <label htmlFor={`edit-active-${s.id}`} className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-[#1e293b]">
-                    <input id={`edit-active-${s.id}`} type="checkbox" checked={eActive} onChange={(e) => setEActive(e.target.checked)} className="size-5 accent-[#0f766e]" />
+                    <input id={`edit-active-${s.id}`} type="checkbox" checked={eActive} onChange={(e) => setEActive(e.target.checked)} className="size-5 accent-[#1f55a8]" />
                     Active (visible for booking)
                   </label>
                   {eError && <InlineNotice>{eError}</InlineNotice>}

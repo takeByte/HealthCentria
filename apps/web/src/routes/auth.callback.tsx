@@ -58,10 +58,10 @@ function GoogleCallback() {
       <div className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-10">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(135deg,#f0fdfa_0%,#eff6ff_55%,#f0fdf4_100%)]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(135deg,#f2f9fe_0%,#eff6ff_55%,#f0fdf4_100%)]"
         />
         <section className="w-full max-w-[420px] rounded-2xl border border-slate-200/70 bg-white p-6 text-center shadow-[0_8px_30px_rgba(15,60,90,0.08)] sm:p-8">
-          <p className="text-sm font-medium text-teal-700">HealthCentria</p>
+          <p className="text-sm font-medium text-[#1f55a8]">HealthCentria</p>
           {error ? (
             <>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">Sign-in failed</h1>
@@ -70,7 +70,7 @@ function GoogleCallback() {
               </p>
               <Link
                 to="/login"
-                className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 text-base font-medium text-white active:scale-[0.97]"
+                className="mt-5 inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#1695de] to-blue-600 text-base font-medium text-white active:scale-[0.97]"
               >
                 Back to log in
               </Link>

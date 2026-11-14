@@ -24,7 +24,7 @@ const COLORS = {
   ink: '#0f3c5a',
   body: '#334155',
   muted: '#64748b',
-  teal: '#0f766e',
+  accent: '#1f55a8',
   line: '#cbd5e1',
   headerBg: '#eef6fd',
   rowAlt: '#f8fafc',
@@ -57,7 +57,7 @@ function drawHeader(doc, meta) {
   doc
     .font('Helvetica-Bold')
     .fontSize(11)
-    .fillColor(COLORS.teal)
+    .fillColor(COLORS.accent)
     .text(meta.title, MARGIN_X, 44, {
       width: CONTENT_WIDTH,
       align: 'right',

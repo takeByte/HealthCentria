@@ -227,9 +227,9 @@ export function ClinicSchedule({ className }: { className?: string }) {
                   className={cn(
                     'flex h-14 flex-col items-stretch rounded-lg border px-1 py-1 text-left transition-colors sm:h-[4.25rem] sm:px-1.5',
                     isSelected
-                      ? 'border-[#0f766e] bg-[#e9f7f4] ring-1 ring-[#0f766e]'
+                      ? 'border-[var(--brand-deep)] bg-[var(--brand-tint)] ring-1 ring-[var(--brand-deep)]'
                       : tag
-                        ? 'border-[#0f766e]/15 bg-[#e9f7f4]/40 hover:border-[#0f766e]/40'
+                        ? 'border-[var(--brand-deep)]/15 bg-[var(--brand-tint)]/40 hover:border-[var(--brand-deep)]/40'
                         : 'border-slate-200/70 bg-white/60 hover:border-slate-300',
                   )}
                 >
@@ -237,13 +237,13 @@ export function ClinicSchedule({ className }: { className?: string }) {
                     <span
                       className={cn(
                         'grid size-5 place-items-center rounded-full text-[12px] font-semibold tabular-nums',
-                        isToday ? 'bg-[#0f766e] text-white' : 'text-slate-700',
+                        isToday ? 'bg-[var(--brand-deep)] text-white' : 'text-slate-700',
                       )}
                     >
                       {date.getDate()}
                     </span>
                     {tag && (
-                      <span className="hidden truncate text-[9.5px] font-semibold uppercase tracking-[0.04em] text-[#0f766e]/80 sm:inline">
+                      <span className="hidden truncate text-[9.5px] font-semibold uppercase tracking-[0.04em] text-[var(--brand-deep)]/80 sm:inline">
                         {tag}
                       </span>
                     )}
@@ -273,7 +273,7 @@ export function ClinicSchedule({ className }: { className?: string }) {
               <span className="size-2.5 rounded-full bg-amber-500/80" aria-hidden /> Pending
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2.5 rounded-sm border border-[#0f766e]/30 bg-[#e9f7f4]" aria-hidden /> Service day
+              <span className="size-2.5 rounded-sm border border-[var(--brand-deep)]/30 bg-[var(--brand-tint)]" aria-hidden /> Service day
             </span>
             <span className="w-full text-[11px] text-slate-400 sm:w-auto">
               Mon Consultation · Tue Prenatal · Thu Family Planning · 2nd Wed Immunization
@@ -326,7 +326,7 @@ export function ClinicSchedule({ className }: { className?: string }) {
             )}
             <Link
               to="/staff/appointments"
-              className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
+              className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--brand-deep)] hover:underline hover:underline-offset-4"
             >
               {dayPending > 0 ? 'Review pending in Appointments' : 'Open Appointments'} <ArrowRight size={15} aria-hidden />
             </Link>

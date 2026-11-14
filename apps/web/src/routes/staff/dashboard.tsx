@@ -292,7 +292,7 @@ function StaffDashboard() {
               canAnnouncements ? (
                 <Link
                   to="/staff/announcements"
-                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--brand-deep)] hover:underline hover:underline-offset-4"
                 >
                   View all <ArrowRight size={15} aria-hidden />
                 </Link>

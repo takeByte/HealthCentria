@@ -80,13 +80,13 @@ export function ServiceUtilization({
                     <p className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[#1e293b]">
                       {r.serviceName}
                     </p>
-                    <p className="font-display text-[12.5px] font-semibold tabular-nums text-[#042f2e]">
+                    <p className="font-display text-[12.5px] font-semibold tabular-nums text-[var(--brand-ink-dark)]">
                       {r.count}
                     </p>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#edf4f8]">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#14b8a6] to-[#0f766e]"
+                      className="h-full rounded-full bg-gradient-to-r from-[var(--brand-bright)] to-[var(--brand-deep)]"
                       style={{ width: `${Math.max(4, share)}%` }}
                     />
                   </div>

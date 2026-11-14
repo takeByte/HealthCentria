@@ -71,7 +71,7 @@ export function SheetsExportNote({
         href={result.url}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 font-semibold text-[#115e59] underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1 font-semibold text-[#1a448a] underline-offset-4 hover:underline"
       >
         Open in Google Sheets <ExternalLink size={14} aria-hidden />
       </a>

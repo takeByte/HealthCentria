@@ -145,7 +145,7 @@ function HomePage() {
           {/* Full-bleed tinted band, like the reference hero, fading into the page. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-full w-screen -translate-x-1/2 bg-[linear-gradient(102deg,#eef6ff_0%,#e9f7f4_42%,#e2f7ee_74%,#ddf4ea_100%)]"
+            className="pointer-events-none absolute left-1/2 top-0 -z-10 h-full w-screen -translate-x-1/2 bg-[linear-gradient(102deg,#eef6ff_0%,#eaf3fc_42%,#e1eefb_74%,#d4e7fa_100%)]"
           />
           <div
             aria-hidden
@@ -157,7 +157,7 @@ function HomePage() {
             className="mx-auto flex max-w-4xl flex-col items-center"
           >
             <p className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/75 py-1 pl-1.5 pr-3 text-xs font-semibold text-slate-700 shadow-[0_6px_20px_rgba(15,60,90,0.08)] backdrop-blur">
-              <span className="rounded-full bg-teal-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+              <span className="rounded-full bg-[#1f55a8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
                 New
               </span>
               Community health center
@@ -177,13 +177,13 @@ function HomePage() {
             <div className="mt-9 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row">
               <Link
                 to="/announcements"
-                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-teal-700/50 bg-white/40 px-7 font-medium text-teal-800 transition hover:bg-white/80 active:scale-[0.98] sm:w-auto"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-[#1f55a8]/50 bg-white/40 px-7 font-medium text-[#1a448a] transition hover:bg-white/80 active:scale-[0.98] sm:w-auto"
               >
                 View announcements
               </Link>
               <Link
                 to="/register"
-                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-teal-700 px-7 font-medium text-white shadow-[0_14px_30px_-12px_rgba(15,118,110,0.85)] transition hover:bg-teal-800 active:scale-[0.98] sm:w-auto"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#1f55a8] px-7 font-medium text-white shadow-[0_14px_30px_-12px_rgba(31,85,168,0.85)] transition hover:bg-[#1a448a] active:scale-[0.98] sm:w-auto"
               >
                 Create an account
               </Link>
@@ -191,11 +191,11 @@ function HomePage() {
 
             <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-600">
               <span className="inline-flex items-center gap-1.5">
-                <MapPin size={15} className="text-teal-700" aria-hidden />
+                <MapPin size={15} className="text-[#1f55a8]" aria-hidden />
                 Barangay 11, Malaybalay City
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <CalendarDays size={15} className="text-teal-700" aria-hidden />
+                <CalendarDays size={15} className="text-[#1f55a8]" aria-hidden />
                 Walk-ins welcome on service days
               </span>
             </div>
@@ -243,7 +243,7 @@ function HomePage() {
             </div>
             <Link
               to="/login"
-              className="shrink-0 text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
+              className="shrink-0 text-sm font-medium text-[#1f55a8] underline-offset-4 hover:underline"
             >
               Sign in to book
             </Link>
@@ -272,7 +272,7 @@ function HomePage() {
               >
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <h3 className="font-bold text-slate-900">{service.name}</h3>
-                  <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
+                  <span className="rounded-full bg-[#eff6fd] px-2.5 py-0.5 text-xs font-semibold text-[#1a448a]">
                     {service.scheduleText}
                   </span>
                 </div>
@@ -295,7 +295,7 @@ function HomePage() {
                 {...fade(0.05 * i, reduceMotion)}
                 className="rounded-2xl border border-slate-200/70 bg-white p-5"
               >
-                <span className="mx-auto flex size-7 items-center justify-center rounded-full bg-teal-600 text-sm font-bold text-white">
+                <span className="mx-auto flex size-7 items-center justify-center rounded-full bg-[#1695de] text-sm font-bold text-white">
                   {i + 1}
                 </span>
                 <h3 className="mt-3 font-bold text-slate-900">{step.title}</h3>
@@ -312,7 +312,7 @@ function HomePage() {
             </h2>
             <Link
               to="/announcements"
-              className="shrink-0 text-sm font-medium text-teal-700 underline-offset-4 hover:underline"
+              className="shrink-0 text-sm font-medium text-[#1f55a8] underline-offset-4 hover:underline"
             >
               View all
             </Link>
@@ -349,7 +349,7 @@ function HomePage() {
                 {...fade(0.05 * i, reduceMotion)}
                 className="rounded-2xl border border-slate-200/70 bg-white p-5"
               >
-                <item.icon size={20} className="mx-auto text-teal-700" aria-hidden />
+                <item.icon size={20} className="mx-auto text-[#1f55a8]" aria-hidden />
                 <h3 className="mt-3 font-bold text-slate-900">{item.title}</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-600">{item.body}</p>
               </motion.div>
@@ -374,7 +374,7 @@ function HomePage() {
                 className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent md:bg-gradient-to-r md:from-transparent md:to-slate-900/45"
               />
               <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11.5px] font-semibold text-slate-800 shadow-sm backdrop-blur">
-                <MapPin size={13} aria-hidden className="text-teal-700" />
+                <MapPin size={13} aria-hidden className="text-[#1f55a8]" />
                 Barangay 11, Malaybalay City
               </span>
             </div>
@@ -429,7 +429,7 @@ function HomePage() {
             </div>
             <p>HealthCentria — community health services.</p>
           </div>
-          <Link to="/announcements" className="font-medium text-teal-700 underline-offset-4 hover:underline">
+          <Link to="/announcements" className="font-medium text-[#1f55a8] underline-offset-4 hover:underline">
             Announcements
           </Link>
         </div>

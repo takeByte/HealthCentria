@@ -1,10 +1,10 @@
 /**
- * Decorative backdrop for the landing page: a very pale blue wash (sky, ice,
- * powder blue and pale cyan) that runs the full length of the page, with
- * subtle translucent blobs and flowing abstract shapes layered over it.
+ * Decorative backdrop for the landing page: a mist-dominant blue wash that runs
+ * the full length of the page, with subtle translucent blobs and flowing
+ * abstract shapes layered over it in the palette's sky and bright stops.
  *
- * The palette is intentionally washed out and low-opacity so the blue reads as
- * a faint tint behind the content rather than a colored page.
+ * Kept low-opacity so the blue reads as a tint behind the content rather than a
+ * colored page.
  *
  * Purely presentational — `aria-hidden` keeps it out of the accessibility tree
  * and `pointer-events-none` guarantees it never swallows a click.
@@ -12,18 +12,18 @@
 export function SoftBlueBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-      {/* Base wash: pale blue throughout, with barely-there undulations. */}
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,#f4faff_0%,#eff7fe_20%,#f7fbff_42%,#eef6fd_64%,#f5faff_84%,#f1f8fe_100%)]" />
+      {/* Base wash: the palette's mist stop, with barely-there undulations. */}
+      <div className="landing-wash absolute inset-0" />
 
       {/* Translucent blobs spread down the page, blurred so they have no edges. */}
-      <div className="absolute -left-28 top-[2%] size-[28rem] rounded-full bg-sky-300/15 blur-3xl" />
-      <div className="absolute -right-24 top-[7%] size-[24rem] rounded-full bg-cyan-200/18 blur-3xl" />
-      <div className="absolute left-[34%] top-[17%] size-[26rem] rounded-full bg-blue-200/12 blur-3xl" />
-      <div className="absolute -right-16 top-[31%] size-[24rem] rounded-full bg-sky-200/18 blur-3xl" />
-      <div className="absolute -left-24 top-[45%] size-[26rem] rounded-full bg-cyan-100/25 blur-3xl" />
-      <div className="absolute right-[24%] top-[58%] size-[20rem] rounded-full bg-blue-100/18 blur-3xl" />
-      <div className="absolute left-[8%] top-[72%] size-[22rem] rounded-full bg-sky-100/28 blur-3xl" />
-      <div className="absolute -right-20 top-[86%] size-[24rem] rounded-full bg-cyan-100/22 blur-3xl" />
+      <div className="absolute -left-28 top-[2%] size-[28rem] rounded-full bg-[var(--palette-sky)]/25 blur-3xl" />
+      <div className="absolute -right-24 top-[7%] size-[24rem] rounded-full bg-[var(--palette-mist)]/60 blur-3xl" />
+      <div className="absolute left-[34%] top-[17%] size-[26rem] rounded-full bg-[var(--palette-bright)]/10 blur-3xl" />
+      <div className="absolute -right-16 top-[31%] size-[24rem] rounded-full bg-[var(--palette-sky)]/20 blur-3xl" />
+      <div className="absolute -left-24 top-[45%] size-[26rem] rounded-full bg-[var(--palette-mist)]/70 blur-3xl" />
+      <div className="absolute right-[24%] top-[58%] size-[20rem] rounded-full bg-[var(--palette-sky)]/18 blur-3xl" />
+      <div className="absolute left-[8%] top-[72%] size-[22rem] rounded-full bg-[var(--palette-mist)]/80 blur-3xl" />
+      <div className="absolute -right-20 top-[86%] size-[24rem] rounded-full bg-[var(--palette-sky)]/20 blur-3xl" />
 
       {/* Flowing abstract ribbons, one band per third of the page. */}
       {['top-[4%]', 'top-[38%]', 'top-[72%]'].map((position, i) => (
@@ -36,14 +36,14 @@ export function SoftBlueBackdrop() {
         >
           <defs>
             <linearGradient id={`backdrop-ribbon-a-${i}`} x1="0" y1="0" x2="1" y2="0.6">
-              <stop offset="0%" stopColor="#bae6fd" stopOpacity="0" />
-              <stop offset="35%" stopColor="#bae6fd" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="#a5f3fc" stopOpacity="0.14" />
+              <stop offset="0%" stopColor="var(--palette-sky)" stopOpacity="0" />
+              <stop offset="35%" stopColor="var(--palette-sky)" stopOpacity="0.3" />
+              <stop offset="100%" stopColor="var(--palette-bright)" stopOpacity="0.12" />
             </linearGradient>
             <linearGradient id={`backdrop-ribbon-b-${i}`} x1="1" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#bfdbfe" stopOpacity="0.26" />
-              <stop offset="60%" stopColor="#cffafe" stopOpacity="0.16" />
-              <stop offset="100%" stopColor="#e0f2fe" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--palette-sky)" stopOpacity="0.26" />
+              <stop offset="60%" stopColor="var(--palette-mist)" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="var(--palette-mist)" stopOpacity="0" />
             </linearGradient>
             <filter
               id={`backdrop-soften-${i}`}

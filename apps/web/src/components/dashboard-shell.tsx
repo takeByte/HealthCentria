@@ -90,7 +90,7 @@ function SidebarBody({
     <>
       <span
         aria-hidden
-        className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#14b8a6] text-[12px] font-bold text-white ring-1 ring-white/25"
+        className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#1695de] text-[12px] font-bold text-white ring-1 ring-white/25"
       >
         {avatarUrl ? (
           <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
@@ -112,7 +112,7 @@ function SidebarBody({
         <div className="flex items-center gap-3 rounded-2xl bg-white/96 p-2.5 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/40">
           <img src={appLogo} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
           <div className="min-w-0 flex-1">
-            <p className="font-display text-[15px] font-semibold leading-tight tracking-[-0.02em] text-[#134e4a]">
+            <p className="font-display text-[15px] font-semibold leading-tight tracking-[-0.02em] text-[#123c78]">
               E-Kalinga
             </p>
             <p className="mt-0.5 truncate text-[10.5px] font-medium leading-tight text-[#64748b]">
@@ -124,7 +124,7 @@ function SidebarBody({
               type="button"
               onClick={onClose}
               aria-label="Close navigation"
-              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[#64748b] transition-colors hover:bg-[#eef4f8] hover:text-[#134e4a]"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[#64748b] transition-colors hover:bg-[#eef4f8] hover:text-[#123c78]"
             >
               <X size={17} />
             </button>
@@ -132,15 +132,15 @@ function SidebarBody({
         </div>
 
         <div className="mt-3 flex items-center gap-2">
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#14b8a6]/22 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-[#99f6e4] ring-1 ring-inset ring-[#5eead4]/25">
-            <span aria-hidden className="size-1.5 rounded-full bg-[#5eead4]" />
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#1695de]/22 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-[#bfe0fa] ring-1 ring-inset ring-[#a9d8f7]/25">
+            <span aria-hidden className="size-1.5 rounded-full bg-[#a9d8f7]" />
             {roleLabel}
           </span>
         </div>
 
         {/* Today's schedule, quiet enough to sit above the nav without shouting. */}
         <div className="mt-3.5 rounded-xl bg-black/15 px-3 py-2.5 ring-1 ring-inset ring-white/10">
-          <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.13em] text-[#99f6e4]">
+          <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.13em] text-[#bfe0fa]">
             <CalendarCheck size={11} aria-hidden />
             Today at the clinic
           </p>
@@ -180,7 +180,7 @@ function SidebarBody({
                       activeOptions={{ exact: true }}
                       activeProps={{
                         className:
-                          'bg-white font-semibold text-[#134e4a] shadow-[0_6px_16px_-6px_rgba(0,0,0,0.45)]',
+                          'bg-white font-semibold text-[#123c78] shadow-[0_6px_16px_-6px_rgba(0,0,0,0.45)]',
                       }}
                       inactiveProps={{
                         className: 'font-medium text-white/80 hover:bg-white/10 hover:text-white',
@@ -293,7 +293,7 @@ export function DashboardShell({
       <AppBackdrop />
 
       {/* Desktop sidebar */}
-      <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-[15rem] border-r border-[#042f2e]/40 lg:block">
+      <aside className="app-sidebar fixed inset-y-0 left-0 z-30 hidden w-[15rem] border-r border-[#0b2c4f]/40 lg:block">
         <SidebarBody
           nav={nav}
           roleLabel={roleLabel}
@@ -397,7 +397,7 @@ export function DashboardShell({
                 <Link
                   to={notificationsTo}
                   onClick={() => setBellOpen(false)}
-                  className="flex h-11 items-center justify-center rounded-lg text-sm font-medium text-[#0f766e] hover:bg-[#eef4f8]"
+                  className="flex h-11 items-center justify-center rounded-lg text-sm font-medium text-[#1f55a8] hover:bg-[#eef4f8]"
                 >
                   View all notifications
                 </Link>
@@ -419,7 +419,7 @@ export function DashboardShell({
               <Menu size={20} />
             </button>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-[17px] font-semibold leading-tight tracking-[-0.02em] text-[#134e4a]">
+              <h1 className="truncate font-display text-[17px] font-semibold leading-tight tracking-[-0.02em] text-[#123c78]">
                 {title}
               </h1>
               {subtitle && (
@@ -430,7 +430,7 @@ export function DashboardShell({
             </div>
             <div className="ml-auto flex items-center gap-1.5">
               <span className="mr-1 hidden items-center gap-1.5 rounded-full border border-[#e2e8f0] bg-white/70 px-3 py-1.5 text-[11px] font-medium text-[#475569] md:inline-flex">
-                <CalendarDays size={13} aria-hidden className="text-[#0f766e]" />
+                <CalendarDays size={13} aria-hidden className="text-[#1f55a8]" />
                 {todayChipLabel()}
               </span>
               <button
@@ -455,7 +455,7 @@ export function DashboardShell({
                   >
                     <span
                       aria-hidden
-                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#0f766e] text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1695de] to-[#1f55a8] text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {avatarUrl ? (
                         <img
@@ -492,7 +492,7 @@ export function DashboardShell({
                           className="absolute right-0 top-full z-20 mt-2 w-56 overflow-hidden rounded-xl border border-[#e2e8f0] bg-white p-1 shadow-xl"
                         >
                           <div className="px-2.5 py-2">
-                            <p className="truncate text-[12.5px] font-semibold text-[#042f2e]">
+                            <p className="truncate text-[12.5px] font-semibold text-[#0b2c4f]">
                               {userName ?? userEmail}
                             </p>
                             {userName && (
@@ -528,7 +528,7 @@ export function DashboardShell({
                   <div className="hidden items-center gap-2.5 sm:flex">
                     <span
                       aria-hidden
-                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#0f766e] text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1695de] to-[#1f55a8] text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {avatarUrl ? (
                         <img
@@ -559,7 +559,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className={cn('app-content mx-auto w-full space-y-5 py-6 sm:py-8', mainClassName)}>
+        <main className={cn('app-content mx-auto w-full space-y-5 px-4 py-6 sm:px-7 sm:py-8', mainClassName)}>
           <EmailVerificationBanner />
           {children}
         </main>

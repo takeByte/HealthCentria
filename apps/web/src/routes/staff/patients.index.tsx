@@ -49,7 +49,7 @@ function initials(name: string): string {
 
 /** A small, stable tint per patient so a long list isn't a wall of grey. */
 const AVATAR_TONES = [
-  'from-[#e3f7f5] to-[#ccfbf1] text-[#115e59] ring-[#0f766e]/10',
+  'from-[#eaf3fc] to-[#d7eafb] text-[#1a448a] ring-[#1f55a8]/10',
   'from-[#e8f1fb] to-[#d4e5f7] text-[#2a6f9e] ring-[#2a6f9e]/10',
   'from-[#fdf3e0] to-[#f7e4bf] text-[#8a5a10] ring-[#c99a3d]/20',
   'from-[#edf3f8] to-[#e0e9f1] text-[#475569] ring-[#64748b]/10',
@@ -146,7 +146,7 @@ function PatientsList() {
         className="flex flex-wrap items-end justify-between gap-3"
       >
         <div className="min-w-0">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#1f55a8]">
             Patient register
           </p>
           <p className="mt-1.5 text-[13px] leading-5 text-[#475569]">
@@ -250,7 +250,7 @@ function PatientsList() {
             key={p.id}
             to="/staff/patients/$patientId"
             params={{ patientId: p.id }}
-            className="app-card group flex items-center gap-3.5 p-4 transition-colors hover:border-[#0f766e]/30 hover:bg-white active:scale-[0.995]"
+            className="app-card group flex items-center gap-3.5 p-4 transition-colors hover:border-[#1f55a8]/30 hover:bg-white active:scale-[0.995]"
           >
             <span
               aria-hidden
@@ -263,7 +263,7 @@ function PatientsList() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
-                <span className="truncate font-display text-[14.5px] font-semibold tracking-[-0.015em] text-[#042f2e]">
+                <span className="truncate font-display text-[14.5px] font-semibold tracking-[-0.015em] text-[#0b2c4f]">
                   {p.name}
                 </span>
                 {!p.active && <StatusPill tone="slate">Inactive</StatusPill>}

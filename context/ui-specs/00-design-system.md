@@ -24,7 +24,8 @@ Sidebar contents: logo/name, role badge, today's service highlight ("Tue: Prenat
 
 ## 3. Visual tokens
 
-- **Colors:** bg `slate-50/white`, cards white with `shadow-soft (0 8px 30px rgba(15,60,90,0.08))`, primary gradient teal→blue (`#0EA5A4→#2563EB`), accent green for confirmed/success, amber pending, red declined. Text slate-900/600. Never flat gray on translucency — use higher weight + contrast (vibrancy rule).
+- **Colors:** `#E3F2FD` mist as the dominant page surface (app wash, landing wash, quiet cards), cards white with `shadow-soft (0 8px 30px rgba(15,60,90,0.08))`, accent green for confirmed/success, amber pending, red declined. Text slate-900/600. Never flat gray on translucency — use higher weight + contrast (vibrancy rule).
+- **Brand palette (single source, colorhunt blues):** mist `#E3F2FD` → sky `#90CAF9` → bright `#2196F3` → deep `#0D47A1`, exposed as `--palette-mist/sky/bright/deep`. Every `--brand-*` role resolves to one of these four stops (deep doubles as ink and hover, sky as secondary/chip fill, mist as wash, bright as primary action); no derived shades.
 - **Radius:** cards 16–20px, chips 999px, inputs 12px. Larger surfaces get thicker shadow + stronger blur.
 - **Typography (system-ui first):** display `clamp(2rem,5vw,3rem), lh 1.05, ls -0.02em`; H2 20–24px tight; body 16px/1.5 ls 0; small 13–14px ls +0.01em. Hierarchy via weight+size+leading, not size alone. Spacing in rem so Dynamic Type scales.
 - **Elevation:** small chips light shadow; sheets/modals heavier + dim scrim (modal task) vs translucent offset without scrim (parallel panel). Stacked sheets progressively dim parent.

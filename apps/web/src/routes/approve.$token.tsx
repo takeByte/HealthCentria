@@ -73,10 +73,10 @@ function ApproveChange() {
       <div className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-10">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(135deg,#f0fdfa_0%,#eff6ff_55%,#f0fdf4_100%)]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(135deg,#f2f9fe_0%,#eff6ff_55%,#f0fdf4_100%)]"
         />
         <section className="w-full max-w-[440px] rounded-2xl border border-slate-200/70 bg-white p-6 shadow-[0_8px_30px_rgba(15,60,90,0.08)] sm:p-8">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-teal-700">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-[#1f55a8]">
             <ShieldCheck size={16} aria-hidden /> HealthCentria superadmin
           </p>
 
@@ -96,7 +96,7 @@ function ApproveChange() {
             <div className="text-center">
               <span
                 className={`mx-auto mt-3 flex size-12 items-center justify-center rounded-full ${
-                  outcome === 'confirmed' ? 'bg-teal-600/10 text-teal-700' : 'bg-destructive/10 text-destructive'
+                  outcome === 'confirmed' ? 'bg-[#1695de]/10 text-[#1f55a8]' : 'bg-destructive/10 text-destructive'
                 }`}
               >
                 {outcome === 'confirmed' ? <CircleCheck size={26} aria-hidden /> : <CircleX size={26} aria-hidden />}
@@ -161,7 +161,7 @@ function ApproveChange() {
                       type="button"
                       onClick={() => decide('confirm')}
                       disabled={busy !== null}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-blue-600 text-base font-medium text-white active:scale-[0.97] disabled:opacity-60"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#1695de] to-blue-600 text-base font-medium text-white active:scale-[0.97] disabled:opacity-60"
                     >
                       {busy === 'confirmed' && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                       Confirm

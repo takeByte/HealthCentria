@@ -432,7 +432,7 @@ function MyProfilePage() {
                   ) : (
                     <span
                       aria-hidden
-                      className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#14b8a6] to-[#134e4a] text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1695de] to-[#123c78] text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {initials(patient.name) || <UserRound size={20} />}
                     </span>
@@ -469,7 +469,7 @@ function MyProfilePage() {
                   aria-labelledby="edit-profile-heading"
                 >
                   <div className="flex items-center gap-2">
-                    <Pencil size={17} aria-hidden className="text-[#0f766e]" />
+                    <Pencil size={17} aria-hidden className="text-[#1f55a8]" />
                     <h3
                       id="edit-profile-heading"
                       className="font-display text-[16px] font-semibold tracking-[-0.01em] text-slate-900"
@@ -484,7 +484,7 @@ function MyProfilePage() {
                   <div className="mt-4 flex flex-wrap items-center gap-4">
                     <span
                       aria-hidden
-                      className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#134e4a] text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1695de] to-[#123c78] text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {avatarUrl ? (
                         <img
