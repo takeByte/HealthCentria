@@ -28,6 +28,7 @@ import { Route as AppDashboardRouteImport } from './routes/app/dashboard'
 import { Route as AppNotificationsRouteImport } from './routes/app/notifications'
 import { Route as AppRecordsRouteImport } from './routes/app/records'
 import { Route as AppServicesRouteImport } from './routes/app/services'
+import { Route as ApproveTokenRouteImport } from './routes/approve.$token'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as StaffActivityRouteImport } from './routes/staff/activity'
 import { Route as StaffAnnouncementsRouteImport } from './routes/staff/announcements'
@@ -141,6 +142,11 @@ const AppServicesRoute = AppServicesRouteImport.update({
   path: '/services',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const ApproveTokenRoute = ApproveTokenRouteImport.update({
+  id: '/approve/$token',
+  path: '/approve/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -247,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
+  '/approve/$token': typeof ApproveTokenRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
@@ -285,6 +292,7 @@ export interface FileRoutesByTo {
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
+  '/approve/$token': typeof ApproveTokenRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
@@ -323,6 +331,7 @@ export interface FileRoutesById {
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
   '/app/services': typeof AppServicesRoute
+  '/approve/$token': typeof ApproveTokenRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
@@ -363,6 +372,7 @@ export interface FileRouteTypes {
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
+    | '/approve/$token'
     | '/auth/callback'
     | '/staff/activity'
     | '/staff/announcements'
@@ -401,6 +411,7 @@ export interface FileRouteTypes {
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
+    | '/approve/$token'
     | '/auth/callback'
     | '/staff/activity'
     | '/staff/announcements'
@@ -438,6 +449,7 @@ export interface FileRouteTypes {
     | '/app/notifications'
     | '/app/records'
     | '/app/services'
+    | '/approve/$token'
     | '/auth/callback'
     | '/staff/activity'
     | '/staff/announcements'
@@ -466,6 +478,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  ApproveTokenRoute: typeof ApproveTokenRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
@@ -603,6 +616,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/services'
       preLoaderRoute: typeof AppServicesRouteImport
       parentRoute: typeof AppRouteRoute
+    }
+    '/approve/$token': {
+      id: '/approve/$token'
+      path: '/approve/$token'
+      fullPath: '/approve/$token'
+      preLoaderRoute: typeof ApproveTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -829,6 +849,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  ApproveTokenRoute: ApproveTokenRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport

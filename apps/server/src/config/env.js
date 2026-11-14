@@ -68,6 +68,10 @@ const envSchema = z.object({
   // SU_EMAIL receives a notice after every approved change.
   SU_PIN: z.string().optional(),
   SU_EMAIL: z.string().optional(),
+  // Second layer: after a correct PIN the superadmin must also confirm by
+  // clicking a link emailed to SU_EMAIL. On by default; set to "off" only to
+  // recover when email delivery itself is broken.
+  SU_EMAIL_APPROVAL: z.string().optional(),
 
   // Google Sheets export: the spreadsheet (shared with the service account as
   // Editor) that receives each export as a new tab. Set as

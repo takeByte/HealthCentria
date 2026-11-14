@@ -51,20 +51,46 @@ export class ApiError extends Error {
   status: number;
   errors?: Record<string, string[]>;
   code?: string;
-  constructor(status: number, message: string, errors?: Record<string, string[]>, code?: string) {
+  /** Extra fields from the error body (e.g. approvalId on APPROVAL_REQUIRED). */
+  data?: Record<string, unknown>;
+  constructor(
+    status: number,
+    message: string,
+    errors?: Record<string, string[]>,
+    code?: string,
+    data?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.errors = errors;
     this.code = code;
+    this.data = data;
   }
 }
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
+/**
+ * Email confirmation the superadmin already granted for the change being
+ * replayed. Set only for the duration of that one request (see super-pin.tsx),
+ * so every existing `pin => api(…, pin)` caller works unchanged.
+ */
+let activeApprovalId: string | null = null;
+
+export function withApprovalId<T>(approvalId: string, run: () => Promise<T>): Promise<T> {
+  activeApprovalId = approvalId;
+  return run().finally(() => {
+    activeApprovalId = null;
+  });
+}
+
 /** Superadmin PIN header for integration changes. Sent per request, never stored. */
 function pinHeader(pin: string): Record<string, string> {
-  return { 'X-Super-Pin': pin };
+  return {
+    'X-Super-Pin': pin,
+    ...(activeApprovalId ? { 'X-Approval-Id': activeApprovalId } : {}),
+  };
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
@@ -99,16 +125,58 @@ async function apiFetch<T>(
     await new Promise((resolve) => setTimeout(resolve, DB_UNAVAILABLE_RETRY_MS));
     res = await send();
   }
-  let data: { message?: string; errors?: Record<string, string[]>; code?: string } | null = null;
+  type ResponseBody = { message?: string; errors?: Record<string, string[]>; code?: string } & Record<string, unknown>;
+  let data: ResponseBody | null = null;
   try {
-    data = (await res.json()) as { message?: string; errors?: Record<string, string[]>; code?: string };
+    data = (await res.json()) as ResponseBody;
   } catch {
     data = null;
   }
   if (!res.ok) {
-    throw new ApiError(res.status, data?.message ?? `Request failed (${res.status}).`, data?.errors, data?.code);
+    throw new ApiError(
+      res.status,
+      data?.message ?? `Request failed (${res.status}).`,
+      data?.errors,
+      data?.code,
+      data ?? undefined,
+    );
   }
   return data as T;
+}
+
+// ---------------------------------------------------------------------------
+// Superadmin email confirmation (second layer after the PIN)
+// ---------------------------------------------------------------------------
+
+export type ApprovalState = 'pending' | 'approved' | 'denied' | 'expired' | 'used' | 'cancelled';
+
+/** The requesting admin polls this while waiting for the superadmin's click. */
+export function getApprovalStatus(approvalId: string): Promise<{ status: ApprovalState; expiresAt: number }> {
+  return apiFetch(`/api/approvals/status/${encodeURIComponent(approvalId)}`);
+}
+
+/** Closing the waiting dialog withdraws the request so the emailed link stops working. */
+export function cancelApprovalRequest(approvalId: string): Promise<{ success: boolean }> {
+  return apiFetch(`/api/approvals/status/${encodeURIComponent(approvalId)}`, { method: 'DELETE' });
+}
+
+export interface ApprovalInfo {
+  status: ApprovalState;
+  label: string;
+  requestedBy: string;
+  requestedAt: number;
+  expiresAt: number;
+  ip: string;
+}
+
+/** Public: what the superadmin sees after opening the emailed link. */
+export function getApprovalInfo(token: string): Promise<{ approval: ApprovalInfo }> {
+  return apiFetch(`/api/approvals/${encodeURIComponent(token)}`);
+}
+
+/** Public: the superadmin's decision. */
+export function decideApproval(token: string, decision: 'confirm' | 'deny'): Promise<{ status: ApprovalState }> {
+  return apiFetch(`/api/approvals/${encodeURIComponent(token)}/${decision}`, { method: 'POST' });
 }
 
 export function listServices(): Promise<{ services: Service[] }> {
