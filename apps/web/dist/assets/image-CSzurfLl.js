@@ -1,6 +1,0 @@
-import{c as s}from"./E-Kalinga_Logo-IT379t6n.js";/**
- * @license lucide-react v1.67.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */const m={name:"camera",size:24,node:[["path",{d:"M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z",key:"18u6gg"}],["circle",{cx:"12",cy:"13",r:"3",key:"1vg3eu"}]]};m.node;const d=s(m),g=4e5;async function w(c,t=256){if(!c.type.startsWith("image/"))throw new Error("Choose an image file (JPG, PNG or WebP).");const a=await createImageBitmap(c);try{const e=document.createElement("canvas");e.width=t,e.height=t;const o=e.getContext("2d");if(!o)throw new Error("Could not read that image.");const h=Math.max(t/a.width,t/a.height),i=a.width*h,l=a.height*h;o.fillStyle="#ffffff",o.fillRect(0,0,t,t),o.drawImage(a,(t-i)/2,(t-l)/2,i,l);let r=.85,n=e.toDataURL("image/jpeg",r);for(;n.length>g&&r>.4;)r-=.15,n=e.toDataURL("image/jpeg",r);if(n.length>g)throw new Error("That image is too large. Choose a smaller photo.");return n}finally{a.close()}}export{d as C,w as f};
