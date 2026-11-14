@@ -231,7 +231,7 @@ function BookAppointment() {
           aria-labelledby="booked-heading"
           className={`app-card mx-auto max-w-xl px-6 py-10 text-center`}
         >
-          <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-teal-600/10 text-teal-700">
+          <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#0f766e]/10 text-[#0f766e]">
             <Check size={24} aria-hidden />
           </span>
           <h2
@@ -276,7 +276,7 @@ function BookAppointment() {
               aria-current={i === step ? 'step' : undefined}
               className={cn(
                 'flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors',
-                i < step && 'bg-teal-700 text-white',
+                i < step && 'bg-[#0f766e] text-white',
                 i === step && 'bg-slate-900 text-white',
                 i > step && 'bg-slate-200/80 text-slate-500',
               )}
@@ -323,15 +323,15 @@ function BookAppointment() {
                   className={cn(
                     'rounded-xl border p-3.5 text-left transition-all active:scale-[0.99]',
                     serviceId === s.id
-                      ? 'border-teal-600/50 bg-teal-600/[0.06] ring-1 ring-teal-600/25'
+                      ? 'border-[#0f766e]/50 bg-[#0f766e]/[0.06] ring-1 ring-[#0f766e]/25'
                       : 'border-slate-200/80 bg-white/60 hover:border-slate-300 hover:bg-white',
                   )}
                 >
                   <span className="flex items-center justify-between gap-3">
                     <span className="text-[14px] font-semibold text-slate-900">{s.name}</span>
-                    {serviceId === s.id && <Check size={16} className="shrink-0 text-teal-700" aria-hidden />}
+                    {serviceId === s.id && <Check size={16} className="shrink-0 text-[#0f766e]" aria-hidden />}
                   </span>
-                  <span className="mt-0.5 block text-[12.5px] font-medium text-teal-700">{s.scheduleText}</span>
+                  <span className="mt-0.5 block text-[12.5px] font-medium text-[#0f766e]">{s.scheduleText}</span>
                   {s.description && (
                     <span className="mt-1 block text-[12.5px] leading-5 text-slate-600">{s.description}</span>
                   )}
@@ -372,8 +372,8 @@ function BookAppointment() {
                             className={cn(
                               'h-9 rounded-lg border px-3 text-[13px] font-semibold transition-colors active:scale-[0.97]',
                               day === d
-                                ? 'border-teal-700 bg-teal-700 text-white'
-                                : 'border-teal-600/25 bg-teal-600/[0.06] text-teal-900 hover:bg-teal-600/15',
+                                ? 'border-[#0f766e] bg-[#0f766e] text-white'
+                                : 'border-[#0f766e]/25 bg-[#0f766e]/[0.06] text-[#134e4a] hover:bg-[#0f766e]/15',
                             )}
                           >
                             {fromYMDShort(d)}
@@ -439,9 +439,9 @@ function BookAppointment() {
                           className={cn(
                             'flex aspect-square items-center justify-center rounded-lg text-[13px] transition-all',
                             selected
-                              ? 'bg-teal-700 font-bold text-white shadow-[0_2px_8px_rgba(13,148,136,0.35)]'
+                              ? 'bg-[#0f766e] font-bold text-white shadow-[0_2px_8px_rgba(15,118,110,0.30)]'
                               : enabled
-                                ? 'bg-teal-600/[0.07] font-semibold text-teal-900 hover:bg-teal-600/15 active:scale-95'
+                                ? 'bg-[#0f766e]/[0.07] font-semibold text-[#134e4a] hover:bg-[#0f766e]/15 active:scale-95'
                                 : 'cursor-not-allowed text-slate-300',
                             isToday && !selected && 'ring-1 ring-inset ring-slate-400',
                           )}
@@ -453,17 +453,17 @@ function BookAppointment() {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-slate-500">
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="size-3 rounded bg-teal-600/[0.15]" aria-hidden /> Open for booking
+                      <span className="size-3 rounded bg-[#0f766e]/[0.15]" aria-hidden /> Open for booking
                     </span>
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="size-3 rounded bg-teal-700" aria-hidden /> Your pick
+                      <span className="size-3 rounded bg-[#0f766e]" aria-hidden /> Your pick
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <span className="size-3 rounded ring-1 ring-inset ring-slate-400" aria-hidden /> Today
                     </span>
                   </div>
                   {day && (
-                    <p className="mt-2 text-[12.5px] font-medium text-teal-800" aria-live="polite">
+                    <p className="mt-2 text-[12.5px] font-medium text-[#115e59]" aria-live="polite">
                       Selected: {formatLong(day)}
                     </p>
                   )}
@@ -476,7 +476,7 @@ function BookAppointment() {
                         id="book-time"
                         value={timePreference}
                         onChange={(e) => setTimePreference(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-slate-200/80 bg-white px-3 text-[13.5px] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+                        className="h-11 w-full rounded-xl border border-slate-200/80 bg-white px-3 text-[13.5px] outline-none focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/25"
                       >
                         <option value="any">No preference</option>
                         <option value="morning">Morning</option>
@@ -494,7 +494,7 @@ function BookAppointment() {
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         placeholder="Briefly describe your concern…"
-                        className="w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-[13.5px] outline-none placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-600/25"
+                        className="w-full rounded-xl border border-slate-200/80 bg-white px-3 py-2.5 text-[13.5px] outline-none placeholder:text-slate-400 focus:border-[#0f766e] focus:ring-2 focus:ring-[#0f766e]/25"
                       />
                     </div>
                   </div>

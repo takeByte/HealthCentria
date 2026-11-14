@@ -6,25 +6,30 @@ import {
   CalendarCheck,
   Clock3,
   FileText,
-  Megaphone,
   Stethoscope,
 } from 'lucide-react';
+import { AnnouncementList } from '../../components/announcement-list';
 import { ClinicSchedule } from '../../components/clinic-schedule';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
+import { ServiceUtilization } from '../../components/service-utilization';
 import {
   CardHeading,
-  EmptyNote,
-  InlineNotice,
   PageHero,
   StatTile,
+  StatusPill,
   panel,
   primaryButton,
   secondaryButton,
 } from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
 import { sessionCan } from '../../lib/permissions';
-import { listAnnouncements, queueAppointments, type Announcement } from '../../lib/api';
+import {
+  listAnnouncements,
+  queueAppointments,
+  type Announcement,
+  type StaffAppointment,
+} from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 
 export const Route = createFileRoute('/staff/dashboard')({
@@ -44,9 +49,21 @@ function displayFirstName(name?: string): string {
   return parts[0] ?? 'there';
 }
 
-function formatShortDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+function patientName(a: StaffAppointment): string {
+  return typeof a.patient === 'object' ? a.patient.name : 'Patient';
+}
+
+function serviceLabel(a: StaffAppointment): string {
+  return typeof a.service === 'object' ? a.service.name : 'Service';
+}
+
+function formatDayShort(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-PH', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 function StaffDashboard() {
@@ -59,6 +76,7 @@ function StaffDashboard() {
   const canReports = sessionCan(session, 'reports.view');
   const canAnnouncements = sessionCan(session, 'announcements.manage');
   const [counts, setCounts] = useState<{ today: number; pending: number } | null>(null);
+  const [requests, setRequests] = useState<StaffAppointment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [announcementsError, setAnnouncementsError] = useState(false);
 
@@ -79,6 +97,7 @@ function StaffDashboard() {
         today: todays.appointments.filter((a) => a.status === 'confirmed' || a.status === 'pending').length,
         pending: pendings.appointments.length,
       });
+      setRequests(pendings.appointments.slice(0, 3));
     });
     return () => {
       cancelled = true;
@@ -145,7 +164,7 @@ function StaffDashboard() {
       <motion.div
         {...rise}
         transition={{ ...riseTransition, delay: 0.04 }}
-        className={`grid gap-3.5 sm:grid-cols-2 ${
+        className={`grid grid-cols-2 gap-3.5 ${
           canAppointments && canReports ? 'xl:grid-cols-4' : canAppointments || canReports ? 'xl:grid-cols-3' : 'xl:grid-cols-1'
         }`}
       >
@@ -200,17 +219,64 @@ function StaffDashboard() {
                       ? 'Nothing waiting — the queue is clear.'
                       : `${counts.pending} request${counts.pending === 1 ? '' : 's'} need${counts.pending === 1 ? 's' : ''} review.`
               }
+              action={
+                canAppointments && counts !== null ? (
+                  <StatusPill tone={counts.pending > 0 ? 'amber' : 'teal'}>
+                    {counts.pending > 0 ? `${counts.pending} waiting` : 'Clear'}
+                  </StatusPill>
+                ) : undefined
+              }
             />
-            {canAppointments && (
-              <Link to="/staff/appointments" className={`${primaryButton} mt-4 h-10 px-4 text-[13px]`}>
-                Review requests <ArrowRight size={15} aria-hidden />
-              </Link>
+
+            {canAppointments && counts === null && (
+              <div className="mt-4 space-y-2.5" aria-hidden>
+                {[0, 1].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <div className="size-7 animate-pulse rounded-full bg-[#edf4f8]" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-[#edf4f8]" />
+                      <div className="h-2 w-2/3 animate-pulse rounded-full bg-[#f2f7fb]" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-            {canWalkIn && (
-              <Link to="/staff/walk-in" className={`${secondaryButton} mt-2 h-10 px-4 text-[13px]`}>
-                Register a walk-in
-              </Link>
+
+            {canAppointments && requests.length > 0 && (
+              <ul className="mt-3.5 divide-y divide-[#eaf0f6]">
+                {requests.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#fdf5e4] text-[10px] font-bold text-[#8a5a10]">
+                      {patientName(a)
+                        .trim()
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((w) => w[0]?.toUpperCase())
+                        .join('')}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12.5px] font-semibold text-[#1e293b]">{patientName(a)}</p>
+                      <p className="truncate text-[11px] text-[#94a3b8]">
+                        {serviceLabel(a)} · {formatDayShort(a.day)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {canAppointments && (
+                <Link to="/staff/appointments" className={`${primaryButton} h-10 px-4 text-[13px]`}>
+                  Review requests <ArrowRight size={15} aria-hidden />
+                </Link>
+              )}
+              {canWalkIn && (
+                <Link to="/staff/walk-in" className={`${secondaryButton} h-10 px-4 text-[13px]`}>
+                  Register a walk-in
+                </Link>
+              )}
+            </div>
           </motion.section>
         )}
 
@@ -226,7 +292,7 @@ function StaffDashboard() {
               canAnnouncements ? (
                 <Link
                   to="/staff/announcements"
-                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-teal-700 hover:underline hover:underline-offset-4"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#0f766e] hover:underline hover:underline-offset-4"
                 >
                   View all <ArrowRight size={15} aria-hidden />
                 </Link>
@@ -234,45 +300,15 @@ function StaffDashboard() {
             }
           />
           <div className="mt-4">
-            {announcementsError ? (
-              <InlineNotice>Couldn't load announcements right now.</InlineNotice>
-            ) : announcements === null ? (
-              <EmptyNote>Loading announcements…</EmptyNote>
-            ) : announcements.length === 0 ? (
-              <EmptyNote>No announcements yet. New posts from the center will show up here.</EmptyNote>
-            ) : (
-              <ul className="divide-y divide-slate-200/70">
-                {announcements.slice(0, 3).map((a) => (
-                  <li key={a.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-teal-600/10 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-teal-800">
-                        <Megaphone size={11} aria-hidden />
-                        {a.pinned ? 'Pinned' : 'Announcement'}
-                      </span>
-                      <span className="text-[11.5px] text-slate-400">{formatShortDate(a.publishedAt)}</span>
-                    </div>
-                    <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-slate-900">{a.title}</p>
-                    <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-5 text-slate-600">{a.body}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AnnouncementList announcements={announcements} error={announcementsError} />
           </div>
         </motion.section>
       </div>
 
       {canReports && (
-        <motion.section {...rise} transition={{ ...riseTransition, delay: 0.16 }} className={panel}>
-          <CardHeading
-            title="Visits per service"
-            description="Completed visits per service for the last 30 days."
-            action={
-              <Link to="/staff/reports" className={`${secondaryButton} h-9 px-3.5 text-[13px]`}>
-                Open reports <ArrowRight size={15} aria-hidden />
-              </Link>
-            }
-          />
-        </motion.section>
+        <motion.div {...rise} transition={{ ...riseTransition, delay: 0.16 }}>
+          <ServiceUtilization />
+        </motion.div>
       )}
     </DashboardShell>
   );

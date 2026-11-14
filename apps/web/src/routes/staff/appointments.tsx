@@ -35,6 +35,11 @@ import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
 
 export const Route = createFileRoute('/staff/appointments')({
+  validateSearch: (search: Record<string, unknown>): { status?: StatusFilter } => ({
+    status: STATUS_FILTERS.includes(search.status as StatusFilter)
+      ? (search.status as StatusFilter)
+      : undefined,
+  }),
   beforeLoad: () => {
     const session = getSession();
     if (!sessionCan(session, 'appointments.manage')) throw redirect({ to: '/staff/dashboard' });
@@ -42,7 +47,8 @@ export const Route = createFileRoute('/staff/appointments')({
   component: StaffQueue,
 });
 
-type StatusFilter = 'all' | 'pending' | 'confirmed' | 'declined' | 'completed' | 'cancelled';
+const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'declined', 'completed', 'cancelled'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 type DatePreset = 'today' | 'week' | 'all';
 
 function toYMD(d: Date): string {
@@ -128,7 +134,7 @@ function QueueCard({
               <Link
                 to="/staff/patients/$patientId"
                 params={{ patientId: linkedPatientId }}
-                className="rounded-sm hover:text-teal-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/30"
+                className="rounded-sm hover:text-[#0f766e] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/30"
               >
                 {patientName(appt)}
               </Link>
@@ -344,13 +350,20 @@ function StaffQueue() {
   const session = getSession();
   const today = getTodayService();
   const canViewPatients = sessionCan(session, 'patients.manage');
+  const { status: statusParam } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [list, setList] = useState<StaffAppointment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<StatusFilter>('all');
+  const [status, setStatus] = useState<StatusFilter>(statusParam ?? 'all');
   const [preset, setPreset] = useState<DatePreset>('all');
   const [serviceId, setServiceId] = useState('');
   const [search, setSearch] = useState('');
   const [services, setServices] = useState<Service[]>([]);
+
+  // Keeps the filter in sync when the URL changes (deep link or back button).
+  useEffect(() => {
+    setStatus(statusParam ?? 'all');
+  }, [statusParam]);
 
   useEffect(() => {
     listServices().then((r) => setServices(r.services)).catch(() => {});
@@ -433,9 +446,9 @@ function StaffQueue() {
           list !== null && (
             <p
               role="status"
-              className="flex items-center gap-2 rounded-xl bg-teal-600/8 px-4 py-2.5 text-[12.5px] font-semibold text-teal-900 ring-1 ring-inset ring-teal-600/15"
+              className="flex items-center gap-2 rounded-xl bg-[#0f766e]/8 px-4 py-2.5 text-[12.5px] font-semibold text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/15"
             >
-              <span aria-hidden className="size-2 rounded-full bg-teal-600" />
+              <span aria-hidden className="size-2 rounded-full bg-[#0f766e]" />
               Queue clear — nothing pending.
             </p>
           )
@@ -446,7 +459,7 @@ function StaffQueue() {
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
         transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
-        className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid grid-cols-2 gap-3.5 xl:grid-cols-4"
       >
         <StatTile
           icon={CalendarCheck}
@@ -521,11 +534,16 @@ function StaffQueue() {
           </select>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as StatusFilter)}
+            onChange={(e) => {
+              const next = e.target.value as StatusFilter;
+              setStatus(next);
+              // Keeps a filtered queue shareable, and matches the dashboard tile link.
+              void navigate({ search: next === 'all' ? {} : { status: next }, replace: true });
+            }}
             aria-label="Filter by status"
             className={`${selectClass} sm:w-auto sm:min-w-40`}
           >
-            {(['all', 'pending', 'confirmed', 'declined', 'completed', 'cancelled'] as const).map((s) => (
+            {STATUS_FILTERS.map((s) => (
               <option key={s} value={s}>
                 {s === 'all' ? 'All statuses' : s[0].toUpperCase() + s.slice(1)}
               </option>

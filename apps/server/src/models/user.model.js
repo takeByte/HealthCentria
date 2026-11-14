@@ -62,6 +62,37 @@ const userSchema = new mongoose.Schema(
     philHealthNumber: { type: String, trim: true, default: '' },
     emergencyName: { type: String, default: '', trim: true },
     emergencyNumber: { type: String, default: '', trim: true },
+    // Optional emails controlled from the patient's Settings. Announcements are
+    // opt-in (off by default); appointment updates are on by default. Accounts
+    // that never touched Settings have no stored value and get the same
+    // defaults (see prefAllows). Security emails (verification and reset
+    // codes) ignore these.
+    emailPrefs: {
+      announcements: { type: Boolean, default: false },
+      appointments: { type: Boolean, default: true },
+    },
+    // Clinical background entered by center staff (patients see it read-only).
+    // Wiped when the account is deleted; see deletePatient.
+    medicalProfile: {
+      bloodType: { type: String, default: '', trim: true },
+      allergies: { type: [String], default: [] },
+      conditions: { type: [String], default: [] },
+      medications: { type: [String], default: [] },
+      immunizations: {
+        type: [
+          {
+            _id: false,
+            name: { type: String, trim: true },
+            // YYYY-MM-DD, or empty when the date is unknown.
+            date: { type: String, default: '', trim: true },
+            note: { type: String, default: '', trim: true },
+          },
+        ],
+        default: [],
+      },
+      recordedAt: { type: Date, default: null },
+      recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    },
     // Last staff/admin account to edit this chart (patients editing their own
     // profile leave it null). Shown as "Updated by" on the patient record.
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

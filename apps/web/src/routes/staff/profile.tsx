@@ -265,14 +265,13 @@ function MyProfilePage() {
       todayService={`${today.name} — ${today.detail}`}
       nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
-      mainClassName="max-w-4xl"
     >
       <motion.section {...rise} transition={riseTransition} className={`${panel} overflow-hidden`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3.5">
             <span
               aria-hidden
-              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#134e4a] text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
@@ -314,7 +313,7 @@ function MyProfilePage() {
             <div className="flex flex-wrap items-center gap-4">
               <span
                 aria-hidden
-                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#14b8a6] to-[#134e4a] text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
               >
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />

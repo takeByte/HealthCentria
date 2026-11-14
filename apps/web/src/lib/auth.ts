@@ -136,12 +136,21 @@ function readRegistry(): Array<{ email: string }> {
   }
 }
 
+/** Mirrors apiFetch's 503 retry: the API rejects before doing any work. */
+const DB_UNAVAILABLE_RETRY_MS = 1500;
+
 async function postJson(path: string, body: unknown): Promise<{ status: number; data: unknown }> {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const send = () =>
+    fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  let res = await send();
+  if (res.status === 503) {
+    await new Promise((resolve) => setTimeout(resolve, DB_UNAVAILABLE_RETRY_MS));
+    res = await send();
+  }
   let data: unknown = null;
   try {
     data = await res.json();

@@ -98,7 +98,7 @@ export function NotificationCenter({
                 aria-hidden
                 className={cn(
                   'mt-1.5 size-2 shrink-0 rounded-full',
-                  item.read ? 'bg-slate-200' : 'bg-teal-600',
+                  item.read ? 'bg-slate-200' : 'bg-[#0f766e]',
                 )}
               />
               <span className="min-w-0 flex-1">

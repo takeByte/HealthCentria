@@ -49,7 +49,6 @@ function PatientNotifications() {
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-        className="max-w-3xl"
       >
         {error && <InlineNotice>{error}</InlineNotice>}
         {items === null && !error && <EmptyNote>Loading notifications…</EmptyNote>}

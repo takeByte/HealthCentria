@@ -361,33 +361,44 @@ function HomePage() {
           aria-labelledby="visit-heading"
           className="mb-14 overflow-hidden rounded-3xl border border-slate-200/70 bg-slate-900 text-white"
         >
-          <img
-            src={barangayHall}
-            alt="Front of the Barangay 11 hall"
-            className="h-40 w-full object-cover object-center sm:h-48"
-            loading="lazy"
-          />
-          <div className="p-6 text-center sm:p-8">
-            <h2 id="visit-heading" className="text-lg font-bold tracking-tight">
-              Visit the center in person
-            </h2>
-            <p className="mx-auto mt-1 max-w-2xl text-sm leading-6 text-slate-300">
-              Barangay 11, Malaybalay City — bring a valid ID on your first visit.
-              Online booking uses the same front-desk schedule.
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-3">
-              <Link
-                to="/register"
-                className="inline-flex h-10 items-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-900 transition-transform active:scale-[0.97]"
-              >
-                Book online instead
-              </Link>
-              <Link
-                to="/announcements"
-                className="inline-flex h-10 items-center rounded-xl border border-white/25 px-4 text-sm font-medium text-white hover:bg-white/10"
-              >
-                Check advisories first
-              </Link>
+          <div className="grid md:grid-cols-2">
+            <div className="relative h-44 w-full sm:h-56 md:h-auto md:min-h-[19rem]">
+              <img
+                src={barangayHall}
+                alt="Front of the Barangay 11 hall"
+                className="absolute inset-0 size-full object-cover object-center"
+                loading="lazy"
+              />
+              <div
+                aria-hidden
+                className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/10 to-transparent md:bg-gradient-to-r md:from-transparent md:to-slate-900/45"
+              />
+              <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-[11.5px] font-semibold text-slate-800 shadow-sm backdrop-blur">
+                <MapPin size={13} aria-hidden className="text-teal-700" />
+                Barangay 11, Malaybalay City
+              </span>
+            </div>
+            <div className="p-6 sm:p-8 md:py-10">
+              <h2 id="visit-heading" className="text-lg font-bold tracking-tight sm:text-xl">
+                Visit the center in person
+              </h2>
+              <p className="mt-2 max-w-md text-sm leading-6 text-slate-300">
+                Bring a valid ID on your first visit. Online booking uses the same front-desk schedule.
+              </p>
+              <div className="mt-5 flex flex-col gap-2.5 sm:flex-row">
+                <Link
+                  to="/register"
+                  className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-slate-900 transition-transform active:scale-[0.97]"
+                >
+                  Book online instead
+                </Link>
+                <Link
+                  to="/announcements"
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-white/25 px-4 text-sm font-medium text-white hover:bg-white/10"
+                >
+                  Check advisories first
+                </Link>
+              </div>
             </div>
           </div>
         </section>

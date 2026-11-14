@@ -99,20 +99,32 @@ export async function fetchHealth(): Promise<HealthResponse> {
   return res.json() as Promise<HealthResponse>;
 }
 
+/** A cold API answers 503 before running any handler, so one retry is safe. */
+const DB_UNAVAILABLE_RETRY_MS = 1500;
+
 async function apiFetch<T>(
   path: string,
   options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<T> {
   const token = getSession()?.token;
-  const res = await fetch(`${API_URL}${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
-  });
+  const send = () =>
+    fetch(`${API_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    });
+
+  let res = await send();
+  // The DB connects in the background on boot; a request that lands in that
+  // window gets 503 without doing any work. Retry once before surfacing it.
+  if (res.status === 503) {
+    await new Promise((resolve) => setTimeout(resolve, DB_UNAVAILABLE_RETRY_MS));
+    res = await send();
+  }
   type ResponseBody = { message?: string; errors?: Record<string, string[]>; code?: string } & Record<string, unknown>;
   let data: ResponseBody | null = null;
   try {
@@ -422,6 +434,27 @@ export interface PatientVisit {
   updatedByName?: string;
 }
 
+export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
+
+export interface Immunization {
+  name: string;
+  /** YYYY-MM-DD, or empty when unknown. */
+  date: string;
+  note: string;
+}
+
+/** Clinical background entered by staff; patients see it read-only. */
+export interface MedicalProfile {
+  bloodType: '' | (typeof BLOOD_TYPES)[number];
+  allergies: string[];
+  conditions: string[];
+  medications: string[];
+  immunizations: Immunization[];
+  recordedAt: string | null;
+}
+
+export type MedicalProfileInput = Omit<MedicalProfile, 'recordedAt'>;
+
 export interface PatientDetail {
   id: string;
   name: string;
@@ -439,6 +472,7 @@ export interface PatientDetail {
   authProvider: 'local' | 'google';
   profileCompleted: boolean;
   avatarUrl: string;
+  medical: MedicalProfile;
   createdAt: string;
   updatedAt?: string;
   updatedByName?: string;
@@ -464,6 +498,22 @@ export function listPatients(search = ''): Promise<{ patients: PatientSummary[] 
 
 export function getPatient(id: string): Promise<{ patient: PatientDetail; visits: PatientVisit[] }> {
   return apiFetch(`/api/patients/${id}`);
+}
+
+/** Optional emails a patient controls from Settings. Verification and reset codes are never affected. */
+export interface EmailPreferences {
+  announcements: boolean;
+  appointments: boolean;
+}
+
+export function getEmailPreferences(): Promise<{ preferences: EmailPreferences }> {
+  return apiFetch('/api/patients/email-preferences');
+}
+
+export function updateEmailPreferences(
+  input: Partial<EmailPreferences>,
+): Promise<{ preferences: EmailPreferences }> {
+  return apiFetch('/api/patients/email-preferences', { method: 'PUT', body: input });
 }
 
 /** The signed-in patient's own chart. */
@@ -492,6 +542,14 @@ export function updatePatientRecord(
   input: PatientRecordInput,
 ): Promise<{ patient: PatientDetail }> {
   return apiFetch(`/api/patients/${id}`, { method: 'PATCH', body: input });
+}
+
+/** Staff/admin: replace a patient's medical profile. */
+export function updatePatientMedical(
+  id: string,
+  input: MedicalProfileInput,
+): Promise<{ patient: PatientDetail }> {
+  return apiFetch(`/api/patients/${id}/medical`, { method: 'PATCH', body: input });
 }
 
 export type ReportRange = 'today' | 'week' | 'month';
@@ -548,6 +606,31 @@ export interface PatientReportRow {
   householdNumber: string;
   lastVisit: string | null;
   registeredAt: string | null;
+}
+
+export interface MonthlyTrendMonth {
+  /** `YYYY-MM`, the same prefix stored in an appointment's `day`. */
+  key: string;
+  label: string;
+  year: number;
+  /** Completed visits in this month across every service. */
+  total: number;
+}
+
+export interface MonthlyTrendSeries {
+  serviceId: string;
+  serviceName: string;
+  /** One entry per month, in `months` order. */
+  values: number[];
+  total: number;
+}
+
+/** Completed visits per service for the last six months (top three services). */
+export function monthlyTrends(): Promise<{
+  months: MonthlyTrendMonth[];
+  series: MonthlyTrendSeries[];
+}> {
+  return apiFetch('/api/reports/monthly-trends');
 }
 
 export function patientReport(

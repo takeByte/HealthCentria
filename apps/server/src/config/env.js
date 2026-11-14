@@ -32,6 +32,12 @@ const envSchema = z.object({
   // the real client IP instead of the proxy's.
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
 
+  // How long a request that needs the database waits for the first connection
+  // before it is rejected with 503. Measured from process start, so a cold or
+  // unreachable Atlas still fails fast once the window closes. 0 disables the
+  // wait (instant 503, old behaviour).
+  DB_WAIT_MS: z.coerce.number().int().min(0).default(10_000),
+
   // Google OAuth (optional). Sign-in with Google stays disabled until both the
   // client id and secret are set. See README § "Sign in with Google".
   GOOGLE_CLIENT_ID: z.string().optional(),

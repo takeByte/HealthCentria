@@ -132,11 +132,16 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const before = await Appointment.findOne({ _id: req.params.id, patient: req.user.id }).lean();
   if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
-  if (before.status !== 'pending' && before.status !== 'confirmed') {
+  // Patients can only withdraw a request staff have not acted on yet; a
+  // confirmed visit has to be changed through the front desk.
+  if (before.status !== 'pending') {
     return res.status(409).json({
       success: false,
       code: 'APPOINTMENT_CONFLICT',
-      message: 'Only pending or confirmed appointments can be cancelled. Reload to see its current status.',
+      message:
+        before.status === 'confirmed'
+          ? 'This appointment is already confirmed and can no longer be cancelled online. Please contact the front desk.'
+          : 'Only pending appointments can be cancelled. Reload to see its current status.',
     });
   }
   // Guard on the status just read so a staff action in between cannot be

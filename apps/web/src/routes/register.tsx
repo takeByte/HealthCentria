@@ -1,12 +1,13 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Eye, EyeOff, LoaderCircle, MailCheck } from 'lucide-react';
+import { CircleCheck, Eye, EyeOff, LoaderCircle, MailCheck } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { PublicHeader } from '../components/public-header';
 import { Button } from '../components/ui/button';
 import {
   AuthError,
+  clearSession,
   confirmEmailVerification,
   DuplicateEmailError,
   isValidEmail,
@@ -252,7 +253,15 @@ function RegisterComponent() {
     };
 
     try {
-      await registerPatient(payload);
+      const session = await registerPatient(payload);
+      if (!session.token) {
+        // No token means the API never answered, so no real account was created
+        // and no verification email could be sent. Don't pretend it worked.
+        clearSession();
+        throw new AuthError(
+          'We could not reach the server, so your account was not created. Check that the server is running, then try again.',
+        );
+      }
       // The account exists now; show the verification step before the
       // dashboard instead of sending the user straight there.
       setVerifyError(null);
@@ -721,9 +730,11 @@ function RegisterComponent() {
                     {verifyNotice && !verifyError && (
                       <p
                         role="status"
-                        className="rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-900 ring-1 ring-inset ring-teal-600/20"
+                        aria-live="polite"
+                        className="flex items-start gap-2 rounded-xl bg-teal-50 px-3 py-2 text-sm text-teal-900 ring-1 ring-inset ring-teal-600/20"
                       >
-                        {verifyNotice}
+                        <CircleCheck size={16} className="mt-0.5 shrink-0 text-teal-700" aria-hidden />
+                        <span>{verifyNotice}</span>
                       </p>
                     )}
 
@@ -746,7 +757,7 @@ function RegisterComponent() {
                         {resending
                           ? 'Sending…'
                           : resendCooldown > 0
-                            ? `Resend in ${resendCooldown}s`
+                            ? `${verifyNotice ? 'Code sent · ' : ''}Resend in ${resendCooldown}s`
                             : 'Resend code'}
                       </button>
                       <button

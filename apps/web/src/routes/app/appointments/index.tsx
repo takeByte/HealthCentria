@@ -41,7 +41,9 @@ function AppointmentCard({ appt, onCancelled }: { appt: Appointment; onCancelled
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cancellable = appt.status === 'pending' || appt.status === 'confirmed';
+  // Patients can only withdraw a request that staff have not acted on yet. Once
+  // it is confirmed, changes go through the front desk.
+  const cancellable = appt.status === 'pending';
   // Only confirmed, upcoming visits: a pending request may still be declined.
   const addable = appt.status === 'confirmed' && appt.day >= todayYMD();
 
@@ -81,6 +83,11 @@ function AppointmentCard({ appt, onCancelled }: { appt: Appointment; onCancelled
         <p className="mt-3 rounded-lg bg-slate-50/80 px-3 py-2 text-[12.5px] leading-5 text-slate-600">
           <span className="font-semibold text-slate-700">Notes: </span>
           {appt.notes}
+        </p>
+      )}
+      {appt.status === 'confirmed' && appt.day >= todayYMD() && (
+        <p className="mt-3 text-[12.5px] leading-5 text-slate-500">
+          Need to change or cancel? Please contact the front desk.
         </p>
       )}
       {error && (

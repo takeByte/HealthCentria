@@ -8,7 +8,7 @@ import { RecordMeta } from './record-meta';
 
 const CATEGORY_STYLE: Record<Announcement['category'], string> = {
   'schedule-change': 'bg-amber-600/10 text-amber-800',
-  'vaccination-day': 'bg-teal-600/10 text-teal-800',
+  'vaccination-day': 'bg-[#0f766e]/10 text-[#115e59]',
   'health-advisory': 'bg-sky-600/10 text-sky-800',
   general: 'bg-slate-500/10 text-slate-700',
 };
@@ -43,11 +43,14 @@ export function AnnouncementFeed({
   items,
   actions,
   emptyNote,
+  collapsible = true,
 }: {
   items: Announcement[];
   /** Optional row actions (edit/delete) — used by the staff composer list. */
   actions?: (item: Announcement) => ReactNode;
   emptyNote?: ReactNode;
+  /** When false the body is always shown in full (public reader). */
+  collapsible?: boolean;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -73,13 +76,13 @@ export function AnnouncementFeed({
             key={a.id}
             className={cn(
               `app-card ${cardPadding}`,
-              a.pinned && 'ring-1 ring-teal-600/25',
+              a.pinned && 'ring-1 ring-[#0f766e]/25',
             )}
           >
             <div className="flex items-start gap-3">
               <span
                 aria-hidden
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-600 to-blue-600 text-[13px] font-bold text-white"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#14b8a6] to-[#134e4a] text-[13px] font-bold text-white"
               >
                 {initials(a.authorName)}
               </span>
@@ -102,22 +105,28 @@ export function AnnouncementFeed({
                   >
                     {relativeTime(a.publishedAt)}
                   </time>
-                  {wasEdited(a) && <span title={'Edited ' + new Date(a.updatedAt as string).toLocaleString('en-PH')}> · Edited</span>}
+                  {wasEdited(a) && (
+                    <span title={'Edited ' + new Date(a.updatedAt as string).toLocaleString('en-PH')}>
+                      {' '}· Edited
+                    </span>
+                  )}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setOpenId(open ? null : a.id)}
-                aria-expanded={open}
-                aria-label={open ? `Hide full text of ${a.title}` : `Show full text of ${a.title}`}
-                className="-mr-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 active:scale-[0.97]"
-              >
-                <ChevronDown size={17} className={cn('transition-transform duration-200', open && 'rotate-180')} />
-              </button>
+              {collapsible && (
+                <button
+                  type="button"
+                  onClick={() => setOpenId(open ? null : a.id)}
+                  aria-expanded={open}
+                  aria-label={open ? `Hide full text of ${a.title}` : `Show full text of ${a.title}`}
+                  className="-mr-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 active:scale-[0.97]"
+                >
+                  <ChevronDown size={17} className={cn('transition-transform duration-200', open && 'rotate-180')} />
+                </button>
+              )}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
               {a.pinned && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-teal-700 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-white">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#0f766e] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-white">
                   <Pin size={11} aria-hidden /> Pinned
                 </span>
               )}
@@ -136,20 +145,20 @@ export function AnnouncementFeed({
             </h3>
             <p
               className={cn(
-                'mt-1 text-[13.5px] leading-6 text-slate-600 [overflow-wrap:anywhere]',
-                !open && 'line-clamp-2',
+                'mt-1 whitespace-pre-line text-[13.5px] leading-6 text-slate-600 [overflow-wrap:anywhere]',
+                !open && collapsible && 'line-clamp-2',
               )}
             >
               {a.body}
             </p>
             <ImageGallery images={a.images ?? []} />
             {actions && (
-            <RecordMeta
-              createdAt={a.createdAt ?? a.publishedAt}
-              updatedAt={a.updatedAt}
-              updatedByName={a.updatedByName}
-              className="mt-2"
-            />
+              <RecordMeta
+                createdAt={a.createdAt ?? a.publishedAt}
+                updatedAt={a.updatedAt}
+                updatedByName={a.updatedByName}
+                className="mt-2"
+              />
             )}
             {actions && <div className="mt-3.5 border-t border-slate-200/70 pt-3.5">{actions(a)}</div>}
           </article>

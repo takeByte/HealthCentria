@@ -14,7 +14,7 @@ import {
 import { User } from '../models/user.model.js';
 import { hashPassword, isValidPassword } from '../utils/password.js';
 import { isValidServiceDay, todayYMD } from '../utils/service-schedule.js';
-import { notifyEmail, notifyUser } from '../utils/notifications.js';
+import { notifyPatientEmail, notifyUser } from '../utils/notifications.js';
 
 const listQuery = z.object({
   status: z.enum(['pending', 'confirmed', 'declined', 'completed', 'cancelled']).optional(),
@@ -167,7 +167,9 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
     body: 'Your appointment is confirmed. Please arrive on time and bring a valid ID.',
     link: '/app/appointments',
   }).catch(() => {});
-  notifyEmail(
+  notifyPatientEmail(
+    appt.patient._id,
+    'appointments',
     appt.patient.email,
     `HealthCentria: appointment confirmed (${appt.service.name}, ${appt.day})`,
     `Good news — your ${appt.service.name} appointment on ${appt.day} is confirmed.\n\nPlease arrive on time and bring a valid ID.\n\n— HealthCentria Barangay Health Center`,
@@ -222,7 +224,9 @@ export const declineAppointment = asyncHandler(async (req, res) => {
     body: `Reason: ${parsed.data.reason}`,
     link: '/app/appointments',
   }).catch(() => {});
-  notifyEmail(
+  notifyPatientEmail(
+    appt.patient._id,
+    'appointments',
     appt.patient.email,
     `HealthCentria: appointment update (${appt.service.name}, ${appt.day})`,
     `Your ${appt.service.name} appointment on ${appt.day} could not be confirmed.\n\nReason: ${parsed.data.reason}\n\nPlease book another date.\n\n— HealthCentria Barangay Health Center`,

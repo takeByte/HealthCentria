@@ -7,6 +7,7 @@ import { opsNav } from '../../components/ops-nav';
 import {
   EmptyNote,
   InlineNotice,
+  Segmented,
   StatTile,
   StatusPill,
   SuccessNote,
@@ -19,8 +20,17 @@ import { getSession } from '../../lib/auth';
 import { listPatients, type PatientSummary } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
+import { cn } from '../../lib/utils';
+
+const PATIENT_STATUS_FILTERS = ['all', 'active', 'inactive'] as const;
+type PatientStatusFilter = (typeof PATIENT_STATUS_FILTERS)[number];
 
 export const Route = createFileRoute('/staff/patients/')({
+  validateSearch: (search: Record<string, unknown>): { status?: PatientStatusFilter } => ({
+    status: PATIENT_STATUS_FILTERS.includes(search.status as PatientStatusFilter)
+      ? (search.status as PatientStatusFilter)
+      : undefined,
+  }),
   beforeLoad: () => {
     const session = getSession();
     if (!sessionCan(session, 'patients.manage')) throw redirect({ to: '/staff/dashboard' });
@@ -37,11 +47,28 @@ function initials(name: string): string {
     .join('');
 }
 
+/** A small, stable tint per patient so a long list isn't a wall of grey. */
+const AVATAR_TONES = [
+  'from-[#e3f7f5] to-[#ccfbf1] text-[#115e59] ring-[#0f766e]/10',
+  'from-[#e8f1fb] to-[#d4e5f7] text-[#2a6f9e] ring-[#2a6f9e]/10',
+  'from-[#fdf3e0] to-[#f7e4bf] text-[#8a5a10] ring-[#c99a3d]/20',
+  'from-[#edf3f8] to-[#e0e9f1] text-[#475569] ring-[#64748b]/10',
+];
+
+function avatarTone(name: string): string {
+  let hash = 0;
+  for (const ch of name) hash = (hash + ch.charCodeAt(0)) % AVATAR_TONES.length;
+  return AVATAR_TONES[hash];
+}
+
 function PatientsList() {
   const reduceMotion = useReducedMotion();
   const session = getSession();
   const today = getTodayService();
+  const { status: statusParam } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<PatientStatusFilter>(statusParam ?? 'all');
   const [list, setList] = useState<PatientSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // One-time note after a redirect here (e.g. a deleted account).
@@ -86,6 +113,17 @@ function PatientsList() {
     };
   }, [list]);
 
+  // Keeps the filter in sync when the URL changes (deep link or back button).
+  useEffect(() => {
+    setStatus(statusParam ?? 'all');
+  }, [statusParam]);
+
+  const visible = useMemo(() => {
+    const all = list ?? [];
+    if (status === 'all') return all;
+    return all.filter((p) => (status === 'active' ? p.active : !p.active));
+  }, [list, status]);
+
   const rise = reduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
     : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
@@ -102,12 +140,21 @@ function PatientsList() {
       nav={opsNav(session?.role, session?.permissions)}
       notificationsTo="/staff/notifications"
     >
-      <motion.div {...rise} transition={riseTransition} className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[13px] leading-5 text-slate-600">
-          {list === null
-            ? 'Loading the register…'
-            : `${summary.total} patient${summary.total === 1 ? '' : 's'} in this view · ${summary.active} active`}
-        </p>
+      <motion.div
+        {...rise}
+        transition={riseTransition}
+        className="flex flex-wrap items-end justify-between gap-3"
+      >
+        <div className="min-w-0">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#0f766e]">
+            Patient register
+          </p>
+          <p className="mt-1.5 text-[13px] leading-5 text-[#475569]">
+            {list === null
+              ? 'Loading the register…'
+              : `${visible.length} patient${visible.length === 1 ? '' : 's'} in this view · ${summary.active} active`}
+          </p>
+        </div>
         <Link to="/staff/walk-in" className={`${primaryButton} h-10 px-4 text-[13px]`}>
           Register a walk-in
         </Link>
@@ -116,9 +163,14 @@ function PatientsList() {
       <motion.div
         {...rise}
         transition={{ ...riseTransition, delay: 0.04 }}
-        className="grid gap-3.5 sm:grid-cols-3"
+        className="grid grid-cols-2 gap-3.5 sm:grid-cols-3"
       >
-        <StatTile icon={Users} label="Patients" value={list === null ? '—' : summary.total} hint="In this view" />
+        <StatTile
+          icon={Users}
+          label="Patients"
+          value={list === null ? '—' : summary.total}
+          hint="In this view"
+        />
         <StatTile
           icon={UserCheck}
           label="Active"
@@ -132,6 +184,7 @@ function PatientsList() {
           value={list === null ? '—' : summary.inactive}
           hint="Sign-in blocked"
           tone="slate"
+          className="col-span-2 sm:col-span-1"
         />
       </motion.div>
 
@@ -158,6 +211,21 @@ function PatientsList() {
             className={`${inputClass} pl-10`}
           />
         </div>
+        <div className="mt-3">
+          <Segmented
+            ariaLabel="Filter patients by status"
+            value={status}
+            onChange={(next) => {
+              setStatus(next);
+              void navigate({ search: next === 'all' ? {} : { status: next }, replace: true });
+            }}
+            options={[
+              { key: 'all', label: 'All' },
+              { key: 'active', label: 'Active' },
+              { key: 'inactive', label: 'Inactive' },
+            ]}
+          />
+        </div>
       </motion.div>
 
       {flash && <SuccessNote>{flash}</SuccessNote>}
@@ -168,40 +236,50 @@ function PatientsList() {
           {search.trim() ? `No patient matches “${search.trim()}”.` : 'No patients registered yet.'}
         </EmptyNote>
       )}
+      {list !== null && list.length > 0 && visible.length === 0 && !error && (
+        <EmptyNote>No {status === 'active' ? 'active' : 'inactive'} patients in this view.</EmptyNote>
+      )}
 
       <motion.div
         {...rise}
         transition={{ ...riseTransition, delay: 0.12 }}
         className="grid gap-3.5 md:grid-cols-2"
       >
-        {(list ?? []).map((p) => (
+        {visible.map((p) => (
           <Link
             key={p.id}
             to="/staff/patients/$patientId"
             params={{ patientId: p.id }}
-            className="app-card flex items-center gap-3.5 p-4 transition-colors hover:border-teal-600/30 hover:bg-white active:scale-[0.995]"
+            className="app-card group flex items-center gap-3.5 p-4 transition-colors hover:border-[#0f766e]/30 hover:bg-white active:scale-[0.995]"
           >
             <span
               aria-hidden
-              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-slate-900/[0.06] text-[13px] font-bold text-slate-700"
+              className={cn(
+                'flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[13px] font-bold ring-1 ring-inset',
+                avatarTone(p.name),
+              )}
             >
               {initials(p.name) || <Users size={16} />}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2">
-                <span className="truncate font-display text-[14.5px] font-semibold tracking-[-0.01em] text-slate-900">
+                <span className="truncate font-display text-[14.5px] font-semibold tracking-[-0.015em] text-[#042f2e]">
                   {p.name}
                 </span>
                 {!p.active && <StatusPill tone="slate">Inactive</StatusPill>}
               </span>
-              <span className="mt-0.5 block truncate text-[12.5px] text-slate-600">{p.email}</span>
+              <span className="mt-0.5 block truncate text-[12.5px] text-[#475569]">{p.email}</span>
               {(p.contactNumber || p.householdNumber) && (
-                <span className="mt-0.5 block truncate text-[11.5px] text-slate-400">
+                <span className="mt-0.5 block truncate text-[11.5px] text-[#94a3b8]">
                   {[p.contactNumber, p.householdNumber].filter(Boolean).join(' · ')}
                 </span>
               )}
             </span>
-            <ChevronRight size={17} aria-hidden className="shrink-0 text-slate-400" />
+            <ChevronRight
+              size={17}
+              aria-hidden
+              className="shrink-0 text-[#94a3b8] transition-transform group-hover:translate-x-0.5"
+            />
           </Link>
         ))}
       </motion.div>

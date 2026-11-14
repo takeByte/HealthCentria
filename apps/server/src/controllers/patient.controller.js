@@ -11,6 +11,7 @@ import { todayYMD } from '../utils/service-schedule.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
 import { avatarSchema } from '../utils/avatar.js';
+import { prefAllows } from '../utils/notifications.js';
 
 const listQuery = z.object({
   search: z.string().trim().max(100).optional().default(''),
@@ -91,6 +92,59 @@ const staffProfileSchema = z.object({
   emergencyNumber: optionalText(60, 'Emergency contact number is too long.'),
 });
 
+const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+function medicalList(label) {
+  return z
+    .array(z.string().trim().min(1, `${label} entries cannot be empty.`).max(120, `A ${label.toLowerCase()} entry is too long.`))
+    .max(30, `Too many ${label.toLowerCase()} entries.`);
+}
+
+/** Medical profile entered by staff. The whole profile is replaced on each save. */
+const medicalSchema = z.object({
+  bloodType: z.enum(BLOOD_TYPES).or(z.literal('')),
+  allergies: medicalList('Allergy'),
+  conditions: medicalList('Condition'),
+  medications: medicalList('Medication'),
+  immunizations: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1, 'Each vaccine needs a name.').max(120, 'A vaccine name is too long.'),
+        date: z
+          .string()
+          .trim()
+          .refine((v) => v === '' || isValidPastBirthdate(v) || v === todayYMD(), 'Enter a valid vaccine date.'),
+        note: z.string().trim().max(200, 'A vaccine note is too long.'),
+      }),
+    )
+    .max(50, 'Too many vaccines listed.'),
+});
+
+/** Case-insensitive de-duplication that keeps the first spelling. */
+function uniqueList(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items) {
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+function presentMedical(u) {
+  const m = u.medicalProfile ?? {};
+  return {
+    bloodType: m.bloodType ?? '',
+    allergies: m.allergies ?? [],
+    conditions: m.conditions ?? [],
+    medications: m.medications ?? [],
+    immunizations: (m.immunizations ?? []).map((i) => ({ name: i.name ?? '', date: i.date ?? '', note: i.note ?? '' })),
+    recordedAt: m.recordedAt ?? null,
+  };
+}
+
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
     res.status(503).json({ success: false, message: 'Database is not connected. Try again later.' });
@@ -131,6 +185,7 @@ function presentProfile(u) {
     authProvider: u.provider ?? 'local',
     profileCompleted: u.profileComplete !== false,
     avatarUrl: u.avatarUrl ?? '',
+    medical: presentMedical(u),
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,
     updatedByName:
@@ -279,6 +334,111 @@ export const updatePatientRecord = asyncHandler(async (req, res) => {
   res.json({ success: true, patient: presentProfile(patient) });
 });
 
+/**
+ * PATCH /api/patients/:id/medical — staff/admin replace a patient's medical
+ * profile (blood type, allergies, conditions, medications, immunizations).
+ * Patients only ever read it. The activity log records which sections changed,
+ * never the clinical values themselves.
+ */
+export const updatePatientMedical = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+  const parsed = medicalSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: parsed.error.flatten().fieldErrors,
+    });
+  }
+  const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null });
+  if (!patient) {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+
+  const before = presentMedical(patient);
+  const data = parsed.data;
+  const next = {
+    bloodType: data.bloodType,
+    allergies: uniqueList(data.allergies),
+    conditions: uniqueList(data.conditions),
+    medications: uniqueList(data.medications),
+    immunizations: data.immunizations,
+  };
+  const changed = Object.keys(next).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(next[key]));
+
+  patient.medicalProfile = { ...next, recordedAt: new Date(), recordedBy: req.user.id };
+  patient.updatedBy = req.user.id;
+  await patient.save();
+  await patient.populate('updatedBy', 'fullName');
+
+  if (changed.length) {
+    await logActivity({
+      req,
+      action: 'patient.medical_update',
+      target: { type: 'patient', id: patient._id, label: patient.fullName },
+      detail: `Medical profile updated: ${changed.join(', ')}.`,
+      patient: patient._id,
+    });
+  }
+
+  res.json({ success: true, patient: presentProfile(patient) });
+});
+
+const emailPrefsSchema = z
+  .object({ announcements: z.boolean(), appointments: z.boolean() })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, 'No changes provided.');
+
+function presentEmailPrefs(user) {
+  return {
+    announcements: prefAllows(user.emailPrefs, 'announcements'),
+    appointments: prefAllows(user.emailPrefs, 'appointments'),
+  };
+}
+
+/** GET /api/patients/email-preferences — the signed-in patient's optional-email switches. */
+export const getMyEmailPrefs = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const user = await User.findById(req.user.id).select('emailPrefs active').lean();
+  if (!user || !user.active) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  res.json({ success: true, preferences: presentEmailPrefs(user) });
+});
+
+/**
+ * PUT /api/patients/email-preferences — switch announcement or appointment
+ * emails on or off. Verification and password-reset codes are never affected.
+ */
+export const updateMyEmailPrefs = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = emailPrefsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid preferences.' });
+  }
+  const set = {};
+  for (const [key, value] of Object.entries(parsed.data)) set[`emailPrefs.${key}`] = value;
+  // updateOne: a plain save() would re-run profile validators on older accounts.
+  const result = await User.updateOne({ _id: req.user.id, role: 'patient', active: true }, { $set: set });
+  if (result.matchedCount === 0) {
+    return res.status(401).json({ success: false, message: 'Session is no longer valid. Log in again.' });
+  }
+  const user = await User.findById(req.user.id).select('emailPrefs fullName').lean();
+  await logActivity({
+    req,
+    action: 'patient.email_prefs_update',
+    target: { type: 'patient', id: req.user.id, label: user?.fullName ?? '' },
+    detail: `Patient changed email preferences: ${Object.entries(parsed.data)
+      .map(([k, v]) => `${k} ${v ? 'on' : 'off'}`)
+      .join(', ')}.`,
+    patient: req.user.id,
+  });
+  res.json({ success: true, preferences: presentEmailPrefs(user) });
+});
+
 /** PUT /api/patients/profile — patient completes their own profile. */
 export const updateMyProfile = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
@@ -423,7 +583,15 @@ export const deletePatient = asyncHandler(async (req, res) => {
         emergencyNumber: '',
         updatedBy: req.user.id,
       },
-      $unset: { passwordHash: '', googleId: '', birthdate: '', sex: '', address: '', contactNumber: '' },
+      $unset: {
+        passwordHash: '',
+        googleId: '',
+        birthdate: '',
+        sex: '',
+        address: '',
+        contactNumber: '',
+        medicalProfile: '',
+      },
       $inc: { tokenVersion: 1 },
     },
   );

@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env.js';
+import { dbGate } from './middleware/dbGate.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
 import { requestContext } from './middleware/requestContext.js';
@@ -37,6 +38,10 @@ export function createApp() {
   app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
   // Client IP + user agent for every activity entry written downstream.
   app.use(requestContext);
+
+  // Requests that need the database wait briefly for the initial connection
+  // instead of failing during the ~1 s handshake. /api/health is exempt.
+  app.use('/api', dbGate);
 
   // UploadThing handshake + completion webhook. Auth lives in the file router.
   app.use('/api/uploadthing', uploadthingHandler);

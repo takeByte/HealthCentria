@@ -42,7 +42,7 @@ function PublicAnnouncements() {
           </p>
         )}
         {items === null && !error && <p className="text-sm text-slate-500">Loading announcements…</p>}
-        {items !== null && <AnnouncementFeed items={items} />}
+        {items !== null && <AnnouncementFeed items={items} collapsible={false} />}
       </main>
     </div>
   );
