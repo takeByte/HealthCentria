@@ -38,6 +38,8 @@ export interface Appointment {
   diagnosis: string;
   prescription: string;
   visitNotes: string;
+  /** ISO time after which the patient can no longer cancel online. */
+  cancellableUntil?: string;
   createdAt: string;
   updatedAt?: string;
 }

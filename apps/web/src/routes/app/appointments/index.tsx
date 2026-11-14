@@ -41,9 +41,11 @@ function AppointmentCard({ appt, onCancelled }: { appt: Appointment; onCancelled
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Patients can only withdraw a request that staff have not acted on yet. Once
-  // it is confirmed, changes go through the front desk.
-  const cancellable = appt.status === 'pending';
+  // Pending or confirmed visits can be cancelled online until the server's
+  // cutoff; after that changes go through the front desk.
+  const open = appt.status === 'pending' || appt.status === 'confirmed';
+  const windowOpen = appt.cancellableUntil ? Date.now() < new Date(appt.cancellableUntil).getTime() : true;
+  const cancellable = open && windowOpen;
   // Only confirmed, upcoming visits: a pending request may still be declined.
   const addable = appt.status === 'confirmed' && appt.day >= todayYMD();
 
@@ -85,9 +87,9 @@ function AppointmentCard({ appt, onCancelled }: { appt: Appointment; onCancelled
           {appt.notes}
         </p>
       )}
-      {appt.status === 'confirmed' && appt.day >= todayYMD() && (
+      {open && !windowOpen && appt.day >= todayYMD() && (
         <p className="mt-3 text-[12.5px] leading-5 text-slate-500">
-          Need to change or cancel? Please contact the front desk.
+          Online cancelling closed 24 hours before the appointment day. Please contact the front desk to change or cancel.
         </p>
       )}
       {error && (

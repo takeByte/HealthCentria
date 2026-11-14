@@ -23,6 +23,14 @@ function requireDB(res) {
   return true;
 }
 
+// Patients may cancel until this many hours before the appointment day starts
+// (00:00 Philippine time, UTC+8 — appointments store a date only, no clock time).
+const CANCEL_CUTOFF_HOURS = 24;
+
+function cancelDeadline(day) {
+  return new Date(new Date(`${day}T00:00:00+08:00`).getTime() - CANCEL_CUTOFF_HOURS * 3600 * 1000);
+}
+
 function present(a) {
   return {
     id: String(a._id),
@@ -35,6 +43,7 @@ function present(a) {
     diagnosis: a.diagnosis ?? '',
     prescription: a.prescription ?? '',
     visitNotes: a.visitNotes ?? '',
+    cancellableUntil: cancelDeadline(a.day).toISOString(),
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
   };
@@ -70,18 +79,8 @@ export const bookAppointment = asyncHandler(async (req, res) => {
     });
   }
 
-  // One pending/confirmed request per patient + service + day.
-  const clash = await Appointment.findOne({
-    patient: req.user.id,
-    service: service._id,
-    day,
-    status: { $in: ['pending', 'confirmed'] },
-  }).lean();
-  if (clash) {
-    return res
-      .status(409)
-      .json({ success: false, message: 'You already have a request for this service on this date.' });
-  }
+  // Patients may book the same service again on the same day, as long as the
+  // service is offered that day (enforced by isValidServiceDay above).
 
   const appt = await Appointment.create({
     patient: req.user.id,
@@ -132,16 +131,20 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const before = await Appointment.findOne({ _id: req.params.id, patient: req.user.id }).lean();
   if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
-  // Patients can only withdraw a request staff have not acted on yet; a
-  // confirmed visit has to be changed through the front desk.
-  if (before.status !== 'pending') {
+  if (before.status !== 'pending' && before.status !== 'confirmed') {
     return res.status(409).json({
       success: false,
       code: 'APPOINTMENT_CONFLICT',
-      message:
-        before.status === 'confirmed'
-          ? 'This appointment is already confirmed and can no longer be cancelled online. Please contact the front desk.'
-          : 'Only pending appointments can be cancelled. Reload to see its current status.',
+      message: 'Only pending or confirmed appointments can be cancelled. Reload to see its current status.',
+    });
+  }
+  // Pending and confirmed visits can be cancelled online until the cutoff;
+  // after that the front desk has to handle changes.
+  if (Date.now() >= cancelDeadline(before.day).getTime()) {
+    return res.status(409).json({
+      success: false,
+      code: 'CANCEL_WINDOW_CLOSED',
+      message: `Appointments can only be cancelled online up to ${CANCEL_CUTOFF_HOURS} hours before the appointment day. Please contact the front desk.`,
     });
   }
   // Guard on the status just read so a staff action in between cannot be
