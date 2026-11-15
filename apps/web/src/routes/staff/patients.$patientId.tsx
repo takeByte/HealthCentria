@@ -418,7 +418,7 @@ function PatientDetailPage() {
               <motion.section
                 {...rise}
                 transition={{ ...riseTransition, delay: 0.08 }}
-                className={`${panel} ${editing ? '' : 'lg:sticky lg:top-24'} lg:col-span-2`}
+                className={`${panel} lg:col-span-2`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">

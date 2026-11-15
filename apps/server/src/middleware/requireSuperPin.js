@@ -244,8 +244,15 @@ async function requestApproval(req, res, what, fingerprint) {
 /**
  * @param {string | ((req) => string)} label What is being changed, for the
  *   Activity log and the SU_EMAIL notice (e.g. "Google sign-in credentials").
+ * @param {{ skipEmailForSuperadmin?: boolean, emailApproval?: boolean, notify?: boolean }} [options]
+ *   skipEmailForSuperadmin (default true): an admin whose own account email equals
+ *   SU_EMAIL only needs the PIN, since confirming by email in their own inbox adds
+ *   nothing. Other admins still need the email confirmation. The change notice still
+ *   goes out. Pass false to always require the email.
+ *   emailApproval: false makes a route PIN-only for everyone (no confirmation email).
+ *   notify: false skips the after-the-fact notice to SU_EMAIL.
  */
-export function requireSuperPin(label) {
+export function requireSuperPin(label, options = {}) {
   return async (req, res, next) => {
     const what = typeof label === 'function' ? label(req) : label;
     const expected = String(env.SU_PIN ?? '').trim();
@@ -257,7 +264,14 @@ export function requireSuperPin(label) {
       });
     }
 
-    const emailOn = emailApprovalOn();
+    let emailOn = options.emailApproval === false ? false : emailApprovalOn();
+    if (emailOn && options.skipEmailForSuperadmin !== false) {
+      const suEmail = String(env.SU_EMAIL ?? '').trim().toLowerCase();
+      const actor = suEmail
+        ? await User.findById(req.user?.id).select('email').lean().catch(() => null)
+        : null;
+      if (actor && String(actor.email ?? '').trim().toLowerCase() === suEmail) emailOn = false;
+    }
     const approvalId = emailOn ? String(req.get(APPROVAL_HEADER) ?? '').trim() : '';
     const fingerprint = approvalFingerprint(req);
     /** The approval this request spends, once the superadmin confirmed it. */
@@ -310,6 +324,7 @@ export function requireSuperPin(label) {
     res.on('finish', () => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         if (approval) markUsed(approval.id);
+        if (options.notify === false) return;
         sendChangeNotice(req, what).catch((err) => {
           console.error('Superadmin change notice failed:', err instanceof Error ? err.message : 'unknown error');
         });

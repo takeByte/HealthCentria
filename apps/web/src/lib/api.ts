@@ -384,17 +384,18 @@ export function markAllNotificationsRead(): Promise<{ success: boolean }> {
   return apiFetch('/api/notifications/read-all', { method: 'POST' });
 }
 
+/** Emergency walk-in: only the name is required; the rest is completed later. */
 export interface WalkInNewPatient {
   fullName: string;
-  email: string;
-  birthdate: string;
-  sex: 'Female' | 'Male' | 'Other' | 'Prefer not to say';
-  address: string;
-  householdNumber: string;
-  contactNumber: string;
+  email?: string;
+  birthdate?: string;
+  sex?: 'Female' | 'Male' | 'Other' | 'Prefer not to say';
+  address?: string;
+  householdNumber?: string;
+  contactNumber?: string;
   philHealthNumber?: string;
-  emergencyName: string;
-  emergencyNumber: string;
+  emergencyName?: string;
+  emergencyNumber?: string;
 }
 
 export function lookupPatient(email: string): Promise<{ patient: { id: string; name: string; email: string } }> {
@@ -403,12 +404,13 @@ export function lookupPatient(email: string): Promise<{ patient: { id: string; n
 
 export function walkInAppointment(input: {
   serviceId: string;
-  day: string;
   timePreference?: string;
   notes?: string;
   patientEmail?: string;
   newPatient?: WalkInNewPatient;
-}): Promise<{ appointment: StaffAppointment; tempPassword?: string }> {
+  /** Create a new record even though a patient with the same name exists. */
+  allowDuplicate?: boolean;
+}): Promise<{ appointment: StaffAppointment; passwordSetup?: 'emailed' | 'none'; emailSent?: boolean }> {
   return apiFetch('/api/appointments/walk-in', { method: 'POST', body: input });
 }
 
@@ -834,8 +836,12 @@ export function createStaffAccount(input: {
   password: string;
   role?: 'staff' | 'admin';
   permissions?: string[];
-}): Promise<{ account: StaffAccount }> {
-  return apiFetch('/api/staff-accounts', { method: 'POST', body: input });
+}, pin?: string): Promise<{ account: StaffAccount }> {
+  return apiFetch('/api/staff-accounts', {
+    method: 'POST',
+    body: input,
+    ...(pin ? { headers: pinHeader(pin) } : {}),
+  });
 }
 
 export function updateStaffAccount(
@@ -847,8 +853,13 @@ export function updateStaffAccount(
     permissions: string[];
     password: string;
   }>,
+  pin?: string,
 ): Promise<{ account: StaffAccount }> {
-  return apiFetch(`/api/staff-accounts/${id}`, { method: 'PATCH', body: input });
+  return apiFetch(`/api/staff-accounts/${id}`, {
+    method: 'PATCH',
+    body: input,
+    ...(pin ? { headers: pinHeader(pin) } : {}),
+  });
 }
 
 /** The signed-in staff/admin account, as returned by the self-service endpoints. */

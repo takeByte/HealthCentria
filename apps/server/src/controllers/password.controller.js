@@ -194,6 +194,11 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
   user.passwordHash = await hashPassword(password);
   user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+  // Entering the emailed code proves the patient owns this inbox.
+  if (user.emailVerified === false) {
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date();
+  }
   await user.save();
 
   record.consumedAt = new Date();

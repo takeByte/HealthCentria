@@ -20,6 +20,7 @@ import {
   selectClass,
 } from '../../components/app-ui';
 import { RecordMeta } from '../../components/record-meta';
+import { PinCancelled, useSuperPin } from '../../components/super-pin';
 import { getSession, isValidPassword, PASSWORD_ERROR_MESSAGE } from '../../lib/auth';
 import {
   DEFAULT_STAFF_PERMISSIONS,
@@ -121,6 +122,7 @@ function StaffAccounts() {
   const today = getTodayService();
   const [list, setList] = useState<StaffAccount[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { withPin, dialog: pinDialog } = useSuperPin();
   const [search, setSearch] = useState('');
   const { view: viewParam } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -174,13 +176,18 @@ function StaffAccounts() {
     setCPasswordError(null);
     setCBusy(true);
     try {
-      await createStaffAccount({
-        fullName: cName.trim(),
-        email: cEmail.trim().toLowerCase(),
-        password: cPassword,
-        role: cRole,
-        permissions: cRole === 'admin' ? PERMISSION_KEYS : cPermissions,
-      });
+      await withPin(`Create the ${cRole} account ${cEmail.trim().toLowerCase()}.`, (pin) =>
+        createStaffAccount(
+          {
+            fullName: cName.trim(),
+            email: cEmail.trim().toLowerCase(),
+            password: cPassword,
+            role: cRole,
+            permissions: cRole === 'admin' ? PERMISSION_KEYS : cPermissions,
+          },
+          pin,
+        ),
+      );
       setCName('');
       setCEmail('');
       setCPassword('');
@@ -189,6 +196,7 @@ function StaffAccounts() {
       setShowCreate(false);
       await reload();
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setCError(err instanceof ApiError ? err.message : 'Could not create account.');
     } finally {
       setCBusy(false);
@@ -215,15 +223,33 @@ function StaffAccounts() {
     setEPasswordError(null);
     setEBusy(true);
     try {
-      await updateStaffAccount(id, {
+      const current = list?.find((x) => x.id === id);
+      const nextPermissions = eRole === 'admin' ? PERMISSION_KEYS : ePermissions;
+      // Renaming alone is free; password, role and permission changes need the
+      // superadmin PIN (the server decides the same way).
+      const sensitive =
+        Boolean(ePassword) ||
+        !current ||
+        eRole !== current.role ||
+        nextPermissions.length !== current.permissions.length ||
+        nextPermissions.some((k) => !current.permissions.includes(k));
+      const payload = {
         fullName: eName.trim(),
         role: eRole,
-        permissions: eRole === 'admin' ? PERMISSION_KEYS : ePermissions,
+        permissions: nextPermissions,
         ...(ePassword ? { password: ePassword } : {}),
-      });
+      };
+      if (sensitive) {
+        await withPin(`Change the account of ${current?.name ?? 'this user'} (password, role or permissions).`, (pin) =>
+          updateStaffAccount(id, payload, pin),
+        );
+      } else {
+        await updateStaffAccount(id, payload);
+      }
       setEditingId(null);
       await reload();
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setEError(err instanceof ApiError ? err.message : 'Could not update account.');
     } finally {
       setEBusy(false);
@@ -233,9 +259,12 @@ function StaffAccounts() {
   async function toggleActive(a: StaffAccount) {
     setEError(null);
     try {
-      await updateStaffAccount(a.id, { active: !a.active });
+      await withPin(`${a.active ? 'Deactivate' : 'Activate'} the account of ${a.name}.`, (pin) =>
+        updateStaffAccount(a.id, { active: !a.active }, pin),
+      );
       await reload();
     } catch (err) {
+      if (err instanceof PinCancelled) return;
       setEError(err instanceof ApiError ? err.message : 'Could not update account.');
     }
   }
@@ -556,6 +585,7 @@ function StaffAccounts() {
           </article>
         ))}
       </motion.div>
+      {pinDialog}
     </DashboardShell>
   );
 }

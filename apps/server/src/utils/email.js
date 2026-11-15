@@ -40,6 +40,8 @@ function errorMessage(err) {
  * a request on email errors (a reset code is still valid in the database).
  */
 export async function sendEmail(to, subject, text) {
+  // Walk-in patients without an email get a ".invalid" placeholder address.
+  if (typeof to === 'string' && /@[^@]+\.invalid$/i.test(to)) return { skipped: true };
   const config = await resolveEmailConfig();
 
   if (isSmtpConfigured(config)) {

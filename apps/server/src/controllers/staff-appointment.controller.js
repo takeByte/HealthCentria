@@ -13,7 +13,8 @@ import {
 } from '../services/google-calendar.js';
 import { User } from '../models/user.model.js';
 import { hashPassword, isValidPassword } from '../utils/password.js';
-import { isValidServiceDay, todayYMD } from '../utils/service-schedule.js';
+import { sendEmail } from '../utils/email.js';
+import { env } from '../config/env.js';
 import { notifyPatientEmail, notifyUser } from '../utils/notifications.js';
 
 const listQuery = z.object({
@@ -367,6 +368,11 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
   res.json({ success: true, appointment: present(appt) });
 });
 
+// Emergency walk-ins: only the name is needed to start care. Everything else
+// is optional and can be completed later, but is still validated when given.
+const blankToUndefined = (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
+const optional = (schema) => z.preprocess(blankToUndefined, schema.optional());
+
 const phoneSchema = z
   .string()
   .trim()
@@ -375,28 +381,30 @@ const phoneSchema = z
 
 const newPatientSchema = z.object({
   fullName: z.string().trim().min(1, 'Full name is required.'),
-  email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
-  birthdate: z
-    .string()
-    .min(1, 'Birthdate is required.')
-    .refine((v) => !Number.isNaN(new Date(`${v}T00:00:00`).getTime()), 'Enter a valid date.')
-    .refine((v) => new Date(`${v}T00:00:00`).getTime() <= Date.now(), 'Birthdate cannot be in the future.'),
-  sex: z.enum(['Female', 'Male', 'Other', 'Prefer not to say']),
-  address: z.string().trim().min(1, 'Address is required.'),
-  householdNumber: z.string().trim().min(1, 'Household number is required.'),
-  contactNumber: phoneSchema,
-  philHealthNumber: z.string().trim().optional().default(''),
-  emergencyName: z.string().trim().min(1, 'Emergency contact name is required.'),
-  emergencyNumber: phoneSchema,
+  email: optional(z.string().trim().toLowerCase().email('Enter a valid email address.')),
+  birthdate: optional(
+    z
+      .string()
+      .refine((v) => !Number.isNaN(new Date(v + 'T00:00:00').getTime()), 'Enter a valid date.')
+      .refine((v) => new Date(v + 'T00:00:00').getTime() <= Date.now(), 'Birthdate cannot be in the future.'),
+  ),
+  sex: optional(z.enum(['Female', 'Male', 'Other', 'Prefer not to say'])),
+  address: optional(z.string().trim()),
+  householdNumber: optional(z.string().trim()),
+  contactNumber: optional(phoneSchema),
+  philHealthNumber: optional(z.string().trim()),
+  emergencyName: optional(z.string().trim()),
+  emergencyNumber: optional(phoneSchema),
 });
 
 const walkInSchema = z.object({
   serviceId: z.string().min(1, 'Service is required.'),
-  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Pick a valid date.'),
   timePreference: z.enum(['morning', 'afternoon', 'any']).optional().default('any'),
   notes: z.string().trim().max(500, 'Notes must be 500 characters or fewer.').optional().default(''),
   patientEmail: z.string().trim().toLowerCase().email().optional(),
   newPatient: newPatientSchema.optional(),
+  // Staff confirmed a "same name already exists" warning and want a new record anyway.
+  allowDuplicate: z.boolean().optional().default(false),
 }).refine((v) => v.patientEmail || v.newPatient, {
   message: 'Provide an existing patient email or new patient details.',
   path: ['patientEmail'],
@@ -427,70 +435,131 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const parsed = walkInSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+    // Name the first problem so the desk knows which field to fix (nested
+    // newPatient fields would otherwise collapse into a bare "Validation failed.").
+    const FIELD_LABELS = {
+      fullName: 'Full name',
+      email: 'Email',
+      birthdate: 'Birthdate',
+      sex: 'Sex',
+      address: 'Address',
+      householdNumber: 'Household number',
+      contactNumber: 'Contact number',
+      philHealthNumber: 'PhilHealth',
+      emergencyName: 'Emergency contact name',
+      emergencyNumber: 'Emergency contact number',
+      serviceId: 'Service',
+      patientEmail: 'Patient email',
+      notes: 'Notes',
+    };
+    const issue = parsed.error.issues[0];
+    const field = issue?.path?.[issue.path.length - 1];
+    const label = FIELD_LABELS[field];
+    return res.status(400).json({
+      success: false,
+      message: issue ? `${label ? `${label}: ` : ''}${issue.message}` : 'Validation failed.',
+      errors: parsed.error.flatten().fieldErrors,
+    });
   }
-  const { serviceId, day, timePreference, notes, patientEmail, newPatient } = parsed.data;
+  const { serviceId, timePreference, notes, patientEmail, newPatient, allowDuplicate } = parsed.data;
 
-  // Walk-ins are same-day only for v1.
-  const today = todayYMD();
-  if (day !== today) {
-    return res.status(400).json({ success: false, message: 'Walk-ins can only be booked for today.' });
-  }
+  // Emergency walk-in: always recorded for the clinic's current date
+  // (Philippine time, UTC+8), whatever date the client sent. There is no
+  // service-day restriction — an emergency can't wait for the service's schedule.
+  const day = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 
   const service = await Service.findById(serviceId).lean();
   if (!service || !service.active) {
     return res.status(404).json({ success: false, message: 'Service not found.' });
   }
-  if (!isValidServiceDay(service, day)) {
-    return res.status(400).json({
-      success: false,
-      message: `This service is not offered on ${day}.`,
-    });
-  }
 
   let patient = null;
-  let tempPassword = null;
+  let passwordSetup = 'none';
+  let emailSent = false;
   if (newPatient) {
-    const existing = await User.findOne({ email: newPatient.email }).lean();
-    if (existing) {
-      return res.status(409).json({ success: false, message: 'Email is already registered. Use existing patient instead.' });
+    const publicOf = (u) => ({ id: String(u._id), name: u.fullName, email: u.email });
+    if (newPatient.email) {
+      const existing = await User.findOne({ email: newPatient.email }).lean();
+      if (existing) {
+        return res.status(409).json({
+          success: false,
+          code: 'PATIENT_EXISTS',
+          message: 'This email is already registered. Use the existing patient instead.',
+          candidates: existing.role === 'patient' ? [publicOf(existing)] : [],
+        });
+      }
     }
+    if (!allowDuplicate) {
+      const escaped = newPatient.fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const sameName = await User.find({
+        role: 'patient',
+        fullName: { $regex: '^' + escaped + '$', $options: 'i' },
+      })
+        .limit(3)
+        .lean();
+      if (sameName.length) {
+        return res.status(409).json({
+          success: false,
+          code: 'POSSIBLE_DUPLICATE',
+          message: 'A patient with this name already exists. Use the existing record to keep their history together.',
+          candidates: sameName.map(publicOf),
+        });
+      }
+    }
+
+    // Nobody ever sees this password. It only satisfies the account record; the
+    // patient sets a real one through "Forgot password" with an emailed code.
+    let throwaway;
     do {
-      tempPassword = randomBytes(6).toString('hex');
-    } while (!isValidPassword(tempPassword));
+      throwaway = randomBytes(12).toString('hex');
+    } while (!isValidPassword(throwaway));
+    // No email: the account still needs a unique address, so it gets a
+    // placeholder that can never receive mail (and never logs in).
+    const email = newPatient.email ?? 'walkin-' + randomBytes(6).toString('hex') + '@no-email.invalid';
     patient = await User.create({
-      email: newPatient.email,
-      passwordHash: await hashPassword(tempPassword),
+      email,
+      passwordHash: await hashPassword(throwaway),
       role: 'patient',
       fullName: newPatient.fullName,
-      birthdate: new Date(`${newPatient.birthdate}T00:00:00`),
-      sex: newPatient.sex,
-      address: newPatient.address,
-      householdNumber: newPatient.householdNumber,
-      contactNumber: newPatient.contactNumber,
-      philHealthNumber: newPatient.philHealthNumber ?? '',
-      emergencyName: newPatient.emergencyName,
-      emergencyNumber: newPatient.emergencyNumber,
+      profileComplete: false,
+      emailVerified: false,
+      ...(newPatient.birthdate ? { birthdate: new Date(newPatient.birthdate + 'T00:00:00') } : {}),
+      ...(newPatient.sex ? { sex: newPatient.sex } : {}),
+      ...(newPatient.address ? { address: newPatient.address } : {}),
+      ...(newPatient.householdNumber ? { householdNumber: newPatient.householdNumber } : {}),
+      ...(newPatient.contactNumber ? { contactNumber: newPatient.contactNumber } : {}),
+      ...(newPatient.philHealthNumber ? { philHealthNumber: newPatient.philHealthNumber } : {}),
+      ...(newPatient.emergencyName ? { emergencyName: newPatient.emergencyName } : {}),
+      ...(newPatient.emergencyNumber ? { emergencyNumber: newPatient.emergencyNumber } : {}),
     });
+    if (newPatient.email) {
+      passwordSetup = 'emailed';
+      const base = String(env.CLIENT_URL).replace(/\/+$/, '');
+      const result = await sendEmail(
+        newPatient.email,
+        'Set up your HealthCentria account',
+        [
+          'Hello ' + newPatient.fullName + ',',
+          '',
+          'The Barangay Health Center registered you at the front desk and created a HealthCentria account for you.',
+          'To use it, set your own password:',
+          '',
+          '1. Open ' + base + '/forgot-password',
+          '2. Enter this email address and request a code',
+          '3. Enter the 6-digit code we email you and choose your password',
+          '',
+          "If you didn't visit the health center, you can ignore this email.",
+          '',
+          '— HealthCentria Barangay Health Center',
+        ].join('\n'),
+      ).catch(() => null);
+      emailSent = Boolean(result?.sent);
+    }
   } else {
     patient = await User.findOne({ email: patientEmail, role: 'patient' });
     if (!patient) {
       return res.status(404).json({ success: false, message: 'No patient found with this email.' });
     }
-  }
-
-  const clash = await Appointment.findOne({
-    patient: patient._id,
-    service: service._id,
-    day,
-    status: { $in: ['pending', 'confirmed'] },
-  }).lean();
-  if (clash) {
-    return res
-      .status(409)
-      .json({ success: false, message: 'This patient already has a request for this service today.' });
   }
 
   const appt = await Appointment.create({
@@ -516,7 +585,9 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
       ['day', '', day],
       ['timePreference', '', timePreference],
     ],
-    detail: newPatient ? 'Walk-in booked for a newly created patient.' : 'Walk-in booked for an existing patient.',
+    detail: newPatient
+      ? 'Emergency walk-in booked for a newly created patient (profile to be completed).'
+      : 'Emergency walk-in booked for an existing patient.',
   });
   if (newPatient) {
     await logActivity({
@@ -533,7 +604,7 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     appointment: present(appt),
-    ...(tempPassword ? { tempPassword } : {}),
+    ...(newPatient ? { passwordSetup, emailSent } : {}),
   });
 });
 
