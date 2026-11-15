@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -20,11 +21,17 @@ function StaffNotifications() {
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['notifications'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     listNotifications()
       .then((r) => {
-        if (!cancelled) setItems(r.notifications);
+        if (!cancelled) {
+          setItems(r.notifications);
+          setError(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load notifications.');
@@ -32,7 +39,7 @@ function StaffNotifications() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   return (
     <DashboardShell

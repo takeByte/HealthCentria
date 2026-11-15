@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -80,6 +81,9 @@ function StaffDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [announcementsError, setAnnouncementsError] = useState(false);
 
+  const [apptTick, setApptTick] = useState(0);
+  useLiveRefresh(['appointments'], () => setApptTick((t) => t + 1));
+
   useEffect(() => {
     if (!canAppointments) {
       setCounts({ today: 0, pending: 0 });
@@ -102,7 +106,10 @@ function StaffDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [canAppointments]);
+  }, [canAppointments, apptTick]);
+
+  const [annTick, setAnnTick] = useState(0);
+  useLiveRefresh(['announcements'], () => setAnnTick((t) => t + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -116,7 +123,7 @@ function StaffDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [annTick]);
 
   const rise = reduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 } }

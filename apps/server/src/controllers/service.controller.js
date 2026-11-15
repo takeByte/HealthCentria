@@ -1,3 +1,4 @@
+import { live } from '../realtime.js';
 import { versionMatches } from '../utils/concurrency.js';
 import { z } from 'zod';
 import mongoose from 'mongoose';
@@ -84,6 +85,7 @@ export const createService = asyncHandler(async (req, res) => {
       ],
       detail: 'Service added to the catalog.',
     });
+    live.services(service._id, req);
     res.status(201).json({ success: true, service: present(service.toObject()) });
   } catch (err) {
     if (err?.code === 11000) {
@@ -123,6 +125,7 @@ export const updateService = asyncHandler(async (req, res) => {
     detail: `Service updated: ${Object.keys(parsed.data).join(', ')}.`,
   });
 
+  live.services(service._id, req);
   res.json({ success: true, service: present(service.toObject()) });
 });
 

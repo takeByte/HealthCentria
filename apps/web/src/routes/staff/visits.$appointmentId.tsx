@@ -1,3 +1,5 @@
+import { LiveBanner } from '../../components/live-banner';
+import { useLiveStale } from '../../lib/realtime';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -84,6 +86,8 @@ function VisitPage() {
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Someone else changed this patient or visit: say so, but never replace what is being typed.
+  const liveStale = useLiveStale(['patients', 'appointments'], ctx?.patient.id);
   const [diagnosis, setDiagnosis] = useState('');
   const [prescription, setPrescription] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
@@ -176,6 +180,13 @@ function VisitPage() {
             </button>
           </div>
         )}
+        <LiveBanner
+          stale={liveStale.stale}
+          onReload={() => {
+            liveStale.clear();
+            setReloadKey((k) => k + 1);
+          }}
+        />
         {!ctx && !error && <EmptyNote>Loading visit…</EmptyNote>}
 
         {ctx && appt && patient && (

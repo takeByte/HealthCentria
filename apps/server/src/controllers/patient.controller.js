@@ -1,3 +1,4 @@
+import { live } from '../realtime.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -370,6 +371,7 @@ export const updatePatientRecord = asyncHandler(async (req, res) => {
     patient: patient._id,
   });
 
+  live.patient(patient._id, req);
   res.json({ success: true, patient: presentProfile(patient) });
 });
 
@@ -424,6 +426,7 @@ export const updatePatientMedical = asyncHandler(async (req, res) => {
     });
   }
 
+  live.patient(patient._id, req);
   res.json({ success: true, patient: presentProfile(patient) });
 });
 
@@ -543,6 +546,7 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
     patient: user._id,
   });
 
+  live.patient(user._id, req);
   res.json({ success: true, user: presentUser(user) });
 });
 
@@ -653,5 +657,7 @@ export const deletePatient = asyncHandler(async (req, res) => {
   // Committed. Now remove the calendar events (best effort, as before).
   await Promise.all(linked.map((l) => removeAppointmentFromCalendar(l.appointment).catch(() => null)));
 
+  live.patient(patient._id, req);
+  live.appointment({ patient: patient._id }, req);
   res.json({ success: true, cancelled: upcoming.length, keptVisits: kept });
 });

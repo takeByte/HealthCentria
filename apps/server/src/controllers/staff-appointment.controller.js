@@ -1,3 +1,4 @@
+import { live } from '../realtime.js';
 import { z } from 'zod';
 import mongoose from 'mongoose';
 import { randomBytes } from 'node:crypto';
@@ -181,6 +182,7 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
   ).catch(() => {});
   // Additive side effect: never blocks the response and never throws.
   void syncAppointmentToCalendar(appt).catch(() => {});
+  live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -238,6 +240,7 @@ export const declineAppointment = asyncHandler(async (req, res) => {
   ).catch(() => {});
   // Pending requests normally have no event; this also clears a stale one.
   void removeAppointmentFromCalendar(appt).catch(() => {});
+  live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -319,6 +322,7 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   }
   // Keep the calendar title/description in step with the completed status.
   void syncAppointmentToCalendar(appt).catch(() => {});
+  live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -386,6 +390,7 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
   // Keep the mirrored calendar entry's description in step.
   void syncAppointmentToCalendar(appt).catch(() => {});
 
+  live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt) });
 });
 
@@ -645,6 +650,7 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
   // Walk-ins are already confirmed, so mirror them immediately.
   void syncAppointmentToCalendar(appt).catch(() => {});
 
+  live.appointment(appt, req);
   res.status(201).json({
     success: true,
     appointment: present(appt),

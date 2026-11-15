@@ -1,4 +1,5 @@
 import { getSession } from './auth';
+import { currentSocketId } from './realtime';
 
 export interface HealthResponse {
   success: boolean;
@@ -147,6 +148,8 @@ async function apiFetch<T>(
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Lets the server skip echoing this change back to this very tab.
+        ...(currentSocketId() ? { 'X-Socket-Id': currentSocketId() } : {}),
         ...options.headers,
       },
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),

@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -57,6 +58,9 @@ function AdminDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [announcementsError, setAnnouncementsError] = useState(false);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['appointments', 'patients', 'announcements'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     overview()
@@ -64,7 +68,7 @@ function AdminDashboard() {
         if (!cancelled) setCounts(r);
       })
       .catch(() => {
-        if (!cancelled) setCounts(null);
+        if (!cancelled) setCounts((c) => c);
       });
     listAnnouncements()
       .then((r) => {
@@ -76,7 +80,7 @@ function AdminDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   const v = (n: number | undefined) => (counts === null ? '—' : String(n ?? 0));
 

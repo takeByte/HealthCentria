@@ -1,3 +1,4 @@
+import { live } from '../realtime.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -116,6 +117,7 @@ export const bookAppointment = asyncHandler(async (req, res) => {
     keyPrefix: `new-request:${appt._id}`,
   }).catch(() => {});
 
+  live.appointment(appt, req);
   res.status(201).json({ success: true, appointment: present(appt.toObject()) });
 });
 
@@ -183,5 +185,6 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   // Remove the mirrored event if one exists. Appointment cancellation succeeds
   // even if Google is unreachable.
   void removeAppointmentFromCalendar(appt).catch(() => {});
+  live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt.toObject()) });
 });

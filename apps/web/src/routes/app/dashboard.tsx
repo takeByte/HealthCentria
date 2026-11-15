@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -169,6 +170,9 @@ function PatientDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
   const [announcementsError, setAnnouncementsError] = useState(false);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['appointments', 'announcements'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     myAppointments()
@@ -176,7 +180,7 @@ function PatientDashboard() {
         if (!cancelled) setAppointments(r.appointments);
       })
       .catch(() => {
-        if (!cancelled) setAppointments([]);
+        if (!cancelled) setAppointments((a) => a ?? []);
       });
     listAnnouncements()
       .then((r) => {
@@ -188,7 +192,7 @@ function PatientDashboard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   const today = todayYMD();
   const live = (appointments ?? []).filter((a) => a.status === 'pending' || a.status === 'confirmed');

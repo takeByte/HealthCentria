@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -114,11 +115,17 @@ function PatientServices() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'cards' | 'week'>('cards');
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['services'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     listServices()
       .then((r) => {
-        if (!cancelled) setServices(r.services);
+        if (!cancelled) {
+          setServices(r.services);
+          setError(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load services.');
@@ -126,7 +133,7 @@ function PatientServices() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   const filtered = useMemo(() => {
     if (!services) return null;

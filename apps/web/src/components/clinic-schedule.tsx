@@ -1,5 +1,6 @@
+import { useLiveRefresh } from '../lib/realtime';
 import { Link } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { CardHeading, EmptyNote, InlineNotice, StatusChip, chipButton, panel } from './app-ui';
 import { getCalendarLink, queueAppointments, type StaffAppointment } from '../lib/api';
@@ -62,6 +63,7 @@ export function ClinicSchedule({ className }: { className?: string }) {
   const [appointments, setAppointments] = useState<StaffAppointment[] | null>(null);
   const [error, setError] = useState(false);
   const [googleUrl, setGoogleUrl] = useState('');
+  const loadedMonth = useRef('');
 
   useEffect(() => {
     let cancelled = false;
@@ -75,9 +77,14 @@ export function ClinicSchedule({ className }: { className?: string }) {
     };
   }, []);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['appointments'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
-    setAppointments(null);
+    const monthKey = toYMD(month);
+    if (loadedMonth.current !== monthKey) setAppointments(null);
+    loadedMonth.current = monthKey;
     setError(false);
     const from = toYMD(month);
     const to = toYMD(new Date(month.getFullYear(), month.getMonth() + 1, 0));
@@ -91,7 +98,7 @@ export function ClinicSchedule({ className }: { className?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [month]);
+  }, [month, liveTick]);
 
   const byDay = useMemo(() => {
     const map = new Map<string, StaffAppointment[]>();

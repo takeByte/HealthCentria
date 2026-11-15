@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -180,6 +181,8 @@ function ServicesManage() {
   const [eDesc, setEDesc] = useState('');
   const [eSched, setESched] = useState<ServiceSchedule>(emptySchedule);
   const [eActive, setEActive] = useState(true);
+  // Version the editor started from. A live list refresh must not change it, or conflicts go unnoticed.
+  const [eVersion, setEVersion] = useState(0);
   const [eBusy, setEBusy] = useState(false);
   const [eError, setEError] = useState<string | null>(null);
 
@@ -195,6 +198,7 @@ function ServicesManage() {
   useEffect(() => {
     reload();
   }, []);
+  useLiveRefresh(['services'], () => void reload());
 
   function startEdit(s: Service) {
     setEditingId(s.id);
@@ -202,6 +206,7 @@ function ServicesManage() {
     setEDesc(s.description);
     setESched(s.schedule);
     setEActive(s.active);
+    setEVersion(s.version);
     setEError(null);
   }
 
@@ -231,7 +236,7 @@ function ServicesManage() {
       await updateService(
         id,
         { name: eName.trim(), description: eDesc.trim(), schedule: eSched, active: eActive },
-        (list ?? []).find((x) => x.id === id)?.version ?? 0,
+        eVersion,
       );
       setEditingId(null);
       await reload();

@@ -1,3 +1,4 @@
+import { live } from '../realtime.js';
 import { isNotificationEmailEnabled } from '../models/app-settings.model.js';
 import { Notification } from '../models/notification.model.js';
 import { User } from '../models/user.model.js';
@@ -9,7 +10,9 @@ export async function notifyUser(userId, { type, title, body = '', link = '', ke
     const existing = await Notification.findOne({ recipient: userId, key }).lean();
     if (existing) return existing;
   }
-  return Notification.create({ recipient: userId, type, title, body, link, key });
+  const created = await Notification.create({ recipient: userId, type, title, body, link, key });
+  live.notifications([userId]);
+  return created;
 }
 
 /** Notify every active user in the given roles (e.g. staff/admin for new requests). */
@@ -24,7 +27,10 @@ export async function notifyRoles(roles, { type, title, body = '', link = '', ke
     }
     docs.push({ recipient: u._id, type, title, body, link, key });
   }
-  if (docs.length > 0) await Notification.insertMany(docs);
+  if (docs.length > 0) {
+    await Notification.insertMany(docs);
+    live.notifications(docs.map((d) => d.recipient));
+  }
   return docs.length;
 }
 

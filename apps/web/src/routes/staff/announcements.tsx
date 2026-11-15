@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -47,6 +48,8 @@ const CATEGORIES = Object.keys(CATEGORY_LABELS) as AnnouncementCategory[];
 
 interface ComposerState {
   id?: string;
+  /** Version the editor started from. A list refresh must not change it, or conflicts go unnoticed. */
+  version?: number;
   title: string;
   body: string;
   category: AnnouncementCategory;
@@ -70,11 +73,17 @@ function StaffAnnouncements() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | AnnouncementCategory>('all');
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['announcements'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     listAnnouncements()
       .then((r) => {
-        if (!cancelled) setItems(r.announcements);
+        if (!cancelled) {
+          setItems(r.announcements);
+          setError(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load announcements.');
@@ -82,7 +91,7 @@ function StaffAnnouncements() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   const filtered = useMemo(() => {
     if (!items) return null;
@@ -113,7 +122,7 @@ function StaffAnnouncements() {
             pinned: composer.pinned,
             images: composer.images,
           },
-          (items ?? []).find((x) => x.id === composer.id)?.version ?? 0,
+          composer.version ?? 0,
         );
         setItems((l) => (l ?? []).map((x) => (x.id === r.announcement.id ? r.announcement : x)));
       } else {
@@ -241,6 +250,7 @@ function StaffAnnouncements() {
                     setFormError(null);
                     setComposer({
                       id: a.id,
+                      version: a.version,
                       title: a.title,
                       body: a.body,
                       category: a.category,

@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -82,6 +83,9 @@ function PatientsList() {
     }
   });
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['patients'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -92,7 +96,7 @@ function PatientsList() {
         })
         .catch((err: unknown) => {
           if (!cancelled) {
-            setList([]);
+            setList((l) => l ?? []);
             setError(err instanceof Error ? err.message : 'Could not load patients.');
           }
         });
@@ -101,7 +105,7 @@ function PatientsList() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [search]);
+  }, [search, liveTick]);
 
   const summary = useMemo(() => {
     const all = list ?? [];

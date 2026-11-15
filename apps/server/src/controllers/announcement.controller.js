@@ -1,3 +1,4 @@
+import { live } from '../realtime.js';
 import { versionMatches } from '../utils/concurrency.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
@@ -133,6 +134,7 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
   }).catch(() => {});
   emailPatients(item.toObject()).catch(() => {});
   await item.populate(POPULATE);
+  live.announcements(item._id, req);
   res.status(201).json({ success: true, announcement: present(item.toObject()) });
 });
 
@@ -168,6 +170,7 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
   });
 
   await item.populate(POPULATE);
+  live.announcements(item._id, req);
   res.json({ success: true, announcement: present(item.toObject()) });
 });
 
@@ -181,5 +184,6 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
     target: { type: 'announcement', id: item._id, label: item.title },
     detail: 'Announcement removed from the feed.',
   });
+  live.announcements(item._id, req);
   res.json({ success: true });
 });

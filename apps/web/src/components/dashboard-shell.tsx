@@ -1,3 +1,4 @@
+import { disconnectLive, useLiveRefresh } from '../lib/realtime';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type ComponentType } from 'react';
@@ -251,6 +252,9 @@ export function DashboardShell({
   const profileTo = nav.find((item) => item.label === 'My Profile')?.to;
   const avatarUrl = session?.avatarUrl ?? '';
 
+  const [bellTick, setBellTick] = useState(0);
+  useLiveRefresh(['notifications'], () => setBellTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     listNotifications()
@@ -264,7 +268,7 @@ export function DashboardShell({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [bellTick]);
 
   async function openBell() {
     setBellOpen(true);
@@ -278,6 +282,7 @@ export function DashboardShell({
   }
 
   async function logout() {
+    disconnectLive();
     // Record the sign-out first; a failed call must never keep the user signed in.
     try {
       await logoutRequest();

@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -303,6 +304,9 @@ function StaffQueue() {
     listServices().then((r) => setServices(r.services)).catch(() => {});
   }, []);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['appointments'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -323,14 +327,14 @@ function StaffQueue() {
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setList([]);
+          setList((l) => l ?? []);
           setError(err instanceof Error ? err.message : 'Could not load the queue.');
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [status, preset, serviceId]);
+  }, [status, preset, serviceId, liveTick]);
 
   const pending = useMemo(() => (list ?? []).filter((a) => a.status === 'pending'), [list]);
   const summary = useMemo(() => {

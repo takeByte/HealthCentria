@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -20,11 +21,17 @@ function PatientAnnouncements() {
   const [items, setItems] = useState<Announcement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['announcements'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     listAnnouncements()
       .then((r) => {
-        if (!cancelled) setItems(r.announcements);
+        if (!cancelled) {
+          setItems(r.announcements);
+          setError(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load announcements.');
@@ -32,7 +39,7 @@ function PatientAnnouncements() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   return (
     <DashboardShell

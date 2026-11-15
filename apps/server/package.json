@@ -15,6 +15,7 @@
     "reminders": "node src/scripts/send-reminders.js",
     "sync:calendar": "node src/scripts/sync-google-calendar.js",
     "demo:concurrency": "node src/scripts/concurrency-demo.mjs",
+    "demo:realtime": "node src/scripts/realtime-demo.mjs",
     "typecheck": "node --check src/index.js",
     "lint": "node --check src/index.js"
   },
@@ -31,7 +32,11 @@
     "pdfkit": "^0.20.2",
     "pdfmake": "^0.2.20",
     "resend": "^6.30.0",
+    "socket.io": "^4.8.4",
     "uploadthing": "^7.7.4",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.4"
   }
 }

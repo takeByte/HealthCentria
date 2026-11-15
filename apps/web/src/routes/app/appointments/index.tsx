@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../../lib/realtime';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -161,11 +162,17 @@ function MyAppointments() {
   const [list, setList] = useState<Appointment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [liveTick, setLiveTick] = useState(0);
+  useLiveRefresh(['appointments'], () => setLiveTick((t) => t + 1));
+
   useEffect(() => {
     let cancelled = false;
     myAppointments()
       .then((r) => {
-        if (!cancelled) setList(r.appointments);
+        if (!cancelled) {
+          setList(r.appointments);
+          setError(null);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load appointments.');
@@ -173,7 +180,7 @@ function MyAppointments() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [liveTick]);
 
   const visible = useMemo(() => {
     if (!list) return null;

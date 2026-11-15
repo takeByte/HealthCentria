@@ -1,3 +1,5 @@
+import { LiveBanner } from '../../components/live-banner';
+import { useLiveStale } from '../../lib/realtime';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -170,6 +172,8 @@ function PatientDetailPage() {
   const [visits, setVisits] = useState<PatientVisit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Someone else changed this patient: say so, but never replace what is being typed.
+  const liveStale = useLiveStale(['patients', 'appointments'], patientId);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<RecordForm>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<RecordErrors>({});
@@ -379,6 +383,14 @@ function PatientDetailPage() {
             <ArrowLeft size={15} aria-hidden /> Back to patients
           </Link>
         </motion.div>
+
+        <LiveBanner
+          stale={liveStale.stale}
+          onReload={() => {
+            liveStale.clear();
+            setReloadKey((key) => key + 1);
+          }}
+        />
 
         {error && (
           <div className="space-y-2">
