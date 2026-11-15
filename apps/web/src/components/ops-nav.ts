@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Megaphone,
   Settings,
+  Sparkles,
   UserCog,
   UserRound,
   Users,
@@ -17,7 +18,7 @@ import type { ShellNavItem } from './dashboard-shell';
 
 // Single source of truth for the ops sidebar. Staff and admin share every
 // screen — the only difference is the dashboard home and (for admins) the
-// Staff Accounts entry. Pages pick via opsNav(session?.role, session?.permissions)
+// User Management entry. Pages pick via opsNav(session?.role, session?.permissions)
 // so the sidebar never flips roles when an admin opens a shared tab.
 export const staffNav: ShellNavItem[] = [
   { label: 'Dashboard', to: '/staff/dashboard', icon: LayoutDashboard, group: 'Overview' },
@@ -27,6 +28,7 @@ export const staffNav: ShellNavItem[] = [
   { label: 'Services', to: '/staff/services', icon: CalendarDays, group: 'Clinic' },
   { label: 'Announcements', to: '/staff/announcements', icon: Megaphone, group: 'Communication' },
   { label: 'Notifications', to: '/staff/notifications', icon: Bell, group: 'Communication' },
+  { label: 'AI Assistant', to: '/staff/assistant', icon: Sparkles, group: 'Communication' },
   { label: 'Activity', to: '/staff/activity', icon: History, group: 'Insights' },
   { label: 'Reports', to: '/staff/reports', icon: FileText, group: 'Insights' },
   { label: 'My Profile', to: '/staff/profile', icon: UserRound, group: 'Account' },
@@ -40,9 +42,10 @@ export const adminNav: ShellNavItem[] = [
   { label: 'Services', to: '/staff/services', icon: CalendarDays, group: 'Clinic' },
   { label: 'Announcements', to: '/staff/announcements', icon: Megaphone, group: 'Communication' },
   { label: 'Notifications', to: '/staff/notifications', icon: Bell, group: 'Communication' },
+  { label: 'AI Assistant', to: '/staff/assistant', icon: Sparkles, group: 'Communication' },
   { label: 'Activity log', to: '/admin/activity', icon: History, group: 'Insights' },
   { label: 'Reports', to: '/staff/reports', icon: FileText, group: 'Insights' },
-  { label: 'Staff Accounts', to: '/admin/staff-accounts', icon: UserCog, group: 'Administration' },
+  { label: 'User Management', to: '/admin/staff-accounts', icon: UserCog, group: 'Administration' },
   { label: 'Backups', to: '/admin/backups', icon: DatabaseBackup, group: 'Administration' },
   { label: 'Settings', to: '/admin/settings', icon: Settings, group: 'Administration' },
   { label: 'My Profile', to: '/staff/profile', icon: UserRound, group: 'Account' },

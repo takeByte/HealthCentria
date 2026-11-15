@@ -67,7 +67,19 @@ function clean(value) {
  * }} input
  * @returns {Promise<Buffer>}
  */
-export function buildReportPdf({ title, details, summary = [], columns, rows, totalRow, note, landscape = false }) {
+export function buildReportPdf({
+  title,
+  details,
+  summary = [],
+  columns = [],
+  rows = [],
+  totalRow,
+  note,
+  landscape = false,
+  // Several tables in one document: [{ heading, columns: string[], rows: string[][], note? }].
+  // When given, they replace the single columns/rows table.
+  sections = null,
+}) {
   const generated = footerTimestamp();
   const clinic = clean(clinicName());
   const image = logo();
@@ -91,6 +103,43 @@ export function buildReportPdf({ title, details, summary = [], columns, rows, to
       ...columns.slice(1).map(() => ({})),
     ]);
   }
+
+  const sectionLayout = {
+    fillColor: (rowIndex) => (rowIndex === 0 ? TEAL : rowIndex % 2 === 0 ? '#f1f5f9' : null),
+    hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 0 : 0.5),
+    vLineWidth: () => 0,
+    hLineColor: () => '#e2e8f0',
+    paddingTop: () => 3,
+    paddingBottom: () => 3,
+    paddingLeft: () => 4,
+    paddingRight: () => 4,
+  };
+  const sectionBlocks = (sections ?? []).flatMap((section, index) => [
+    {
+      text: clean(section.heading),
+      bold: true,
+      fontSize: 11,
+      color: TEAL,
+      margin: [0, index ? 18 : 0, 0, 5],
+    },
+    section.rows.length && section.columns.length
+      ? {
+          table: {
+            headerRows: 1,
+            dontBreakRows: true,
+            widths: section.columns.map(() => '*'),
+            body: [
+              section.columns.map((c) => ({ text: clean(c), style: 'th' })),
+              ...section.rows.map((r) => r.map((cell) => ({ text: clean(cell), fontSize: 7.5 }))),
+            ],
+          },
+          layout: sectionLayout,
+        }
+      : { text: 'No records in this table.', italics: true, color: MUTED },
+    ...(section.note
+      ? [{ text: clean(section.note), italics: true, color: MUTED, fontSize: 8, margin: [0, 4, 0, 0] }]
+      : []),
+  ]);
 
   const docDefinition = {
     info: { title: `${clinic} - ${clean(title)}`, author: 'HealthCentria', creator: 'HealthCentria' },
@@ -166,6 +215,7 @@ export function buildReportPdf({ title, details, summary = [], columns, rows, to
             },
           ]
         : []),
+      ...(sections ? sectionBlocks : [
       {
         table: {
           headerRows: 1, // repeats on every page the table continues to
@@ -184,6 +234,7 @@ export function buildReportPdf({ title, details, summary = [], columns, rows, to
           paddingRight: () => 5,
         },
       },
+      ]),
       ...(note ? [{ text: clean(note), italics: true, color: MUTED, fontSize: 8, margin: [0, 10, 0, 0] }] : []),
     ],
     styles: {

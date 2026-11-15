@@ -12,10 +12,12 @@ import { healthRouter } from './health.routes.js';
 import { serviceRouter } from './service.routes.js';
 import { settingsRouter } from './settings.routes.js';
 import { approvalRouter } from './su-approval.routes.js';
+import { assistantRouter } from './assistant.routes.js';
 
 export const apiRouter = Router();
 
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/assistant', assistantRouter);
 apiRouter.use('/activity', activityRouter);
 apiRouter.use('/announcements', announcementRouter);
 apiRouter.use('/notifications', notificationRouter);

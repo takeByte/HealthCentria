@@ -10,6 +10,7 @@ import {
   updateAppointmentRecord,
   walkInAppointment,
 } from '../controllers/staff-appointment.controller.js';
+import { getVisitContext } from '../controllers/patient.controller.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/requireAuth.js';
 import { requireCompleteProfile } from '../middleware/requireCompleteProfile.js';
 
@@ -29,6 +30,14 @@ appointmentRouter.get(
   requireRole('staff', 'admin'),
   requirePermission('appointments.manage'),
   queueAppointments,
+);
+// Context for the "complete visit" page: appointment + patient chart.
+appointmentRouter.get(
+  '/:id/visit',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('appointments.manage'),
+  getVisitContext,
 );
 // Dashboard "Open in Google Calendar" link: any staff/admin (no patient data).
 appointmentRouter.get('/calendar-link', requireAuth, requireRole('staff', 'admin'), calendarLink);

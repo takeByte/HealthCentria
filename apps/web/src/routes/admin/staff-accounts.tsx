@@ -298,7 +298,7 @@ function StaffAccounts() {
 
   return (
     <DashboardShell
-      title="Staff Accounts"
+      title="User Management"
       subtitle="Who can sign in to the center's workspace"
       roleLabel="Admin"
       userName={session?.name}

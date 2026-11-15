@@ -4,12 +4,12 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   CalendarCheck,
   Clock3,
-  Download,
   Eye,
   Printer,
   Stethoscope,
   TrendingUp,
   Users,
+  Download,
 } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
@@ -20,8 +20,7 @@ import {
   chipButton,
 } from '../../components/app-ui';
 import { Toast, type ToastMessage } from '../../components/toast';
-import { PdfExportDialog, PdfExportNote, usePdfExport } from '../../components/pdf-export';
-import { SheetsExportButton, SheetsExportNote, useSheetsExport } from '../../components/sheets-export';
+import { ExportDialog } from '../../components/export-dialog';
 import { getSession } from '../../lib/auth';
 import {
   appointmentsByStatus,
@@ -118,12 +117,10 @@ function Reports() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [csvExporting, setCsvExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const rangeDays = RANGE_DAYS[range];
-  const sheets = useSheetsExport(() => exportVisitsToSheets(rangeDays));
-  const pdf = usePdfExport((options) => exportVisitsPdf(rangeDays, options));
 
   useEffect(() => {
     let cancelled = false;
@@ -191,22 +188,6 @@ function Reports() {
     }));
   }, [patientRows]);
 
-  async function handleExportCsv() {
-    if (csvExporting) return;
-    setCsvExporting(true);
-    try {
-      await downloadVisitsCsv(rangeDays);
-      setToast({ tone: 'success', message: 'Report CSV downloaded.' });
-    } catch (err) {
-      setToast({
-        tone: 'error',
-        message: err instanceof Error ? err.message : 'Could not generate the CSV. Try again.',
-      });
-    } finally {
-      setCsvExporting(false);
-    }
-  }
-
   const rise = reduceMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
     : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
@@ -270,25 +251,25 @@ function Reports() {
           </button>
           <button
             type="button"
-            onClick={pdf.start}
+            onClick={() => setExportOpen(true)}
             disabled={visits === null}
-            title="Generate a PDF, optionally save it to Google Drive and email the link"
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-[#d9a441] px-4 py-2.5 text-[12.5px] font-semibold text-[#3b2a06] shadow-sm transition-colors hover:bg-[#c99433] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d9a441] disabled:opacity-60"
+            title="Export this report as CSV, Google Sheets or PDF"
+            className={chipButton}
           >
             <Download size={15} aria-hidden />
-            Generate Report
+            Export
           </button>
         </div>
       </div>
 
-      <SheetsExportNote result={sheets.result} error={sheets.error} />
-      <PdfExportNote result={pdf.result} error={pdf.error} />
-      {pdf.open && (
-        <PdfExportDialog
-          title="Export PDF"
-          subtitle={`Visits per service · ${period || 'selected period'}`}
-          onCancel={pdf.close}
-          onGenerate={pdf.run}
+      {exportOpen && (
+        <ExportDialog
+          title="Export report"
+          summary={`Visits per service · ${period || 'selected period'}`}
+          onClose={() => setExportOpen(false)}
+          runCsv={() => downloadVisitsCsv(rangeDays)}
+          runSheets={() => exportVisitsToSheets(rangeDays)}
+          runPdf={(options) => exportVisitsPdf(rangeDays, options)}
         />
       )}
 
@@ -444,23 +425,6 @@ function Reports() {
               completed visits total.
             </p>
           )}
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-[#eef4f8] pt-3 print-hide">
-            <button
-              type="button"
-              onClick={handleExportCsv}
-              disabled={csvExporting || visits === null}
-              className={chipButton}
-            >
-              <Download size={15} aria-hidden />
-              {csvExporting ? 'Preparing…' : 'Export CSV'}
-            </button>
-            <SheetsExportButton
-              exporting={sheets.exporting}
-              disabled={visits === null}
-              onClick={sheets.start}
-              className={chipButton}
-            />
-          </div>
         </motion.section>
       </div>
 

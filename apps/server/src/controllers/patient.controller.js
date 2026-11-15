@@ -252,6 +252,40 @@ export const getPatient = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * GET /api/appointments/:id/visit — everything the "complete visit" page needs:
+ * the appointment, the patient's profile and medical profile, and their other
+ * visits. Reachable with the appointments permission, so a staff member who can
+ * complete visits can see the patient they are treating.
+ */
+export const getVisitContext = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ success: false, message: 'Appointment not found.' });
+  }
+  const appt = await Appointment.findById(req.params.id).populate('service', 'name').lean();
+  if (!appt) return res.status(404).json({ success: false, message: 'Appointment not found.' });
+  const patient = await User.findOne({ _id: appt.patient, role: 'patient', deletedAt: null })
+    .populate('updatedBy', 'fullName')
+    .lean();
+  if (!patient) return res.status(404).json({ success: false, message: 'Patient not found.' });
+  const visits = await Appointment.find({ patient: patient._id, _id: { $ne: appt._id } })
+    .populate('service', 'name')
+    .populate('updatedBy', 'fullName')
+    .sort({ day: -1, createdAt: -1 })
+    .lean();
+  res.json({
+    success: true,
+    appointment: {
+      ...presentVisit(appt),
+      timePreference: appt.timePreference,
+      notes: appt.notes ?? '',
+    },
+    patient: presentProfile(patient),
+    visits: visits.map(presentVisit),
+  });
+});
+
 /** GET /api/patients/profile — the signed-in patient's own chart. */
 export const getMyProfile = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;

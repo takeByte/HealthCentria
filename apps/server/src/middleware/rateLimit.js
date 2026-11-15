@@ -70,3 +70,17 @@ export const passwordChangeLimiter = rateLimit({
   message: limitResponse('Too many password attempts. Try again in 15 minutes.'),
   validate: { xForwardedForHeader: false },
 });
+
+/**
+ * Caps assistant messages per signed-in account (not per IP, so a shared clinic
+ * connection is not throttled together). Each message is a paid model call.
+ */
+export const assistantLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.id ?? 'anon'),
+  message: limitResponse('You have sent a lot of messages. Please wait a few minutes and try again.'),
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});

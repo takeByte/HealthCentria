@@ -24,6 +24,7 @@ import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminStaffAccountsRouteImport } from './routes/admin/staff-accounts'
 import { Route as AppActivityRouteImport } from './routes/app/activity'
 import { Route as AppAnnouncementsRouteImport } from './routes/app/announcements'
+import { Route as AppAssistantRouteImport } from './routes/app/assistant'
 import { Route as AppDashboardRouteImport } from './routes/app/dashboard'
 import { Route as AppNotificationsRouteImport } from './routes/app/notifications'
 import { Route as AppRecordsRouteImport } from './routes/app/records'
@@ -34,6 +35,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as StaffActivityRouteImport } from './routes/staff/activity'
 import { Route as StaffAnnouncementsRouteImport } from './routes/staff/announcements'
 import { Route as StaffAppointmentsRouteImport } from './routes/staff/appointments'
+import { Route as StaffAssistantRouteImport } from './routes/staff/assistant'
 import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
 import { Route as StaffNotificationsRouteImport } from './routes/staff/notifications'
 import { Route as StaffPatientsRouteImport } from './routes/staff/patients'
@@ -47,6 +49,7 @@ import { Route as AppProfileIndexRouteImport } from './routes/app/profile/index'
 import { Route as AppProfileCompleteRouteImport } from './routes/app/profile/complete'
 import { Route as StaffPatientsIndexRouteImport } from './routes/staff/patients.index'
 import { Route as StaffPatientsPatientIdRouteImport } from './routes/staff/patients.$patientId'
+import { Route as StaffVisitsAppointmentIdRouteImport } from './routes/staff/visits.$appointmentId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -123,6 +126,11 @@ const AppAnnouncementsRoute = AppAnnouncementsRouteImport.update({
   path: '/announcements',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppAssistantRoute = AppAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -171,6 +179,11 @@ const StaffAnnouncementsRoute = StaffAnnouncementsRouteImport.update({
 const StaffAppointmentsRoute = StaffAppointmentsRouteImport.update({
   id: '/appointments',
   path: '/appointments',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
+const StaffAssistantRoute = StaffAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
   getParentRoute: () => StaffRouteRoute,
 } as any)
 const StaffDashboardRoute = StaffDashboardRouteImport.update({
@@ -238,6 +251,12 @@ const StaffPatientsPatientIdRoute = StaffPatientsPatientIdRouteImport.update({
   path: '/$patientId',
   getParentRoute: () => StaffPatientsRoute,
 } as any)
+const StaffVisitsAppointmentIdRoute =
+  StaffVisitsAppointmentIdRouteImport.update({
+    id: '/visits/$appointmentId',
+    path: '/visits/$appointmentId',
+    getParentRoute: () => StaffRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -255,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
   '/app/activity': typeof AppActivityRoute
   '/app/announcements': typeof AppAnnouncementsRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
@@ -265,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
+  '/staff/assistant': typeof StaffAssistantRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
   '/staff/patients': typeof StaffPatientsRouteWithChildren
@@ -275,6 +296,7 @@ export interface FileRoutesByFullPath {
   '/app/appointments/new': typeof AppAppointmentsNewRoute
   '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
+  '/staff/visits/$appointmentId': typeof StaffVisitsAppointmentIdRoute
   '/app/appointments/': typeof AppAppointmentsIndexRoute
   '/app/profile/': typeof AppProfileIndexRoute
   '/staff/patients/': typeof StaffPatientsIndexRoute
@@ -295,6 +317,7 @@ export interface FileRoutesByTo {
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
   '/app/activity': typeof AppActivityRoute
   '/app/announcements': typeof AppAnnouncementsRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
@@ -305,6 +328,7 @@ export interface FileRoutesByTo {
   '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
+  '/staff/assistant': typeof StaffAssistantRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
   '/staff/profile': typeof StaffProfileRoute
@@ -314,6 +338,7 @@ export interface FileRoutesByTo {
   '/app/appointments/new': typeof AppAppointmentsNewRoute
   '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
+  '/staff/visits/$appointmentId': typeof StaffVisitsAppointmentIdRoute
   '/app/appointments': typeof AppAppointmentsIndexRoute
   '/app/profile': typeof AppProfileIndexRoute
   '/staff/patients': typeof StaffPatientsIndexRoute
@@ -335,6 +360,7 @@ export interface FileRoutesById {
   '/admin/staff-accounts': typeof AdminStaffAccountsRoute
   '/app/activity': typeof AppActivityRoute
   '/app/announcements': typeof AppAnnouncementsRoute
+  '/app/assistant': typeof AppAssistantRoute
   '/app/dashboard': typeof AppDashboardRoute
   '/app/notifications': typeof AppNotificationsRoute
   '/app/records': typeof AppRecordsRoute
@@ -345,6 +371,7 @@ export interface FileRoutesById {
   '/staff/activity': typeof StaffActivityRoute
   '/staff/announcements': typeof StaffAnnouncementsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
+  '/staff/assistant': typeof StaffAssistantRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/notifications': typeof StaffNotificationsRoute
   '/staff/patients': typeof StaffPatientsRouteWithChildren
@@ -355,6 +382,7 @@ export interface FileRoutesById {
   '/app/appointments/new': typeof AppAppointmentsNewRoute
   '/app/profile/complete': typeof AppProfileCompleteRoute
   '/staff/patients/$patientId': typeof StaffPatientsPatientIdRoute
+  '/staff/visits/$appointmentId': typeof StaffVisitsAppointmentIdRoute
   '/app/appointments/': typeof AppAppointmentsIndexRoute
   '/app/profile/': typeof AppProfileIndexRoute
   '/staff/patients/': typeof StaffPatientsIndexRoute
@@ -377,6 +405,7 @@ export interface FileRouteTypes {
     | '/admin/staff-accounts'
     | '/app/activity'
     | '/app/announcements'
+    | '/app/assistant'
     | '/app/dashboard'
     | '/app/notifications'
     | '/app/records'
@@ -387,6 +416,7 @@ export interface FileRouteTypes {
     | '/staff/activity'
     | '/staff/announcements'
     | '/staff/appointments'
+    | '/staff/assistant'
     | '/staff/dashboard'
     | '/staff/notifications'
     | '/staff/patients'
@@ -397,6 +427,7 @@ export interface FileRouteTypes {
     | '/app/appointments/new'
     | '/app/profile/complete'
     | '/staff/patients/$patientId'
+    | '/staff/visits/$appointmentId'
     | '/app/appointments/'
     | '/app/profile/'
     | '/staff/patients/'
@@ -417,6 +448,7 @@ export interface FileRouteTypes {
     | '/admin/staff-accounts'
     | '/app/activity'
     | '/app/announcements'
+    | '/app/assistant'
     | '/app/dashboard'
     | '/app/notifications'
     | '/app/records'
@@ -427,6 +459,7 @@ export interface FileRouteTypes {
     | '/staff/activity'
     | '/staff/announcements'
     | '/staff/appointments'
+    | '/staff/assistant'
     | '/staff/dashboard'
     | '/staff/notifications'
     | '/staff/profile'
@@ -436,6 +469,7 @@ export interface FileRouteTypes {
     | '/app/appointments/new'
     | '/app/profile/complete'
     | '/staff/patients/$patientId'
+    | '/staff/visits/$appointmentId'
     | '/app/appointments'
     | '/app/profile'
     | '/staff/patients'
@@ -456,6 +490,7 @@ export interface FileRouteTypes {
     | '/admin/staff-accounts'
     | '/app/activity'
     | '/app/announcements'
+    | '/app/assistant'
     | '/app/dashboard'
     | '/app/notifications'
     | '/app/records'
@@ -466,6 +501,7 @@ export interface FileRouteTypes {
     | '/staff/activity'
     | '/staff/announcements'
     | '/staff/appointments'
+    | '/staff/assistant'
     | '/staff/dashboard'
     | '/staff/notifications'
     | '/staff/patients'
@@ -476,6 +512,7 @@ export interface FileRouteTypes {
     | '/app/appointments/new'
     | '/app/profile/complete'
     | '/staff/patients/$patientId'
+    | '/staff/visits/$appointmentId'
     | '/app/appointments/'
     | '/app/profile/'
     | '/staff/patients/'
@@ -601,6 +638,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAnnouncementsRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/app/assistant': {
+      id: '/app/assistant'
+      path: '/assistant'
+      fullPath: '/app/assistant'
+      preLoaderRoute: typeof AppAssistantRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/app/dashboard': {
       id: '/app/dashboard'
       path: '/dashboard'
@@ -669,6 +713,13 @@ declare module '@tanstack/react-router' {
       path: '/appointments'
       fullPath: '/staff/appointments'
       preLoaderRoute: typeof StaffAppointmentsRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
+    '/staff/assistant': {
+      id: '/staff/assistant'
+      path: '/assistant'
+      fullPath: '/staff/assistant'
+      preLoaderRoute: typeof StaffAssistantRouteImport
       parentRoute: typeof StaffRouteRoute
     }
     '/staff/dashboard': {
@@ -762,6 +813,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffPatientsPatientIdRouteImport
       parentRoute: typeof StaffPatientsRoute
     }
+    '/staff/visits/$appointmentId': {
+      id: '/staff/visits/$appointmentId'
+      path: '/visits/$appointmentId'
+      fullPath: '/staff/visits/$appointmentId'
+      preLoaderRoute: typeof StaffVisitsAppointmentIdRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
   }
 }
 
@@ -788,6 +846,7 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 interface AppRouteRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
   AppAnnouncementsRoute: typeof AppAnnouncementsRoute
+  AppAssistantRoute: typeof AppAssistantRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppNotificationsRoute: typeof AppNotificationsRoute
   AppRecordsRoute: typeof AppRecordsRoute
@@ -802,6 +861,7 @@ interface AppRouteRouteChildren {
 const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppActivityRoute: AppActivityRoute,
   AppAnnouncementsRoute: AppAnnouncementsRoute,
+  AppAssistantRoute: AppAssistantRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppNotificationsRoute: AppNotificationsRoute,
   AppRecordsRoute: AppRecordsRoute,
@@ -835,6 +895,7 @@ interface StaffRouteRouteChildren {
   StaffActivityRoute: typeof StaffActivityRoute
   StaffAnnouncementsRoute: typeof StaffAnnouncementsRoute
   StaffAppointmentsRoute: typeof StaffAppointmentsRoute
+  StaffAssistantRoute: typeof StaffAssistantRoute
   StaffDashboardRoute: typeof StaffDashboardRoute
   StaffNotificationsRoute: typeof StaffNotificationsRoute
   StaffPatientsRoute: typeof StaffPatientsRouteWithChildren
@@ -842,12 +903,14 @@ interface StaffRouteRouteChildren {
   StaffReportsRoute: typeof StaffReportsRoute
   StaffServicesRoute: typeof StaffServicesRoute
   StaffWalkInRoute: typeof StaffWalkInRoute
+  StaffVisitsAppointmentIdRoute: typeof StaffVisitsAppointmentIdRoute
 }
 
 const StaffRouteRouteChildren: StaffRouteRouteChildren = {
   StaffActivityRoute: StaffActivityRoute,
   StaffAnnouncementsRoute: StaffAnnouncementsRoute,
   StaffAppointmentsRoute: StaffAppointmentsRoute,
+  StaffAssistantRoute: StaffAssistantRoute,
   StaffDashboardRoute: StaffDashboardRoute,
   StaffNotificationsRoute: StaffNotificationsRoute,
   StaffPatientsRoute: StaffPatientsRouteWithChildren,
@@ -855,6 +918,7 @@ const StaffRouteRouteChildren: StaffRouteRouteChildren = {
   StaffReportsRoute: StaffReportsRoute,
   StaffServicesRoute: StaffServicesRoute,
   StaffWalkInRoute: StaffWalkInRoute,
+  StaffVisitsAppointmentIdRoute: StaffVisitsAppointmentIdRoute,
 }
 
 const StaffRouteRouteWithChildren = StaffRouteRoute._addFileChildren(

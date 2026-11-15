@@ -35,8 +35,7 @@ import {
   panel,
   secondaryButton,
 } from './app-ui';
-import { PdfExportButton, PdfExportDialog, PdfExportNote, usePdfExport } from './pdf-export';
-import { SheetsExportButton, SheetsExportNote, useSheetsExport } from './sheets-export';
+import { ExportDialog } from './export-dialog';
 import { formatDateTime } from './record-meta';
 import { cn } from '../lib/utils';
 
@@ -102,6 +101,8 @@ const ACTION_LABELS: Record<string, string> = {
   'settings.sheets.reset': 'Google Sheets reset to default',
   'report.export_sheets': 'Report exported to Google Sheets',
   'activity.export_sheets': 'Activity log exported to Google Sheets',
+  'settings.assistant.update': 'AI Assistant settings changed',
+  'settings.assistant.reset': 'AI Assistant credentials reset',
   'settings.drive.connect': 'Google Drive connected',
   'report.export_pdf': 'Report exported as PDF',
   'activity.export_pdf': 'Activity log exported as PDF',
@@ -241,14 +242,7 @@ export function ActivityFeed({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const sheets = useSheetsExport(() =>
-    exportActivityToSheets({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }),
-  );
-  const pdf = usePdfExport((options) =>
-    exportActivityPdf({ category, q: query || undefined, actor: actor.trim() || undefined, from, to }, options),
-  );
+  const [exportOpen, setExportOpen] = useState(false);
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purging, setPurging] = useState(false);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
@@ -261,6 +255,7 @@ export function ActivityFeed({
   }, [search]);
 
   const { from, to } = presetRange(preset, customFrom, customTo);
+  const exportFilters = { category, q: query || undefined, actor: actor.trim() || undefined, from, to };
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -326,18 +321,6 @@ export function ActivityFeed({
     }
   }
 
-  async function handleExport() {
-    setExportError(null);
-    setExporting(true);
-    try {
-      await downloadActivityCsv({ category, q: query || undefined, actor: actor.trim() || undefined, from, to });
-    } catch (err) {
-      setExportError(err instanceof ApiError ? err.message : 'Could not export the log.');
-    } finally {
-      setExporting(false);
-    }
-  }
-
   async function handlePurge() {
     setPurgeError(null);
     setPurging(true);
@@ -395,27 +378,12 @@ export function ActivityFeed({
               {showExport && (
                 <button
                   type="button"
-                  onClick={handleExport}
-                  disabled={exporting}
+                  onClick={() => setExportOpen(true)}
                   className={`${secondaryButton} h-11 px-4 text-[13px]`}
                 >
-                  {exporting ? (
-                    <LoaderCircle size={15} className="animate-spin" aria-hidden />
-                  ) : (
-                    <Download size={15} aria-hidden />
-                  )}
-                  Export CSV
+                  <Download size={15} aria-hidden />
+                  Export
                 </button>
-              )}
-              {showExport && (
-                <SheetsExportButton
-                  exporting={sheets.exporting}
-                  onClick={sheets.start}
-                  className={`${secondaryButton} h-11 px-4 text-[13px]`}
-                />
-              )}
-              {showExport && (
-                <PdfExportButton onClick={pdf.start} className={`${secondaryButton} h-11 px-4 text-[13px]`} />
               )}
               {showPurge && (
                 <button
@@ -511,15 +479,14 @@ export function ActivityFeed({
         </section>
       )}
 
-      {exportError && <InlineNotice>{exportError}</InlineNotice>}
-      <SheetsExportNote result={sheets.result} error={sheets.error} />
-      <PdfExportNote result={pdf.result} error={pdf.error} />
-      {pdf.open && (
-        <PdfExportDialog
-          title="Export PDF"
-          subtitle="Activity log · current filters (up to 2,000 entries)"
-          onCancel={pdf.close}
-          onGenerate={pdf.run}
+      {exportOpen && (
+        <ExportDialog
+          title="Export activity log"
+          summary="The log with your current search and filters. A PDF holds up to 2,000 entries; CSV and Google Sheets can hold more."
+          onClose={() => setExportOpen(false)}
+          runCsv={() => downloadActivityCsv(exportFilters)}
+          runSheets={() => exportActivityToSheets(exportFilters)}
+          runPdf={(options) => exportActivityPdf(exportFilters, options)}
         />
       )}
       {purgeResult && <SuccessNote>{purgeResult}</SuccessNote>}

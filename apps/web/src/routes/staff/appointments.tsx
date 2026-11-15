@@ -23,7 +23,6 @@ import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
 import {
   ApiError,
-  completeAppointment,
   confirmAppointment,
   declineAppointment,
   listServices,
@@ -86,17 +85,13 @@ function QueueCard({
   onChange: (a: StaffAppointment) => void;
 }) {
   const [declining, setDeclining] = useState(false);
-  const [completing, setCompleting] = useState(false);
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
-  const [diagnosis, setDiagnosis] = useState('');
-  const [prescription, setPrescription] = useState('');
-  const [visitNotes, setVisitNotes] = useState('');
-  const [busy, setBusy] = useState<'confirm' | 'decline' | 'complete' | null>(null);
+  const [busy, setBusy] = useState<'confirm' | 'decline' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const linkedPatientId = patientId(appt);
 
-  async function run(action: 'confirm' | 'decline' | 'complete') {
+  async function run(action: 'confirm' | 'decline') {
     if (action === 'decline' && !reason.trim()) {
       setReasonError('A reason is required so the patient understands why.');
       return;
@@ -107,16 +102,9 @@ function QueueCard({
       const r =
         action === 'confirm'
           ? await confirmAppointment(appt.id)
-          : action === 'decline'
-            ? await declineAppointment(appt.id, reason.trim())
-            : await completeAppointment(appt.id, {
-                diagnosis: diagnosis.trim(),
-                prescription: prescription.trim(),
-                visitNotes: visitNotes.trim(),
-              });
+          : await declineAppointment(appt.id, reason.trim());
       onChange(r.appointment);
       setDeclining(false);
-      setCompleting(false);
       setReason('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Action failed. Try again.');
@@ -246,77 +234,14 @@ function QueueCard({
         </div>
       )}
 
-      {appt.status === 'confirmed' && !completing && (
-        <button
-          type="button"
-          onClick={() => setCompleting(true)}
+      {appt.status === 'confirmed' && (
+        <Link
+          to="/staff/visits/$appointmentId"
+          params={{ appointmentId: appt.id }}
           className={`${secondaryButton} mt-3.5 h-9 px-3.5 text-[13px]`}
         >
           Complete visit
-        </button>
-      )}
-
-      {appt.status === 'confirmed' && completing && (
-        <div className="mt-3.5 space-y-3 rounded-xl bg-slate-50/80 p-3">
-          <p className="text-[12.5px] font-semibold text-slate-700">
-            Visit record <span className="font-normal text-slate-500">(saved on completion, visible to the patient)</span>
-          </p>
-          <div>
-            <label htmlFor={`diag-${appt.id}`} className={fieldLabel}>Diagnosis</label>
-            <textarea
-              id={`diag-${appt.id}`}
-              rows={2}
-              maxLength={1000}
-              value={diagnosis}
-              onChange={(e) => setDiagnosis(e.target.value)}
-              placeholder="e.g. Acute viral nasopharyngitis"
-              className={textareaClass}
-            />
-          </div>
-          <div>
-            <label htmlFor={`rx-${appt.id}`} className={fieldLabel}>Prescription</label>
-            <textarea
-              id={`rx-${appt.id}`}
-              rows={2}
-              maxLength={1000}
-              value={prescription}
-              onChange={(e) => setPrescription(e.target.value)}
-              placeholder="e.g. Paracetamol 500mg every 6 hours for 3 days"
-              className={textareaClass}
-            />
-          </div>
-          <div>
-            <label htmlFor={`vn-${appt.id}`} className={fieldLabel}>Visit notes</label>
-            <textarea
-              id={`vn-${appt.id}`}
-              rows={2}
-              maxLength={2000}
-              value={visitNotes}
-              onChange={(e) => setVisitNotes(e.target.value)}
-              placeholder="Advice, follow-up instructions…"
-              className={textareaClass}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => run('complete')}
-              disabled={busy !== null}
-              className={`${primaryButton} h-9 flex-1 px-3 text-[13px]`}
-            >
-              {busy === 'complete' && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
-              Save &amp; complete
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompleting(false)}
-              disabled={busy !== null}
-              className="h-9 flex-1 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 active:scale-[0.97] disabled:opacity-60"
-            >
-              Back
-            </button>
-          </div>
-        </div>
+        </Link>
       )}
 
       {appt.status === 'completed' && (appt.diagnosis || appt.prescription || appt.visitNotes) && (
@@ -340,6 +265,15 @@ function QueueCard({
             </div>
           )}
         </dl>
+      )}
+      {appt.status === 'completed' && (
+        <Link
+          to="/staff/visits/$appointmentId"
+          params={{ appointmentId: appt.id }}
+          className={`${secondaryButton} mt-3 h-9 px-3.5 text-[13px]`}
+        >
+          View / edit record
+        </Link>
       )}
     </article>
   );

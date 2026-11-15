@@ -8,6 +8,7 @@ import {
   Megaphone,
   Plus,
   Settings,
+  Sparkles,
   UserRound,
 } from 'lucide-react';
 import type { ShellNavItem } from './dashboard-shell';
@@ -20,6 +21,7 @@ export const patientNav: ShellNavItem[] = [
   { label: 'My Appointments', to: '/app/appointments', icon: CalendarCheck, group: 'Care' },
   { label: 'My Records', to: '/app/records', icon: ClipboardList, group: 'Care' },
   { label: 'Activity', to: '/app/activity', icon: History, group: 'Care' },
+  { label: 'AI Assistant', to: '/app/assistant', icon: Sparkles, group: 'Care' },
   { label: 'Announcements', to: '/app/announcements', icon: Megaphone, group: 'Communication' },
   { label: 'Notifications', to: '/app/notifications', icon: Bell, group: 'Communication' },
   { label: 'My Profile', to: '/app/profile', icon: UserRound, group: 'Account' },

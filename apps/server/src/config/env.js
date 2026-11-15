@@ -97,6 +97,15 @@ const envSchema = z.object({
   // BACKUP_TIMEZONE decides which wall clock the schedule hours refer to.
   BACKUP_DIR: z.string().optional(),
   BACKUP_TIMEZONE: z.string().default('Asia/Manila'),
+
+  // AI assistant (Cloudflare Workers AI). Needs an account ID and an API token
+  // with the "Workers AI" permission. ASSISTANT_ENABLED=off hides the answers
+  // without removing the keys. The model can be swapped for any Workers AI
+  // text-generation model.
+  CLOUDFLARE_ACCOUNT_ID: z.string().optional(),
+  CLOUDFLARE_API_TOKEN: z.string().optional(),
+  CLOUDFLARE_AI_MODEL: z.string().default('@cf/meta/llama-3.1-8b-instruct'),
+  ASSISTANT_ENABLED: z.string().optional(),
 });
 
 // Integration defaults that an admin can override from Settings are named

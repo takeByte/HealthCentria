@@ -42,6 +42,18 @@ import {
   updateDriveFolder,
 } from '../controllers/drive-settings.controller.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import {
+  exportBackupCsv,
+  exportBackupPdf,
+  exportBackupSheets,
+  listBackupTables,
+} from '../controllers/backup-export.controller.js';
+import {
+  deleteAssistantSettings,
+  getAssistantSettings,
+  testAssistantSettings,
+  updateAssistantSettings,
+} from '../controllers/assistant-settings.controller.js';
 import { requireSuperPin } from '../middleware/requireSuperPin.js';
 import {
   downloadBackup,
@@ -77,6 +89,14 @@ adminSettingsRouter.delete('/google', requireSuperPin('Google sign-in credential
 adminSettingsRouter.get('/recaptcha', getRecaptchaSettings);
 adminSettingsRouter.put('/recaptcha', requireSuperPin('reCAPTCHA keys'), updateRecaptchaSettings);
 adminSettingsRouter.delete('/recaptcha', requireSuperPin('reCAPTCHA keys (reset to default)'), deleteRecaptchaSettings);
+
+// AI Assistant (Cloudflare Workers AI): account ID, API token (encrypted at
+// rest), model and the on/off switch. New credentials are tried with Cloudflare
+// before they are saved.
+adminSettingsRouter.get('/ai', getAssistantSettings);
+adminSettingsRouter.put('/ai', requireSuperPin('AI Assistant settings'), updateAssistantSettings);
+adminSettingsRouter.delete('/ai', requireSuperPin('AI Assistant credentials (reset to default)'), deleteAssistantSettings);
+adminSettingsRouter.post('/ai/test', testAssistantSettings);
 
 // Upload Image (UploadThing) token, encrypted at rest.
 adminSettingsRouter.get('/uploadthing', getUploadThingSettings);
@@ -151,4 +171,22 @@ adminSettingsRouter.put(
 );
 adminSettingsRouter.post('/backup/run', requireSuperPin('Manual data backup'), runBackupNow);
 adminSettingsRouter.get('/backup/download/:name', downloadBackup);
+// Exports of one backup: the admin picks the tables. They copy patient data
+// out of the system, so each one needs the superadmin PIN.
+adminSettingsRouter.get('/backup/:name/tables', listBackupTables);
+adminSettingsRouter.post(
+  '/backup/:name/export/csv',
+  requireSuperPin((req) => `Backup exported as CSV (${(req.body?.tables ?? []).length} table(s))`),
+  exportBackupCsv,
+);
+adminSettingsRouter.post(
+  '/backup/:name/export/sheets',
+  requireSuperPin((req) => `Backup exported to Google Sheets (${(req.body?.tables ?? []).length} table(s))`),
+  exportBackupSheets,
+);
+adminSettingsRouter.post(
+  '/backup/:name/export/pdf',
+  requireSuperPin((req) => `Backup exported as PDF (${(req.body?.tables ?? []).length} table(s))`),
+  exportBackupPdf,
+);
 adminSettingsRouter.delete('/backup/:name', requireSuperPin('Backup file deletion'), removeBackup);

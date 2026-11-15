@@ -142,7 +142,7 @@ function AdminDashboard() {
         />
         <StatTile
           icon={UserCog}
-          label="Staff accounts"
+          label="User management"
           value={v(counts?.activeStaff)}
           hint="Active staff + admins"
           tone="slate"
@@ -190,7 +190,7 @@ function AdminDashboard() {
                 <UserCog size={15} aria-hidden />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-semibold text-[#0b2c4f]">Staff accounts</span>
+                <span className="block text-[12.5px] font-semibold text-[#0b2c4f]">User management</span>
                 <span className="block truncate text-[11px] text-[#94a3b8]">Invite, suspend, reset</span>
               </span>
               <ArrowRight

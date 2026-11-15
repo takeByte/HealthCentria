@@ -31,6 +31,7 @@ import {
   secondaryButton,
   selectClass,
 } from '../../components/app-ui';
+import { BackupExportDialog } from '../../components/backup-export-dialog';
 import { formatDateTime } from '../../components/record-meta';
 import { PinCancelled, useSuperPin } from '../../components/super-pin';
 import { Toast, type ToastMessage } from '../../components/toast';
@@ -98,6 +99,9 @@ function AdminBackups() {
   const [running, setRunning] = useState(false);
   const [busyFile, setBusyFile] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+
+  const [exportOpen, setExportOpen] = useState(false);
+
 
   function apply(next: BackupSettings) {
     setSettings(next);
@@ -476,6 +480,32 @@ function AdminBackups() {
 
       <motion.section
         {...rise}
+        transition={{ ...riseTransition, delay: 0.1 }}
+        className={panel}
+        aria-label="Export backup data"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardHeading
+            title="Export backup data"
+            description="Pick a backup, choose the tables, then export them as CSV, Google Sheets or PDF. Each export needs the superadmin PIN."
+          />
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            disabled={!settings?.files.length}
+            className={`${secondaryButton} h-11 px-4 text-[13px]`}
+          >
+            <Download size={15} aria-hidden />
+            Export
+          </button>
+        </div>
+        {!settings?.files.length && (
+          <EmptyNote className="mt-4">Write a backup first, then you can export its data here.</EmptyNote>
+        )}
+      </motion.section>
+
+      <motion.section
+        {...rise}
         transition={{ ...riseTransition, delay: 0.16 }}
         className={panel}
       >
@@ -542,6 +572,9 @@ function AdminBackups() {
         </div>
       </motion.section>
 
+      {exportOpen && settings && (
+        <BackupExportDialog files={settings.files} withPin={withPin} onClose={() => setExportOpen(false)} />
+      )}
       {pinDialog}
 
       <AnimatePresence>

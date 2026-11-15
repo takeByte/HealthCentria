@@ -52,6 +52,11 @@ import {
   type GoogleSheetsSettings,
   getPublicSettings,
   getRecaptchaIntegrationSettings,
+  getAssistantIntegrationSettings,
+  resetAssistantIntegrationSettings,
+  testAssistantIntegration,
+  updateAssistantIntegrationSettings,
+  type AssistantIntegrationSettings,
   getUploadThingIntegrationSettings,
   resetUploadThingIntegrationSettings,
   updateUploadThingIntegrationSettings,
@@ -731,6 +736,317 @@ function UploadThingCard({
   );
 }
 
+/**
+ * AI Assistant card (Cloudflare Workers AI). Account ID, API token and model can
+ * be changed here without editing .env. Saving and switching need the superadmin
+ * PIN; new credentials are tried with Cloudflare first; the token is stored
+ * encrypted on the server and never sent back to this page.
+ */
+function AssistantCard({
+  withPin,
+  onToast,
+  onEnabledChange,
+}: {
+  withPin: WithPin;
+  onToast: (t: ToastMessage) => void;
+  /** Lets the page count this switch in the "x of y active" summary. */
+  onEnabledChange: (enabled: boolean) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [info, setInfo] = useState<AssistantIntegrationSettings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [accountDraft, setAccountDraft] = useState('');
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [modelDraft, setModelDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAssistantIntegrationSettings()
+      .then((r) => {
+        if (!cancelled) setInfo(r);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError('Could not load the AI Assistant settings. Reload the page to try again.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (info) onEnabledChange(info.enabled);
+  }, [info, onEnabledChange]);
+
+  const dirty = Boolean(accountDraft.trim() || tokenDraft.trim() || modelDraft.trim());
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (saving || !dirty) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await withPin('Save the AI Assistant settings.', (pin) =>
+        updateAssistantIntegrationSettings(
+          { accountId: accountDraft.trim(), apiToken: tokenDraft.trim(), model: modelDraft.trim() },
+          pin,
+        ),
+      );
+      setInfo(r);
+      setAccountDraft('');
+      setTokenDraft('');
+      setModelDraft('');
+      onToast({ tone: 'success', message: 'AI Assistant settings verified with Cloudflare and saved.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      setError(
+        err instanceof ApiError
+          ? (Object.values(err.errors ?? {})[0]?.[0] ?? err.message)
+          : 'Could not save the settings. Try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setEnabled(next: boolean) {
+    if (!info || toggling) return;
+    setToggling(true);
+    try {
+      const r = await withPin(`Turn the AI Assistant ${next ? 'on' : 'off'}.`, (pin) =>
+        updateAssistantIntegrationSettings({ enabled: next }, pin),
+      );
+      setInfo(r);
+      onToast({ tone: 'success', message: `AI Assistant turned ${next ? 'on' : 'off'}.` });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      onToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not save the AI Assistant setting. Try again.',
+      });
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  async function test() {
+    if (testing) return;
+    setTesting(true);
+    try {
+      const r = await testAssistantIntegration();
+      onToast({ tone: 'success', message: r.message });
+    } catch (err) {
+      onToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not test the AI Assistant. Try again.',
+      });
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function reset() {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      const r = await withPin('Reset the AI Assistant credentials to the default.', (pin) =>
+        resetAssistantIntegrationSettings(pin),
+      );
+      setInfo(r);
+      setAccountDraft('');
+      setTokenDraft('');
+      setModelDraft('');
+      setError(null);
+      setResetOpen(false);
+      onToast({ tone: 'success', message: 'AI Assistant credentials reset to the default.' });
+    } catch (err) {
+      if (err instanceof PinCancelled) return;
+      onToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not reset the credentials. Try again.',
+      });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <>
+      <motion.section
+        id="ai-assistant"
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+        transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.16 }}
+        className={panel}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-xl">
+            <CardHeading
+              title="AI Assistant"
+              description="Powers the AI Assistant tab for patients, staff and admins, using Cloudflare Workers AI. It only sees public clinic information and never patient records. Chats are not saved."
+            />
+          </div>
+          <div className="flex items-center gap-2.5">
+            {toggling && <LoaderCircle size={17} className="animate-spin text-slate-400" aria-hidden />}
+            {info === null ? (
+              <StatusPill tone={loadError ? 'red' : 'slate'}>{loadError ? 'Unavailable' : 'Loading…'}</StatusPill>
+            ) : !info.configured ? (
+              <StatusPill tone="amber">Not set up</StatusPill>
+            ) : null}
+            {info && (
+              <>
+                <StatusPill tone={info.enabled ? 'teal' : 'slate'}>{info.enabled ? 'On' : 'Off'}</StatusPill>
+                <Toggle checked={info.enabled} disabled={toggling} label="Turn the AI Assistant on" onChange={setEnabled} />
+              </>
+            )}
+          </div>
+        </div>
+
+        {info && !info.enabled && (
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20">
+            The assistant is off. The AI Assistant tab stays in the menu but tells people it is turned off.
+          </p>
+        )}
+        {loadError && <InlineNotice className="mt-4">{loadError}</InlineNotice>}
+        {info && !info.configured && (
+          <InlineNotice className="mt-4">
+            No Cloudflare account ID or API token is set yet. Open Configure and add them, or the assistant will not answer.
+          </InlineNotice>
+        )}
+
+        {info && (
+          <ConfigureSection
+            id="ai-assistant-config"
+            label="Configure"
+            defaultOpen={!info.configured}
+            summary={
+              <span className="truncate">
+                {info.configured ? (info.source === 'custom' ? 'Custom credentials' : 'Default credentials') : 'No credentials'}
+                {' · '}
+                {info.model}
+              </span>
+            }
+          >
+            <form onSubmit={save} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="ai-account-id" className={fieldLabel}>
+                    Cloudflare Account ID
+                  </label>
+                  <input
+                    id="ai-account-id"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={accountDraft}
+                    onChange={(e) => {
+                      setAccountDraft(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder={compactMask(info.accountIdMasked) || 'No account ID configured'}
+                    className={cn(inputClass, 'font-mono text-[12.5px]')}
+                  />
+                  <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                    Current: <span className="text-slate-700">{compactMask(info.accountIdMasked) || 'Not set'}</span>
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="ai-api-token" className={fieldLabel}>
+                    API token
+                  </label>
+                  <input
+                    id="ai-api-token"
+                    type="password"
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    value={tokenDraft}
+                    onChange={(e) => {
+                      setTokenDraft(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder={compactMask(info.tokenMasked) || 'No token configured'}
+                    className={cn(inputClass, 'font-mono text-[12.5px]')}
+                  />
+                  <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                    Current: <span className="text-slate-700">{compactMask(info.tokenMasked) || 'Not set'}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="ai-model" className={fieldLabel}>
+                  Model
+                </label>
+                <input
+                  id="ai-model"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={modelDraft}
+                  onChange={(e) => {
+                    setModelDraft(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder={info.model}
+                  className={cn(inputClass, 'font-mono text-[12.5px]')}
+                />
+                <p className="mt-1.5 break-all font-mono text-[11.5px] leading-5 text-slate-500">
+                  Current: <span className="text-slate-700">{info.model}</span>
+                  {info.modelCustom ? ' (custom)' : ' (default)'}
+                </p>
+              </div>
+
+              <p className="text-[12px] leading-5 text-slate-500">
+                Leave a field blank to keep its current value. New values are tried with Cloudflare before they are
+                saved, the token is encrypted on the server and never sent back to this page, and saving needs the
+                superadmin PIN. The token needs the &quot;Workers AI&quot; permission.
+              </p>
+
+              {error && <InlineNotice>{error}</InlineNotice>}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="submit" disabled={saving || !dirty} className={primaryButton}>
+                  {saving && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                  Verify &amp; save
+                </button>
+                <button
+                  type="button"
+                  onClick={test}
+                  disabled={testing || !info.configured}
+                  className={secondaryButton}
+                >
+                  {testing && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                  Test connection
+                </button>
+                {info.source === 'custom' && (
+                  <button type="button" onClick={() => setResetOpen(true)} className={secondaryButton}>
+                    Reset to default
+                  </button>
+                )}
+              </div>
+            </form>
+          </ConfigureSection>
+        )}
+      </motion.section>
+
+      {resetOpen && (
+        <ResetDialog
+          title="Reset the AI Assistant credentials?"
+          description="The custom account ID, API token and model will be deleted. The assistant will immediately use the defaults configured on the server."
+          busy={resetting}
+          onCancel={() => setResetOpen(false)}
+          onConfirm={reset}
+        />
+      )}
+    </>
+  );
+}
+
 function GoogleDriveCard({
   withPin,
   onToast,
@@ -1202,6 +1518,7 @@ function AdminSettings() {
   const [recaptchaError, setRecaptchaError] = useState<string | null>(null);
 
   const [calendar, setCalendar] = useState<GoogleCalendarSettings | null>(null);
+  const [assistantEnabled, setAssistantEnabled] = useState<boolean | undefined>(undefined);
   const [calendarLoadError, setCalendarLoadError] = useState<string | null>(null);
   const [calendarSaving, setCalendarSaving] = useState(false);
   const [calendarTesting, setCalendarTesting] = useState(false);
@@ -1817,6 +2134,7 @@ function AdminSettings() {
         ]
       : []),
     ...(calendar ? [calendar.enabled] : []),
+    ...(assistantEnabled !== undefined ? [assistantEnabled] : []),
   ];
   const activeToggles = accessToggles.filter(Boolean).length;
   const hasNewGoogleValue = Boolean(googleClientId.trim() || googleClientSecret.trim());
@@ -2638,6 +2956,8 @@ function AdminSettings() {
           toggling={saving}
           onToggle={setUploadThingEnabled}
         />
+
+        <AssistantCard withPin={withPin} onToast={setToast} onEnabledChange={setAssistantEnabled} />
       </DashboardShell>
 
       <AnimatePresence>

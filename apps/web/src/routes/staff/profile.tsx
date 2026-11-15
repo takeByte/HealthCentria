@@ -524,7 +524,7 @@ function MyProfilePage() {
         )}
 
         <p className="mt-4 text-[12px] leading-5 text-slate-500">
-          Email, role, status and permissions are managed by an admin in Staff Accounts.
+          Email, role, status and permissions are managed by an admin in User Management.
         </p>
       </motion.section>
 
@@ -546,7 +546,7 @@ function MyProfilePage() {
           <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-600/20 bg-amber-50/70 px-3.5 py-3">
             <X size={17} aria-hidden className="shrink-0 text-amber-700" />
             <p className="text-[12.5px] text-amber-900">
-              No actions assigned yet. An admin can grant access in Staff Accounts.
+              No actions assigned yet. An admin can grant access in User Management.
             </p>
           </div>
         ) : (

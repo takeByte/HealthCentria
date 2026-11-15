@@ -438,6 +438,17 @@ export interface PatientVisit {
   updatedByName?: string;
 }
 
+/** Everything the "complete visit" page shows: this visit plus the patient's chart. */
+export interface VisitContext {
+  appointment: PatientVisit & { timePreference: 'morning' | 'afternoon' | 'any'; notes: string };
+  patient: PatientDetail;
+  visits: PatientVisit[];
+}
+
+export function getVisitContext(appointmentId: string): Promise<VisitContext> {
+  return apiFetch(`/api/appointments/${encodeURIComponent(appointmentId)}/visit`);
+}
+
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 
 export interface Immunization {
@@ -757,27 +768,44 @@ export interface PdfExportOptions {
   uploadToDrive: boolean;
 }
 
+/**
+ * Turns a failed response into an ApiError that keeps the code and extra fields,
+ * which the superadmin PIN dialog needs (APPROVAL_REQUIRED, PIN_INCORRECT, ...).
+ */
+async function responseError(res: Response, what: string): Promise<ApiError> {
+  let body: ({ message?: string; errors?: Record<string, string[]>; code?: string } & Record<string, unknown>) | null =
+    null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  return new ApiError(
+    res.status,
+    body?.message ?? `${what} (${res.status}).`,
+    body?.errors,
+    body?.code,
+    body ?? undefined,
+  );
+}
+
 /** POSTs, downloads the returned PDF, and reports what happened with Drive and email. */
-async function downloadPdf(path: string, { recipients, uploadToDrive }: PdfExportOptions): Promise<PdfExportResult> {
+async function downloadPdf(
+  path: string,
+  { recipients, uploadToDrive }: PdfExportOptions,
+  extra: { body?: Record<string, unknown>; headers?: Record<string, string> } = {},
+): Promise<PdfExportResult> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...extra.headers,
     },
-    body: JSON.stringify({ recipients: uploadToDrive ? recipients : [], uploadToDrive }),
+    body: JSON.stringify({ ...extra.body, recipients: uploadToDrive ? recipients : [], uploadToDrive }),
   });
-  if (!res.ok) {
-    let message = `Export failed (${res.status}).`;
-    try {
-      const data = (await res.json()) as { message?: string };
-      if (data?.message) message = data.message;
-    } catch {
-      // keep the status-based message
-    }
-    throw new ApiError(res.status, message);
-  }
+  if (!res.ok) throw await responseError(res, 'Export failed');
   const blob = await res.blob();
   const disposition = res.headers.get('Content-Disposition') ?? '';
   const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'healthcentria-report.pdf';
@@ -961,6 +989,38 @@ export function updateRecaptchaIntegrationSettings(
 
 export function resetRecaptchaIntegrationSettings(pin: string): Promise<{ success: true } & RecaptchaIntegrationSettings> {
   return apiFetch('/api/admin/settings/recaptcha', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+export interface AssistantIntegrationSettings {
+  accountIdMasked: string;
+  tokenMasked: string;
+  model: string;
+  /** True when an admin chose the model; false = the server default. */
+  modelCustom: boolean;
+  enabled: boolean;
+  source: 'custom' | 'default';
+  /** False when neither the database nor the server defaults have an account ID and token. */
+  configured: boolean;
+}
+
+export function getAssistantIntegrationSettings(): Promise<{ success: true } & AssistantIntegrationSettings> {
+  return apiFetch('/api/admin/settings/ai');
+}
+
+export function updateAssistantIntegrationSettings(
+  input: { accountId?: string; apiToken?: string; model?: string; enabled?: boolean },
+  pin: string,
+): Promise<{ success: true } & AssistantIntegrationSettings> {
+  return apiFetch('/api/admin/settings/ai', { method: 'PUT', body: input, headers: pinHeader(pin) });
+}
+
+export function resetAssistantIntegrationSettings(pin: string): Promise<{ success: true } & AssistantIntegrationSettings> {
+  return apiFetch('/api/admin/settings/ai', { method: 'DELETE', headers: pinHeader(pin) });
+}
+
+/** Sends a one-line test request to Cloudflare with the active credentials. */
+export function testAssistantIntegration(): Promise<{ success: true; message: string; model: string }> {
+  return apiFetch('/api/admin/settings/ai/test', { method: 'POST' });
 }
 
 export interface UploadThingIntegrationSettings {
@@ -1372,6 +1432,23 @@ export async function downloadActivityCsv(filters: ActivityFilters = {}): Promis
   URL.revokeObjectURL(url);
 }
 
+/* ------------------------------------------------------------- assistant --- */
+
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export function assistantStatus(): Promise<{ enabled: boolean; configured: boolean }> {
+  return apiFetch('/api/assistant/status');
+}
+
+/** Sends the running chat (kept in the page, never stored) and returns the assistant's reply. */
+export async function assistantChat(messages: AssistantMessage[]): Promise<string> {
+  const r = await apiFetch<{ reply: string }>('/api/assistant/chat', { method: 'POST', body: { messages } });
+  return r.reply;
+}
+
 /* --------------------------------------------------------------- backups --- */
 
 export interface BackupRun {
@@ -1444,6 +1521,54 @@ export function deleteBackupFile(
 }
 
 /** Streams one snapshot through the authenticated API and saves it locally. */
+/** Tables inside one backup, with record counts (for the export picker). */
+export function listBackupTables(name: string): Promise<{ createdAt: string; tables: Array<{ name: string; count: number }> }> {
+  return apiFetch(`/api/admin/settings/backup/${encodeURIComponent(name)}/tables`);
+}
+
+const backupExportPath = (name: string, kind: 'csv' | 'sheets' | 'pdf') =>
+  `/api/admin/settings/backup/${encodeURIComponent(name)}/export/${kind}`;
+
+/** Backup tables as a ZIP of CSV files. Needs the superadmin PIN. */
+export async function exportBackupCsv(name: string, tables: string[], pin: string): Promise<void> {
+  const token = getSession()?.token;
+  const res = await fetch(`${API_URL}${backupExportPath(name, 'csv')}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...pinHeader(pin),
+    },
+    body: JSON.stringify({ tables }),
+  });
+  if (!res.ok) throw await responseError(res, 'Export failed');
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'healthcentria-backup-csv.zip';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Backup tables as tabs in the export spreadsheet. Needs the superadmin PIN. */
+export function exportBackupToSheets(name: string, tables: string[], pin: string): Promise<SheetsExportResult> {
+  return apiFetch(backupExportPath(name, 'sheets'), { method: 'POST', body: { tables }, headers: pinHeader(pin) });
+}
+
+/** Backup tables as a PDF, with the optional Drive upload. Needs the superadmin PIN. */
+export function exportBackupPdf(
+  name: string,
+  tables: string[],
+  options: PdfExportOptions,
+  pin: string,
+): Promise<PdfExportResult> {
+  return downloadPdf(backupExportPath(name, 'pdf'), options, { body: { tables }, headers: pinHeader(pin) });
+}
+
 export async function downloadBackupFile(name: string): Promise<void> {
   const token = getSession()?.token;
   const res = await fetch(`${API_URL}/api/admin/settings/backup/download/${encodeURIComponent(name)}`, {
