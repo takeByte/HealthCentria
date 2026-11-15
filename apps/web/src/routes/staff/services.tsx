@@ -228,7 +228,11 @@ function ServicesManage() {
     setEError(null);
     setEBusy(true);
     try {
-      await updateService(id, { name: eName.trim(), description: eDesc.trim(), schedule: eSched, active: eActive });
+      await updateService(
+        id,
+        { name: eName.trim(), description: eDesc.trim(), schedule: eSched, active: eActive },
+        (list ?? []).find((x) => x.id === id)?.version ?? 0,
+      );
       setEditingId(null);
       await reload();
     } catch (err) {

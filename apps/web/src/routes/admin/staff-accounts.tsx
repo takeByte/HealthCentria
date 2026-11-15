@@ -241,10 +241,10 @@ function StaffAccounts() {
       };
       if (sensitive) {
         await withPin(`Change the account of ${current?.name ?? 'this user'} (password, role or permissions).`, (pin) =>
-          updateStaffAccount(id, payload, pin),
+          updateStaffAccount(id, payload, current?.version ?? 0, pin),
         );
       } else {
-        await updateStaffAccount(id, payload);
+        await updateStaffAccount(id, payload, current?.version ?? 0);
       }
       setEditingId(null);
       await reload();
@@ -260,7 +260,7 @@ function StaffAccounts() {
     setEError(null);
     try {
       await withPin(`${a.active ? 'Deactivate' : 'Activate'} the account of ${a.name}.`, (pin) =>
-        updateStaffAccount(a.id, { active: !a.active }, pin),
+        updateStaffAccount(a.id, { active: !a.active }, a.version, pin),
       );
       await reload();
     } catch (err) {

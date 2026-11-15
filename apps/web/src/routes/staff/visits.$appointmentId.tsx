@@ -133,7 +133,9 @@ function VisitPage() {
         void navigate({ to: '/staff/appointments' });
         return;
       }
-      await updateAppointmentRecord(appt.id, clinical);
+      const saved = await updateAppointmentRecord(appt.id, clinical, appt.version);
+      // Keep the new version so a second save from this page is not mistaken for a conflict.
+      setCtx((c) => (c ? { ...c, appointment: { ...c.appointment, version: saved.appointment.version } } : c));
       setToast({ tone: 'success', message: 'Visit record updated.' });
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Could not save. Try again.');
@@ -318,7 +320,7 @@ function VisitPage() {
                 onSave={
                   canEditMedical
                     ? async (input: MedicalProfileInput) => {
-                        const result = await updatePatientMedical(patient.id, input);
+                        const result = await updatePatientMedical(patient.id, input, patient.version);
                         setPatient(result.patient);
                         setToast({ tone: 'success', message: 'Medical profile saved.' });
                       }

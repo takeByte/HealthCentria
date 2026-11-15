@@ -117,6 +117,7 @@ export async function logActivity({
   actorRole,
   appointment,
   patient,
+  session,
 }) {
   try {
     const id = actorId ?? req?.user?.id ?? null;
@@ -129,7 +130,7 @@ export async function logActivity({
         ? truncate(formatValue(target.label)).slice(0, 200)
         : '';
 
-    await AuditLog.create({
+    await AuditLog.create([{
       actor: id || null,
       actorName: name,
       actorRole: ['patient', 'staff', 'admin'].includes(role) ? role : '',
@@ -146,8 +147,10 @@ export async function logActivity({
       detail: truncate(detail).slice(0, MAX_DETAIL_CHARS),
       ...(appointment ? { appointment } : {}),
       ...(patient ? { patient } : {}),
-    });
+    }], session ? { session } : undefined);
   } catch (err) {
+    // Inside a transaction a failed write has already poisoned it: let it roll the whole thing back.
+    if (session) throw err;
     console.error('Activity log write failed:', err instanceof Error ? err.message : 'unknown error');
   }
 }

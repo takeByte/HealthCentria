@@ -104,13 +104,17 @@ function StaffAnnouncements() {
     setFormError(null);
     try {
       if (composer.id) {
-        const r = await updateAnnouncement(composer.id, {
-          title: composer.title.trim(),
-          body: composer.body.trim(),
-          category: composer.category,
-          pinned: composer.pinned,
-          images: composer.images,
-        });
+        const r = await updateAnnouncement(
+          composer.id,
+          {
+            title: composer.title.trim(),
+            body: composer.body.trim(),
+            category: composer.category,
+            pinned: composer.pinned,
+            images: composer.images,
+          },
+          (items ?? []).find((x) => x.id === composer.id)?.version ?? 0,
+        );
         setItems((l) => (l ?? []).map((x) => (x.id === r.announcement.id ? r.announcement : x)));
       } else {
         const r = await createAnnouncement({

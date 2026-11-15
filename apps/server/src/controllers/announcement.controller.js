@@ -1,3 +1,4 @@
+import { versionMatches } from '../utils/concurrency.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -55,6 +56,7 @@ function requireDB(res) {
 function present(a) {
   return {
     id: String(a._id),
+    version: Number(a.__v ?? 0),
     title: a.title,
     body: a.body,
     category: a.category,
@@ -144,6 +146,7 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
   }
   const item = await Announcement.findById(req.params.id);
   if (!item) return res.status(404).json({ success: false, message: 'Announcement not found.' });
+  if (!versionMatches(req, res, item, 'announcement')) return;
 
   const tracked = ['title', 'body', 'category', 'pinned', 'active'];
   const imagesBefore = item.images?.length ?? 0;

@@ -106,6 +106,10 @@ const envSchema = z.object({
   CLOUDFLARE_API_TOKEN: z.string().optional(),
   CLOUDFLARE_AI_MODEL: z.string().default('@cf/meta/llama-3.1-8b-instruct'),
   ASSISTANT_ENABLED: z.string().optional(),
+
+  // Multi-document transactions for visit completion, walk-ins and patient deletion.
+  // On by default. Set to "off" to fall back to the previous step-by-step behaviour.
+  USE_TRANSACTIONS: z.string().optional(),
 });
 
 // Integration defaults that an admin can override from Settings are named

@@ -34,6 +34,7 @@ function cancelDeadline(day) {
 function present(a) {
   return {
     id: String(a._id),
+    version: Number(a.__v ?? 0),
     service: a.service && typeof a.service === 'object' ? { id: String(a.service._id), name: a.service.name } : a.service,
     day: a.day,
     timePreference: a.timePreference,

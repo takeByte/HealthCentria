@@ -1,3 +1,4 @@
+import { versionMatches } from '../utils/concurrency.js';
 import { z } from 'zod';
 import mongoose from 'mongoose';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -40,6 +41,7 @@ function requireDB(res) {
 function present(service) {
   return {
     id: String(service._id),
+    version: Number(service.__v ?? 0),
     name: service.name,
     description: service.description,
     schedule: service.schedule,
@@ -101,6 +103,7 @@ export const updateService = asyncHandler(async (req, res) => {
   }
   const service = await Service.findById(req.params.id);
   if (!service) return res.status(404).json({ success: false, message: 'Service not found.' });
+  if (!versionMatches(req, res, service, 'service')) return;
 
   const tracked = ['name', 'description', 'schedule', 'active'];
   const before = { ...service.toObject(), schedule: scheduleText(service.schedule) };

@@ -1,3 +1,4 @@
+import { versionMatches } from '../utils/concurrency.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -22,6 +23,7 @@ function present(u) {
   const obj = typeof u.toObject === 'function' ? u.toObject() : u;
   return {
     id: String(obj._id),
+    version: Number(obj.__v ?? 0),
     name: obj.fullName,
     email: obj.email,
     role: obj.role,
@@ -112,6 +114,7 @@ export const updateStaff = asyncHandler(async (req, res) => {
   if (!target) {
     return res.status(404).json({ success: false, message: 'Account not found.' });
   }
+  if (!versionMatches(req, res, target, 'account')) return;
   // Never lock yourself out: block self-demotion and self-deactivation.
   const isSelf = String(target._id) === String(req.user.id);
   if (isSelf && parsed.data.role && parsed.data.role !== 'admin') {

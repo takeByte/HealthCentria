@@ -16,6 +16,8 @@ import { hashPassword, isValidPassword } from '../utils/password.js';
 import { sendEmail } from '../utils/email.js';
 import { env } from '../config/env.js';
 import { notifyPatientEmail, notifyUser } from '../utils/notifications.js';
+import { versionFilter, versionMatches } from '../utils/concurrency.js';
+import { TransactionAbort, runInTransaction } from '../utils/transaction.js';
 
 const listQuery = z.object({
   status: z.enum(['pending', 'confirmed', 'declined', 'completed', 'cancelled']).optional(),
@@ -54,6 +56,7 @@ function present(a) {
   const obj = typeof a.toObject === 'function' ? a.toObject() : a;
   return {
     id: String(obj._id),
+    version: Number(obj.__v ?? 0),
     patient:
       obj.patient && typeof obj.patient === 'object'
         ? { id: String(obj.patient._id), name: obj.patient.fullName, email: obj.patient.email }
@@ -89,9 +92,10 @@ function patientIdOf(appt) {
   return appt.patient && typeof appt.patient === 'object' ? appt.patient._id : appt.patient;
 }
 
-async function logAppointment(req, action, appt, { changes = [], detail = '' } = {}) {
+async function logAppointment(req, action, appt, { changes = [], detail = '', session } = {}) {
   await logActivity({
     req,
+    session,
     action,
     target: { type: 'appointment', id: appt._id, label: appointmentLabel(appt) },
     changes,
@@ -263,41 +267,55 @@ export const completeAppointment = asyncHandler(async (req, res) => {
     ['visitNotes', before.visitNotes ?? '', parsed.data.visitNotes],
   ]);
 
-  const appt = await Appointment.findOneAndUpdate(
-    { _id: req.params.id, status: 'confirmed' },
-    {
-      $set: {
-        status: 'completed',
-        diagnosis: parsed.data.diagnosis,
-        prescription: parsed.data.prescription,
-        visitNotes: parsed.data.visitNotes,
-        updatedBy: req.user.id,
-      },
-      $inc: { __v: 1 },
-    },
-    { new: true },
-  );
-  if (!appt) {
-    return appointmentConflict(
-      res,
-      req.params.id,
-      'This visit was already completed or changed by someone else. Reload the queue.',
-    );
-  }
-  await appt.populate([
-    { path: 'patient', select: 'fullName email' },
-    { path: 'service', select: 'name' },
-    { path: 'updatedBy', select: 'fullName' },
-  ]);
-  await logAppointment(req, 'appointment.complete', appt, {
-    changes: clinicalChanges,
-    detail: 'Visit marked completed.',
-  });
-  if (parsed.data.diagnosis || parsed.data.prescription || parsed.data.visitNotes) {
-    await logAppointment(req, 'record.update', appt, {
-      changes: clinicalChanges.filter((c) => c.field !== 'status'),
-      detail: 'Clinical visit record written on completion.',
+  // One transaction: the status change, the clinical notes and their activity-log
+  // entries are saved together or not at all. The update is still guarded on
+  // status, so two staff cannot both complete the same visit.
+  let appt;
+  try {
+    appt = await runInTransaction(async (session) => {
+      const updated = await Appointment.findOneAndUpdate(
+        { _id: req.params.id, status: 'confirmed' },
+        {
+          $set: {
+            status: 'completed',
+            diagnosis: parsed.data.diagnosis,
+            prescription: parsed.data.prescription,
+            visitNotes: parsed.data.visitNotes,
+            updatedBy: req.user.id,
+          },
+          $inc: { __v: 1 },
+        },
+        { new: true, session },
+      );
+      if (!updated) throw new TransactionAbort('APPOINTMENT_CHANGED');
+      await updated.populate([
+        { path: 'patient', select: 'fullName email' },
+        { path: 'service', select: 'name' },
+        { path: 'updatedBy', select: 'fullName' },
+      ]);
+      await logAppointment(req, 'appointment.complete', updated, {
+        changes: clinicalChanges,
+        detail: 'Visit marked completed.',
+        session,
+      });
+      if (parsed.data.diagnosis || parsed.data.prescription || parsed.data.visitNotes) {
+        await logAppointment(req, 'record.update', updated, {
+          changes: clinicalChanges.filter((c) => c.field !== 'status'),
+          detail: 'Clinical visit record written on completion.',
+          session,
+        });
+      }
+      return updated;
     });
+  } catch (err) {
+    if (err instanceof TransactionAbort) {
+      return appointmentConflict(
+        res,
+        req.params.id,
+        'This visit was already completed or changed by someone else. Reload the queue.',
+      );
+    }
+    throw err;
   }
   // Keep the calendar title/description in step with the completed status.
   void syncAppointmentToCalendar(appt).catch(() => {});
@@ -329,6 +347,7 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
       message: 'Clinical notes can only be edited after the visit is completed.',
     });
   }
+  if (!versionMatches(req, res, before, 'visit record')) return;
 
   const changes = diffChanges(
     ['diagnosis', 'prescription', 'visitNotes']
@@ -342,7 +361,7 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
   }
 
   const appt = await Appointment.findOneAndUpdate(
-    { _id: req.params.id, status: 'completed' },
+    { _id: req.params.id, status: 'completed', ...versionFilter(req) },
     { $set: patch, $inc: { __v: 1 } },
     { new: true },
   ).populate([
@@ -354,7 +373,9 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
     return appointmentConflict(
       res,
       req.params.id,
-      'This visit is no longer completed. Reload the patient record.',
+      req.expectedVersion === undefined
+        ? 'This visit is no longer completed. Reload the patient record.'
+        : 'This visit was changed by someone else while you were editing it. Reload to see the latest version, then make your change again.',
     );
   }
 
@@ -474,6 +495,7 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
   }
 
   let patient = null;
+  let newUserFields = null;
   let passwordSetup = 'none';
   let emailSent = false;
   if (newPatient) {
@@ -516,7 +538,7 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
     // No email: the account still needs a unique address, so it gets a
     // placeholder that can never receive mail (and never logs in).
     const email = newPatient.email ?? 'walkin-' + randomBytes(6).toString('hex') + '@no-email.invalid';
-    patient = await User.create({
+    newUserFields = {
       email,
       passwordHash: await hashPassword(throwaway),
       role: 'patient',
@@ -531,30 +553,7 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
       ...(newPatient.philHealthNumber ? { philHealthNumber: newPatient.philHealthNumber } : {}),
       ...(newPatient.emergencyName ? { emergencyName: newPatient.emergencyName } : {}),
       ...(newPatient.emergencyNumber ? { emergencyNumber: newPatient.emergencyNumber } : {}),
-    });
-    if (newPatient.email) {
-      passwordSetup = 'emailed';
-      const base = String(env.CLIENT_URL).replace(/\/+$/, '');
-      const result = await sendEmail(
-        newPatient.email,
-        'Set up your HealthCentria account',
-        [
-          'Hello ' + newPatient.fullName + ',',
-          '',
-          'The Barangay Health Center registered you at the front desk and created a HealthCentria account for you.',
-          'To use it, set your own password:',
-          '',
-          '1. Open ' + base + '/forgot-password',
-          '2. Enter this email address and request a code',
-          '3. Enter the 6-digit code we email you and choose your password',
-          '',
-          "If you didn't visit the health center, you can ignore this email.",
-          '',
-          '— HealthCentria Barangay Health Center',
-        ].join('\n'),
-      ).catch(() => null);
-      emailSent = Boolean(result?.sent);
-    }
+    };
   } else {
     patient = await User.findOne({ email: patientEmail, role: 'patient' });
     if (!patient) {
@@ -562,41 +561,86 @@ export const walkInAppointment = asyncHandler(async (req, res) => {
     }
   }
 
-  const appt = await Appointment.create({
-    patient: patient._id,
-    service: service._id,
-    day,
-    date: new Date(`${day}T12:00:00.000Z`),
-    timePreference,
-    notes,
-    status: 'confirmed',
-    createdBy: req.user.id,
-    updatedBy: req.user.id,
-  });
-  await appt.populate([
-    { path: 'patient', select: 'fullName email' },
-    { path: 'service', select: 'name' },
-    { path: 'updatedBy', select: 'fullName' },
-  ]);
-  await logAppointment(req, 'appointment.walkin', appt, {
-    changes: [
-      ['status', '', 'confirmed'],
-      ['service', '', service.name],
-      ['day', '', day],
-      ['timePreference', '', timePreference],
-    ],
-    detail: newPatient
-      ? 'Emergency walk-in booked for a newly created patient (profile to be completed).'
-      : 'Emergency walk-in booked for an existing patient.',
-  });
-  if (newPatient) {
-    await logActivity({
-      req,
-      action: 'patient.create',
-      target: { type: 'patient', id: patient._id, label: patient.fullName },
-      detail: 'Patient account created at the front desk.',
-      patient: patient._id,
+  // One transaction: the new patient account (if any), the visit and their
+  // activity-log entries are saved together or not at all, so a failure can never
+  // leave an account with no visit or a visit with no log.
+  const created = await runInTransaction(async (session) => {
+    let owner = patient;
+    if (newUserFields) {
+      const [user] = await User.create([newUserFields], { session });
+      owner = user;
+    }
+    const [visit] = await Appointment.create(
+      [
+        {
+          patient: owner._id,
+          service: service._id,
+          day,
+          date: new Date(`${day}T12:00:00.000Z`),
+          timePreference,
+          notes,
+          status: 'confirmed',
+          createdBy: req.user.id,
+          updatedBy: req.user.id,
+        },
+      ],
+      { session },
+    );
+    await visit.populate([
+      { path: 'patient', select: 'fullName email' },
+      { path: 'service', select: 'name' },
+      { path: 'updatedBy', select: 'fullName' },
+    ]);
+    await logAppointment(req, 'appointment.walkin', visit, {
+      changes: [
+        ['status', '', 'confirmed'],
+        ['service', '', service.name],
+        ['day', '', day],
+        ['timePreference', '', timePreference],
+      ],
+      detail: newUserFields
+        ? 'Emergency walk-in booked for a newly created patient (profile to be completed).'
+        : 'Emergency walk-in booked for an existing patient.',
+      session,
     });
+    if (newUserFields) {
+      await logActivity({
+        req,
+        session,
+        action: 'patient.create',
+        target: { type: 'patient', id: owner._id, label: owner.fullName },
+        detail: 'Patient account created at the front desk.',
+        patient: owner._id,
+      });
+    }
+    return { owner, visit };
+  });
+  patient = created.owner;
+  const appt = created.visit;
+
+  // Emails cannot be undone, so they go out only after the transaction has committed.
+  if (newPatient?.email) {
+    passwordSetup = 'emailed';
+    const base = String(env.CLIENT_URL).replace(/\/+$/, '');
+    const result = await sendEmail(
+      newPatient.email,
+      'Set up your HealthCentria account',
+      [
+        'Hello ' + newPatient.fullName + ',',
+        '',
+        'The Barangay Health Center registered you at the front desk and created a HealthCentria account for you.',
+        'To use it, set your own password:',
+        '',
+        '1. Open ' + base + '/forgot-password',
+        '2. Enter this email address and request a code',
+        '3. Enter the 6-digit code we email you and choose your password',
+        '',
+        "If you didn't visit the health center, you can ignore this email.",
+        '',
+        '— HealthCentria Barangay Health Center',
+      ].join('\n'),
+    ).catch(() => null);
+    emailSent = Boolean(result?.sent);
   }
   // Walk-ins are already confirmed, so mirror them immediately.
   void syncAppointmentToCalendar(appt).catch(() => {});

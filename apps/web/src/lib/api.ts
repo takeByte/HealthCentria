@@ -17,6 +17,8 @@ export interface ServiceSchedule {
 
 export interface Service {
   id: string;
+  /** Record version: send it back when editing so changes cannot overwrite each other. */
+  version: number;
   name: string;
   description: string;
   schedule: ServiceSchedule;
@@ -29,6 +31,7 @@ export interface Service {
 
 export interface Appointment {
   id: string;
+  version: number;
   service: { id: string; name: string } | string;
   day: string;
   timePreference: 'morning' | 'afternoon' | 'any';
@@ -99,6 +102,35 @@ export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(`${API_URL}/api/health`);
   if (!res.ok) throw new Error(`API responded with ${res.status}`);
   return res.json() as Promise<HealthResponse>;
+}
+
+/**
+ * Idempotency-Key for "create" requests (API v2). A double-click or a quick retry
+ * sends the same request twice within a moment; they share one key so the server
+ * creates the record once. A later, deliberate repeat gets a fresh key.
+ */
+const RECENT_KEY_MS = 15_000;
+const recentKeys = new Map<string, { key: string; at: number }>();
+
+function makeKey(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    // Non-secure contexts have no randomUUID; this is still unique enough for a 15 second window.
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function idempotencyHeaders(path: string, body: unknown): Record<string, string> {
+  const now = Date.now();
+  for (const [sig, entry] of recentKeys) if (now - entry.at > RECENT_KEY_MS) recentKeys.delete(sig);
+  const signature = `${path}|${JSON.stringify(body)}`;
+  let entry = recentKeys.get(signature);
+  if (!entry) {
+    entry = { key: makeKey(), at: now };
+    recentKeys.set(signature, entry);
+  }
+  return { 'Idempotency-Key': entry.key };
 }
 
 /** A cold API answers 503 before running any handler, so one retry is safe. */
@@ -196,8 +228,8 @@ export function createService(input: ServiceInput): Promise<{ service: Service }
   return apiFetch('/api/services', { method: 'POST', body: input });
 }
 
-export function updateService(id: string, input: Partial<ServiceInput>): Promise<{ service: Service }> {
-  return apiFetch(`/api/services/${id}`, { method: 'PATCH', body: input });
+export function updateService(id: string, input: Partial<ServiceInput>, version: number): Promise<{ service: Service }> {
+  return apiFetch(`/api/v2/services/${id}`, { method: 'PATCH', body: { ...input, version } });
 }
 
 export function validDates(serviceId: string, days = 30): Promise<{ dates: string[] }> {
@@ -210,7 +242,11 @@ export function bookAppointment(input: {
   timePreference?: string;
   notes?: string;
 }): Promise<{ appointment: Appointment }> {
-  return apiFetch('/api/appointments', { method: 'POST', body: input });
+  return apiFetch('/api/v2/appointments', {
+    method: 'POST',
+    body: input,
+    headers: idempotencyHeaders('/api/v2/appointments', input),
+  });
 }
 
 export function myAppointments(): Promise<{ appointments: Appointment[] }> {
@@ -287,8 +323,9 @@ export function completeAppointment(
 export function updateAppointmentRecord(
   id: string,
   clinical: { diagnosis?: string; prescription?: string; visitNotes?: string },
+  version: number,
 ): Promise<{ appointment: StaffAppointment }> {
-  return apiFetch(`/api/appointments/${id}/record`, { method: 'PATCH', body: clinical });
+  return apiFetch(`/api/v2/appointments/${id}/record`, { method: 'PATCH', body: { ...clinical, version } });
 }
 
 export type AnnouncementCategory = 'schedule-change' | 'vaccination-day' | 'health-advisory' | 'general';
@@ -302,6 +339,7 @@ export interface AnnouncementImage {
 
 export interface Announcement {
   id: string;
+  version: number;
   title: string;
   body: string;
   category: AnnouncementCategory;
@@ -333,7 +371,11 @@ export function createAnnouncement(input: {
   pinned: boolean;
   images?: AnnouncementImage[];
 }): Promise<{ announcement: Announcement }> {
-  return apiFetch('/api/announcements', { method: 'POST', body: input });
+  return apiFetch('/api/v2/announcements', {
+    method: 'POST',
+    body: input,
+    headers: idempotencyHeaders('/api/v2/announcements', input),
+  });
 }
 
 export function updateAnnouncement(
@@ -346,8 +388,9 @@ export function updateAnnouncement(
     active: boolean;
     images: AnnouncementImage[];
   }>,
+  version: number,
 ): Promise<{ announcement: Announcement }> {
-  return apiFetch(`/api/announcements/${id}`, { method: 'PATCH', body: input });
+  return apiFetch(`/api/v2/announcements/${id}`, { method: 'PATCH', body: { ...input, version } });
 }
 
 export function deleteAnnouncement(id: string): Promise<{ success: boolean }> {
@@ -411,7 +454,11 @@ export function walkInAppointment(input: {
   /** Create a new record even though a patient with the same name exists. */
   allowDuplicate?: boolean;
 }): Promise<{ appointment: StaffAppointment; passwordSetup?: 'emailed' | 'none'; emailSent?: boolean }> {
-  return apiFetch('/api/appointments/walk-in', { method: 'POST', body: input });
+  return apiFetch('/api/v2/appointments/walk-in', {
+    method: 'POST',
+    body: input,
+    headers: idempotencyHeaders('/api/v2/appointments/walk-in', input),
+  });
 }
 
 export interface PatientSummary {
@@ -427,6 +474,7 @@ export interface PatientSummary {
 
 export interface PatientVisit {
   id: string;
+  version: number;
   service: { id: string; name: string } | string;
   day: string;
   status: StaffAppointment['status'];
@@ -472,6 +520,7 @@ export type MedicalProfileInput = Omit<MedicalProfile, 'recordedAt'>;
 
 export interface PatientDetail {
   id: string;
+  version: number;
   name: string;
   email: string;
   birthdate: string;
@@ -555,16 +604,18 @@ export function deletePatientAccount(
 export function updatePatientRecord(
   id: string,
   input: PatientRecordInput,
+  version: number,
 ): Promise<{ patient: PatientDetail }> {
-  return apiFetch(`/api/patients/${id}`, { method: 'PATCH', body: input });
+  return apiFetch(`/api/v2/patients/${id}`, { method: 'PATCH', body: { ...input, version } });
 }
 
 /** Staff/admin: replace a patient's medical profile. */
 export function updatePatientMedical(
   id: string,
   input: MedicalProfileInput,
+  version: number,
 ): Promise<{ patient: PatientDetail }> {
-  return apiFetch(`/api/patients/${id}/medical`, { method: 'PATCH', body: input });
+  return apiFetch(`/api/v2/patients/${id}/medical`, { method: 'PATCH', body: { ...input, version } });
 }
 
 export type ReportRange = 'today' | 'week' | 'month';
@@ -844,6 +895,7 @@ export function overview(): Promise<{
 
 export interface StaffAccount {
   id: string;
+  version: number;
   name: string;
   email: string;
   role: 'staff' | 'admin';
@@ -865,10 +917,13 @@ export function createStaffAccount(input: {
   role?: 'staff' | 'admin';
   permissions?: string[];
 }, pin?: string): Promise<{ account: StaffAccount }> {
-  return apiFetch('/api/staff-accounts', {
+  return apiFetch('/api/v2/staff-accounts', {
     method: 'POST',
     body: input,
-    ...(pin ? { headers: pinHeader(pin) } : {}),
+    headers: {
+      ...idempotencyHeaders('/api/v2/staff-accounts', { ...input, password: '' }),
+      ...(pin ? pinHeader(pin) : {}),
+    },
   });
 }
 
@@ -881,11 +936,12 @@ export function updateStaffAccount(
     permissions: string[];
     password: string;
   }>,
+  version: number,
   pin?: string,
 ): Promise<{ account: StaffAccount }> {
-  return apiFetch(`/api/staff-accounts/${id}`, {
+  return apiFetch(`/api/v2/staff-accounts/${id}`, {
     method: 'PATCH',
-    body: input,
+    body: { ...input, version },
     ...(pin ? { headers: pinHeader(pin) } : {}),
   });
 }

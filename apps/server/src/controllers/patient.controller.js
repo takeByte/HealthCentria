@@ -12,6 +12,8 @@ import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
 import { avatarSchema } from '../utils/avatar.js';
 import { prefAllows } from '../utils/notifications.js';
+import { versionMatches } from '../utils/concurrency.js';
+import { runInTransaction } from '../utils/transaction.js';
 
 const listQuery = z.object({
   search: z.string().trim().max(100).optional().default(''),
@@ -170,6 +172,7 @@ function presentProfile(u) {
   const birthdate = u.birthdate ? new Date(u.birthdate) : null;
   return {
     id: String(u._id),
+    version: Number(u.__v ?? 0),
     name: u.fullName,
     email: u.email,
     birthdate: birthdate && !Number.isNaN(birthdate.getTime()) ? birthdate.toISOString().slice(0, 10) : '',
@@ -213,6 +216,7 @@ function presentVisit(a) {
   const obj = typeof a.toObject === 'function' ? a.toObject() : a;
   return {
     id: String(obj._id),
+    version: Number(obj.__v ?? 0),
     service:
       obj.service && typeof obj.service === 'object'
         ? { id: String(obj.service._id), name: obj.service.name }
@@ -322,6 +326,7 @@ export const updatePatientRecord = asyncHandler(async (req, res) => {
   if (!patient) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
+  if (!versionMatches(req, res, patient, 'patient record')) return;
 
   const data = parsed.data;
   // Snapshot the tracked fields before writing so the log shows real diffs.
@@ -391,6 +396,7 @@ export const updatePatientMedical = asyncHandler(async (req, res) => {
   if (!patient) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
+  if (!versionMatches(req, res, patient, 'patient record')) return;
 
   const before = presentMedical(patient);
   const data = parsed.data;
@@ -569,74 +575,83 @@ export const deletePatient = asyncHandler(async (req, res) => {
   const appointments = await Appointment.find({ patient: patient._id }).select('_id status day').lean();
   const upcoming = appointments.filter((a) => ['pending', 'confirmed'].includes(a.status) && a.day >= today);
 
-  // Calendar events carry the patient's name: remove every one that exists
-  // (only appointments with a live link, so nothing new is created). Best effort.
+  // Calendar events carry the patient's name. Remember which ones exist now; they are
+  // removed AFTER the database changes commit, because a Google call cannot be rolled back.
   const linked = await CalendarEventLink.find({
     appointment: { $in: appointments.map((a) => a._id) },
     status: { $ne: 'deleted' },
   })
     .select('appointment')
     .lean();
-  await Promise.all(linked.map((l) => removeAppointmentFromCalendar(l.appointment).catch(() => null)));
 
-  if (upcoming.length) {
-    await Appointment.updateMany(
-      { _id: { $in: upcoming.map((a) => a._id) } },
-      { $set: { status: 'cancelled', updatedBy: req.user.id } },
-    );
-  }
-  await Appointment.updateMany(
-    { patient: patient._id },
-    { $set: { diagnosis: '', prescription: '', visitNotes: '', notes: '', declineReason: '' } },
-  );
-
-  await Promise.all([
-    Notification.deleteMany({ recipient: patient._id }),
-    VerificationCode.deleteMany({ email: patient.email }),
-  ]);
-
-  // updateOne skips schema validators on purpose: the placeholder has no
-  // password, Google id or profile fields, which a normal save would refuse.
-  await User.updateOne(
-    { _id: patient._id },
-    {
-      $set: {
-        email: `deleted-${patient._id}@deleted.invalid`,
-        fullName: 'Deleted patient',
-        active: false,
-        deletedAt: new Date(),
-        profileComplete: false,
-        emailVerified: false,
-        emailVerifiedAt: null,
-        provider: 'local',
-        avatarUrl: '',
-        barangay: '',
-        householdNumber: '',
-        philHealthNumber: '',
-        emergencyName: '',
-        emergencyNumber: '',
-        updatedBy: req.user.id,
-      },
-      $unset: {
-        passwordHash: '',
-        googleId: '',
-        birthdate: '',
-        sex: '',
-        address: '',
-        contactNumber: '',
-        medicalProfile: '',
-      },
-      $inc: { tokenVersion: 1 },
-    },
-  );
-
+  // One transaction: cancelling visits, wiping clinical notes, deleting notifications and
+  // codes, anonymizing the account and the audit entry are saved together or not at all.
+  // Before this, a failure half-way could leave a patient partly anonymized.
   const kept = appointments.length - upcoming.length;
-  await logActivity({
-    req,
-    action: 'patient.delete',
-    target: { type: 'patient', id: patient._id, label: patient.fullName || patient.email },
-    detail: `Patient account deleted and anonymized. ${upcoming.length} upcoming appointment(s) cancelled; ${kept} past visit(s) kept for reports without clinical notes.`,
+  await runInTransaction(async (session) => {
+    if (upcoming.length) {
+      await Appointment.updateMany(
+        { _id: { $in: upcoming.map((a) => a._id) } },
+        { $set: { status: 'cancelled', updatedBy: req.user.id } },
+        { session },
+      );
+    }
+    await Appointment.updateMany(
+      { patient: patient._id },
+      { $set: { diagnosis: '', prescription: '', visitNotes: '', notes: '', declineReason: '' } },
+      { session },
+    );
+
+    await Notification.deleteMany({ recipient: patient._id }, { session });
+    await VerificationCode.deleteMany({ email: patient.email }, { session });
+
+    // updateOne skips schema validators on purpose: the placeholder has no
+    // password, Google id or profile fields, which a normal save would refuse.
+    await User.updateOne(
+      { _id: patient._id },
+      {
+        $set: {
+          email: `deleted-${patient._id}@deleted.invalid`,
+          fullName: 'Deleted patient',
+          active: false,
+          deletedAt: new Date(),
+          profileComplete: false,
+          emailVerified: false,
+          emailVerifiedAt: null,
+          provider: 'local',
+          avatarUrl: '',
+          barangay: '',
+          householdNumber: '',
+          philHealthNumber: '',
+          emergencyName: '',
+          emergencyNumber: '',
+          updatedBy: req.user.id,
+        },
+        $unset: {
+          passwordHash: '',
+          googleId: '',
+          birthdate: '',
+          sex: '',
+          address: '',
+          contactNumber: '',
+          medicalProfile: '',
+        },
+        $inc: { tokenVersion: 1 },
+      },
+      { session },
+    );
+
+    await logActivity({
+      req,
+      session,
+      action: 'patient.delete',
+      target: { type: 'patient', id: patient._id, label: patient.fullName || patient.email },
+      detail: `Patient account deleted and anonymized. ${upcoming.length} upcoming appointment(s) cancelled; ${kept} past visit(s) kept for reports without clinical notes.`,
+    });
   });
+
+  // Committed. Now remove the calendar events (best effort, as before).
+  await Promise.all(linked.map((l) => removeAppointmentFromCalendar(l.appointment).catch(() => null)));
 
   res.json({ success: true, cancelled: upcoming.length, keptVisits: kept });
 });

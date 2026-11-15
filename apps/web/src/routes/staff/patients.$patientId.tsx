@@ -245,7 +245,9 @@ function PatientDetailPage() {
 
     setPending(true);
     try {
-      const result = await updatePatientRecord(patient.id, {
+      const result = await updatePatientRecord(
+        patient.id,
+        {
         fullName: form.fullName.trim(),
         birthdate: form.birthdate,
         sex: form.sex,
@@ -256,7 +258,9 @@ function PatientDetailPage() {
         philHealthNumber: form.philHealthNumber.trim(),
         emergencyName: form.emergencyName.trim(),
         emergencyNumber: form.emergencyNumber.trim(),
-      });
+        },
+        patient.version,
+      );
       setPatient(result.patient);
       setForm(formFromPatient(result.patient));
       setEditing(false);
@@ -298,11 +302,15 @@ function PatientDetailPage() {
     if (!recordEdit) return;
     setRecordSaving(true);
     try {
-      const result = await updateAppointmentRecord(recordEdit.id, {
-        diagnosis: recordEdit.diagnosis.trim(),
-        prescription: recordEdit.prescription.trim(),
-        visitNotes: recordEdit.visitNotes.trim(),
-      });
+      const result = await updateAppointmentRecord(
+        recordEdit.id,
+        {
+          diagnosis: recordEdit.diagnosis.trim(),
+          prescription: recordEdit.prescription.trim(),
+          visitNotes: recordEdit.visitNotes.trim(),
+        },
+        (visits ?? []).find((x) => x.id === recordEdit.id)?.version ?? 0,
+      );
       setVisits((list) =>
         list
           ? list.map((visit) =>
@@ -312,6 +320,7 @@ function PatientDetailPage() {
                     diagnosis: result.appointment.diagnosis,
                     prescription: result.appointment.prescription,
                     visitNotes: result.appointment.visitNotes,
+                    version: result.appointment.version,
                     updatedAt: result.appointment.updatedAt,
                     updatedByName: result.appointment.updatedByName,
                   }
@@ -665,7 +674,7 @@ function PatientDetailPage() {
                   <MedicalProfileCard
                     medical={patient.medical}
                     onSave={async (input: MedicalProfileInput) => {
-                      const result = await updatePatientMedical(patient.id, input);
+                      const result = await updatePatientMedical(patient.id, input, patient.version);
                       setPatient(result.patient);
                       setToast({ tone: 'success', message: 'Medical profile saved.' });
                     }}
