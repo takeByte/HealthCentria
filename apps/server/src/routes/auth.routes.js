@@ -20,6 +20,7 @@ import {
 import { requireAuth } from '../middleware/requireAuth.js';
 import {
   emailVerificationLimiter,
+  loginIpLimiter,
   loginLimiter,
   passwordChangeLimiter,
   passwordResetLimiter,
@@ -29,10 +30,10 @@ import { verifyCaptcha } from '../middleware/verifyCaptcha.js';
 
 export const authRouter = Router();
 
-// Order matters: throttle the IP, then verify the bot challenge, and only then
-// run the controller (which touches the database).
+// Order matters: throttle the IP, then the account, then verify the bot
+// challenge, and only then run the controller (which touches the database).
 authRouter.post('/register', registerLimiter, verifyCaptcha, register);
-authRouter.post('/login', loginLimiter, verifyCaptcha, login);
+authRouter.post('/login', loginIpLimiter, loginLimiter, verifyCaptcha, login);
 // Password reset is public (the user cannot sign in), so it is throttled and
 // the request step is CAPTCHA-guarded to prevent email bombing.
 authRouter.post('/password/forgot', passwordResetLimiter, verifyCaptcha, requestPasswordReset);

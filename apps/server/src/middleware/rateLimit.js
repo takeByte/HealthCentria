@@ -4,9 +4,11 @@ import rateLimit from 'express-rate-limit';
  * Rate limits for the public auth endpoints.
  *
  * CAPTCHA slows bots down but does not cap the number of requests, so these
- * limiters cap how often one IP can hit each endpoint. Keys are only counted
- * for failed sign-ins (`skipSuccessfulRequests`) so several patients sharing
- * one clinic Wi-Fi do not lock each other out.
+ * limiters cap how often a client can hit each endpoint. Sign-in failures are
+ * counted per account (normalized email) so patients sharing one clinic Wi-Fi
+ * cannot lock each other out; a looser IP cap stays in place to stop one host
+ * from spraying many accounts. Only failed sign-ins are counted
+ * (`skipSuccessfulRequests`).
  *
  * Behind a reverse proxy set TRUST_PROXY in the server env; otherwise every
  * request appears to come from the proxy's IP.
@@ -16,16 +18,40 @@ function limitResponse(message) {
   return { success: false, code: 'RATE_LIMITED', message };
 }
 
+/**
+ * Normalizes the submitted email so casing and stray spaces cannot split the
+ * counter. Bounded to the RFC 5321 maximum so a hostile body cannot store an
+ * oversized key.
+ */
+function loginAccountKey(req) {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  return email.slice(0, 254) || 'unknown-account';
+}
+
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: 5,
   skipSuccessfulRequests: true,
+  keyGenerator: loginAccountKey,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  message: limitResponse('Too many sign-in attempts. Try again in 15 minutes.'),
+  message: limitResponse('Too many sign-in attempts for this account. Try again in 15 minutes.'),
   // The Vite dev proxy (and most PaaS proxies) add X-Forwarded-For even when
   // Express is not configured to trust it. Suppress that warning; TRUST_PROXY
   // is the documented switch for real deployments.
+  validate: { xForwardedForHeader: false },
+});
+
+// Credential stuffing tries one password across many accounts, which an
+// account-keyed limit never sees. This looser cap only exists to stop a single
+// host from spraying the whole site.
+export const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 50,
+  skipSuccessfulRequests: true,
+  standardHeaders: false,
+  legacyHeaders: false,
+  message: limitResponse('Too many sign-in attempts. Try again in 15 minutes.'),
   validate: { xForwardedForHeader: false },
 });
 

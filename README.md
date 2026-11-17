@@ -33,7 +33,7 @@ pnpm dev:web      # http://localhost:5173
 ## CAPTCHA (reCAPTCHA v2)
 
 Login and registration are protected by a server-verified reCAPTCHA v2 checkbox
-plus per-IP rate limits.
+plus per-account and per-IP rate limits.
 
 1. Create a **reCAPTCHA v2 → "I'm not a robot" Checkbox** key pair at
    <https://www.google.com/recaptcha/admin>.
