@@ -1,4 +1,5 @@
 import { getSession } from './auth';
+import { reportEditConflict } from './edit-conflict';
 import { currentSocketId } from './realtime';
 
 export interface HealthResponse {
@@ -74,6 +75,32 @@ export class ApiError extends Error {
     this.data = data;
   }
 }
+
+/**
+ * The record moved on since this screen loaded it, so the save was refused
+ * (409 EDIT_CONFLICT or VERSION_CONFLICT). Retrying the same body cannot work:
+ * the draft was written against an older copy, so reload first.
+ */
+export class EditConflictError extends ApiError {
+  /** Version now stored on the server, when the response carried it. */
+  currentVersion?: number;
+  updatedAt?: string | null;
+
+  constructor(status: number, message: string, code: string, data?: Record<string, unknown>) {
+    super(status, message, undefined, code, data);
+    this.name = 'EditConflictError';
+    this.currentVersion = typeof data?.currentVersion === 'number' ? data.currentVersion : undefined;
+    this.updatedAt = typeof data?.updatedAt === 'string' ? data.updatedAt : null;
+  }
+}
+
+export function isEditConflict(error: unknown): error is EditConflictError {
+  return error instanceof EditConflictError;
+}
+
+const EDIT_CONFLICT_CODES = new Set(['EDIT_CONFLICT', 'VERSION_CONFLICT']);
+const CONFLICT_FALLBACK =
+  'This record was changed by someone else. Reload to see the latest version, then make your change again.';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 
@@ -170,13 +197,14 @@ async function apiFetch<T>(
     data = null;
   }
   if (!res.ok) {
-    throw new ApiError(
-      res.status,
-      data?.message ?? `Request failed (${res.status}).`,
-      data?.errors,
-      data?.code,
-      data ?? undefined,
-    );
+    const message = data?.message ?? `Request failed (${res.status}).`;
+    const code = data?.code;
+    if (res.status === 409 && code && EDIT_CONFLICT_CODES.has(code)) {
+      const conflict = new EditConflictError(res.status, data?.message ?? CONFLICT_FALLBACK, code, data ?? undefined);
+      reportEditConflict({ message: conflict.message, currentVersion: conflict.currentVersion });
+      throw conflict;
+    }
+    throw new ApiError(res.status, message, data?.errors, code, data ?? undefined);
   }
   return data as T;
 }

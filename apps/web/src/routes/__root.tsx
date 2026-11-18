@@ -1,4 +1,5 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { EditConflictNotice } from '../components/edit-conflict-notice';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -9,5 +10,11 @@ export const Route = createRootRoute({
  * public pages use `PublicHeader`, dashboards use `DashboardShell`.
  */
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      {/* A refused save can happen on any screen, so the notice lives here. */}
+      <EditConflictNotice />
+    </>
+  );
 }

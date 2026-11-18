@@ -91,10 +91,10 @@ export function printRecords(data: PrintableRecords): boolean {
 <title>Medical record — ${esc(data.patientName)}</title>
 <style>
   body{font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:#0f172a;margin:32px auto;max-width:760px;padding:0 20px}
-  header{border-bottom:2px solid #0f766e;padding-bottom:10px;margin-bottom:18px}
-  header .org{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#0f766e;font-weight:700}
+  header{border-bottom:2px solid #0d47a1;padding-bottom:10px;margin-bottom:18px}
+  header .org{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#0d47a1;font-weight:700}
   h1{font-size:22px;margin:4px 0 0}
-  h2{font-size:15px;margin:22px 0 8px;color:#134e4a}
+  h2{font-size:15px;margin:22px 0 8px;color:#0d47a1}
   h3{font-size:14px;margin:0 0 4px}
   .muted{color:#64748b;font-weight:400}
   .facts{border-collapse:collapse;width:100%}

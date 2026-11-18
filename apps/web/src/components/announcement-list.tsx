@@ -32,7 +32,7 @@ export function AnnouncementList({
   if (announcements.length === 0) return <EmptyNote>{emptyMessage}</EmptyNote>;
 
   return (
-    <ul className={cn('divide-y divide-[#eaf0f6]', className)}>
+    <ul className={cn('divide-y divide-[var(--palette-veil)]', className)}>
       {announcements.slice(0, limit).map((a) => (
         <li key={a.id} className="py-3.5 first:pt-0 last:pb-0">
           <div className="flex items-center gap-2">

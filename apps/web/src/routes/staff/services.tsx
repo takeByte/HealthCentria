@@ -109,7 +109,7 @@ function ScheduleFields({
                   className={cn(
                     'h-9 min-w-12 rounded-lg border px-3 text-[12.5px] font-semibold transition-colors active:scale-[0.97]',
                     on
-                      ? 'border-[#1f55a8]/40 bg-[#1f55a8]/10 text-[#123c78]'
+                      ? 'border-[var(--brand-deep)]/40 bg-[var(--brand-deep)]/10 text-[var(--brand-ink)]'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
                   )}
                 >
@@ -362,19 +362,19 @@ function ServicesManage() {
         {(filtered ?? []).map((s) => (
           <article key={s.id} className={`${panel} flex flex-col`}>
             <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf3fc] text-[#1f55a8] ring-1 ring-inset ring-[#1f55a8]/12">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-tint)] text-[var(--brand-deep)] ring-1 ring-inset ring-[var(--brand-deep)]/12">
                 <CalendarDays size={18} aria-hidden />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-display text-[15px] font-semibold tracking-[-0.015em] text-[#0b2c4f]">
+                  <h3 className="font-display text-[15px] font-semibold tracking-[-0.015em] text-[var(--brand-ink-dark)]">
                     {s.name}
                   </h3>
                   <StatusPill tone={s.active ? 'teal' : 'slate'} className="shrink-0">
                     {s.active ? 'Active' : 'Inactive'}
                   </StatusPill>
                 </div>
-                <p className="mt-1 inline-flex items-center rounded-full bg-[#1f55a8]/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-[#1a448a]">
+                <p className="mt-1 inline-flex items-center rounded-full bg-[var(--brand-deep)]/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-[var(--brand-deep)]">
                   {s.scheduleText}
                 </p>
               </div>
@@ -394,7 +394,7 @@ function ServicesManage() {
               {editingId === s.id ? (
                 <form
                   onSubmit={(e) => handleUpdate(e, s.id)}
-                  className="grid gap-4 border-t border-[#eaf0f6] pt-4"
+                  className="grid gap-4 border-t border-[var(--palette-veil)] pt-4"
                 >
                   <div>
                     <label htmlFor={`edit-name-${s.id}`} className={fieldLabel}>Name *</label>
@@ -406,7 +406,7 @@ function ServicesManage() {
                   </div>
                   <ScheduleFields schedule={eSched} set={setESched} prefix={`edit-${s.id}`} />
                   <label htmlFor={`edit-active-${s.id}`} className="flex cursor-pointer items-center gap-3 text-[13px] font-medium text-[#1e293b]">
-                    <input id={`edit-active-${s.id}`} type="checkbox" checked={eActive} onChange={(e) => setEActive(e.target.checked)} className="size-5 accent-[#1f55a8]" />
+                    <input id={`edit-active-${s.id}`} type="checkbox" checked={eActive} onChange={(e) => setEActive(e.target.checked)} className="size-5 accent-[var(--brand-deep)]" />
                     Active (visible for booking)
                   </label>
                   {eError && <InlineNotice>{eError}</InlineNotice>}

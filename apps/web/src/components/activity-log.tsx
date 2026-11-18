@@ -46,10 +46,10 @@ const CATEGORIES = Object.keys(ACTIVITY_CATEGORY_LABELS) as ActivityCategory[];
 
 const CATEGORY_STYLE: Record<ActivityCategory, string> = {
   auth: 'bg-slate-500/10 text-slate-700 ring-slate-500/20',
-  appointments: 'bg-sky-600/10 text-sky-800 ring-sky-600/20',
-  clinical: 'bg-[#1f55a8]/10 text-[#1a448a] ring-[#1f55a8]/20',
+  appointments: 'bg-[var(--brand-sky)]/30 text-[var(--brand-ink)] ring-[var(--brand-sky)]/70',
+  clinical: 'bg-[var(--brand-deep)]/10 text-[var(--brand-deep)] ring-[var(--brand-deep)]/20',
   people: 'bg-amber-500/10 text-amber-800 ring-amber-600/25',
-  content: 'bg-indigo-500/10 text-indigo-800 ring-indigo-600/20',
+  content: 'bg-[var(--brand-bright)]/10 text-[var(--brand-deep)] ring-[var(--brand-bright)]/25',
   configuration: 'bg-amber-500/10 text-amber-800 ring-amber-600/25',
   system: 'bg-slate-500/10 text-slate-600 ring-slate-500/20',
 };
@@ -538,7 +538,7 @@ export function ActivityFeed({
                       aria-hidden
                       className={cn(
                         'mt-1 size-2 shrink-0 rounded-full',
-                        entry.outcome === 'failed' ? 'bg-red-500' : 'bg-[#1f55a8]',
+                        entry.outcome === 'failed' ? 'bg-red-500' : 'bg-[var(--brand-deep)]',
                       )}
                     />
                     <span className="min-w-0 flex-1">

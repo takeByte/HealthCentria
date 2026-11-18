@@ -29,7 +29,7 @@ export const Route = createFileRoute('/register')({
 
 // Matches the login form so the two public auth screens stay visually identical.
 const inputClass =
-  'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-[#1695de] focus:ring-2 focus:ring-[#1695de]/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
+  'h-10 w-full rounded-xl border border-input bg-background px-3 text-base outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand-bright)] focus:ring-2 focus:ring-[var(--brand-bright)]/25 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-destructive/20';
 
 const labelClass = 'mb-1 block text-sm font-medium text-slate-800';
 
@@ -330,7 +330,7 @@ function RegisterComponent() {
   const stepTransition = { duration: reduceMotion ? 0.12 : 0.18, ease: 'easeOut' as const };
 
   return (
-    <div className="relative flex min-h-dvh flex-col bg-[#f3f8fd]">
+    <div className="relative flex min-h-dvh flex-col bg-[var(--palette-veil)]">
       <PublicHeader />
 
       <main className="flex flex-1 flex-col p-2.5 sm:p-4">
@@ -458,7 +458,7 @@ function RegisterComponent() {
                             className={cn(
                               'h-9 rounded-xl border px-2 text-sm font-medium transition-colors active:scale-[0.97]',
                               form.sex === opt
-                                ? 'border-[#1695de] bg-[#eff6fd] text-[#1a448a]'
+                                ? 'border-[var(--brand-bright)] bg-[var(--brand-tint)] text-[var(--brand-deep)]'
                                 : 'border-input bg-background text-slate-700 hover:border-slate-300',
                             )}
                           >
@@ -506,7 +506,7 @@ function RegisterComponent() {
 
                     <Button
                       type="submit"
-                      className="h-10 w-full bg-gradient-to-r from-[#1695de] to-blue-600 text-base active:scale-[0.97]"
+                      className="h-10 w-full bg-gradient-to-r from-[var(--brand-bright)] to-[var(--brand-deep)] text-base active:scale-[0.97]"
                     >
                       Next
                     </Button>
@@ -514,7 +514,7 @@ function RegisterComponent() {
                     <div className="space-y-1.5 pt-1 text-center text-sm">
                       <p className="text-slate-600">
                         Already registered?{' '}
-                        <Link to="/login" className="font-medium text-[#1f55a8] underline-offset-4 hover:underline">
+                        <Link to="/login" className="font-medium text-[var(--brand-deep)] underline-offset-4 hover:underline">
                           Log in
                         </Link>
                       </p>
@@ -619,7 +619,7 @@ function RegisterComponent() {
                           onChange={(e) => set('consent', e.target.checked)}
                           aria-invalid={Boolean(errors.consent)}
                           aria-describedby={errors.consent ? 'reg-consent-error' : undefined}
-                          className="mt-0.5 size-4 shrink-0 accent-[#1f55a8]"
+                          className="mt-0.5 size-4 shrink-0 accent-[var(--brand-deep)]"
                         />
                         <span className="text-xs leading-5 text-slate-700">
                           I agree to the collection and use of my personal and health information for this health
@@ -665,7 +665,7 @@ function RegisterComponent() {
                           !form.consent ||
                           (Boolean(siteKey) && recaptchaEnabled && !captchaToken)
                         }
-                        className="h-10 flex-1 bg-gradient-to-r from-[#1695de] to-blue-600 text-base active:scale-[0.97]"
+                        className="h-10 flex-1 bg-gradient-to-r from-[var(--brand-bright)] to-[var(--brand-deep)] text-base active:scale-[0.97]"
                       >
                         {pending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
                         {pending ? 'Creating account…' : 'Create account'}
@@ -675,7 +675,7 @@ function RegisterComponent() {
                     <div className="space-y-1.5 pt-1 text-center text-sm">
                       <p className="text-slate-600">
                         Already registered?{' '}
-                        <Link to="/login" className="font-medium text-[#1f55a8] underline-offset-4 hover:underline">
+                        <Link to="/login" className="font-medium text-[var(--brand-deep)] underline-offset-4 hover:underline">
                           Log in
                         </Link>
                       </p>
@@ -692,9 +692,9 @@ function RegisterComponent() {
                     noValidate
                     className={cn(stepClass, 'justify-center')}
                   >
-                    <div className="flex items-start gap-2.5 rounded-xl border border-[#1695de]/20 bg-[#eff6fd]/80 px-3.5 py-3">
-                      <MailCheck size={18} className="mt-0.5 shrink-0 text-[#1f55a8]" aria-hidden />
-                      <p className="text-sm leading-6 text-[#0b2c4f]">
+                    <div className="flex items-start gap-2.5 rounded-xl border border-[var(--brand-bright)]/20 bg-[var(--brand-tint)]/80 px-3.5 py-3">
+                      <MailCheck size={18} className="mt-0.5 shrink-0 text-[var(--brand-deep)]" aria-hidden />
+                      <p className="text-sm leading-6 text-[var(--brand-ink-dark)]">
                         We sent a 6-digit code to{' '}
                         <span className="font-semibold break-all">{form.email.trim()}</span>. Enter it below to
                         verify your email. Check your spam folder if it has not arrived.
@@ -731,7 +731,7 @@ function RegisterComponent() {
                       <p
                         role="status"
                         aria-live="polite"
-                        className="flex items-start gap-2 rounded-xl bg-[#eff6fd] px-3 py-2 text-sm text-[#0d47a1] ring-1 ring-inset ring-[#2196f3]/20"
+                        className="flex items-start gap-2 rounded-xl bg-[var(--brand-tint)] px-3 py-2 text-sm text-[#0d47a1] ring-1 ring-inset ring-[#2196f3]/20"
                       >
                         <CircleCheck size={16} className="mt-0.5 shrink-0 text-[#0d47a1]" aria-hidden />
                         <span>{verifyNotice}</span>
@@ -741,7 +741,7 @@ function RegisterComponent() {
                     <Button
                       type="submit"
                       disabled={verifyPending || code.length !== 6}
-                      className="h-10 w-full bg-gradient-to-r from-[#1695de] to-blue-600 text-base active:scale-[0.97]"
+                      className="h-10 w-full bg-gradient-to-r from-[var(--brand-bright)] to-[var(--brand-deep)] text-base active:scale-[0.97]"
                     >
                       {verifyPending && <LoaderCircle size={18} className="animate-spin" aria-hidden />}
                       {verifyPending ? 'Verifying…' : 'Verify and continue'}
@@ -752,7 +752,7 @@ function RegisterComponent() {
                         type="button"
                         onClick={handleResend}
                         disabled={resending || resendCooldown > 0}
-                        className="font-medium text-[#1f55a8] underline-offset-4 hover:underline disabled:text-slate-400 disabled:no-underline"
+                        className="font-medium text-[var(--brand-deep)] underline-offset-4 hover:underline disabled:text-slate-400 disabled:no-underline"
                       >
                         {resending
                           ? 'Sending…'

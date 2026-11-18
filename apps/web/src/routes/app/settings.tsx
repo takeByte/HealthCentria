@@ -49,8 +49,8 @@ function Switch({
       disabled={busy}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/40 disabled:opacity-60',
-        checked ? 'bg-[#0f766e]' : 'bg-slate-300',
+        'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-deep)]/40 disabled:opacity-60',
+        checked ? 'bg-[var(--brand-deep)]' : 'bg-slate-300',
       )}
     >
       <span
@@ -150,8 +150,8 @@ function PatientSettings() {
               </li>
             ))}
           </ul>
-          <p className="mt-1 flex items-start gap-2 rounded-xl bg-[#0f766e]/8 px-3.5 py-3 text-[12.5px] leading-5 text-[#134e4a] ring-1 ring-inset ring-[#0f766e]/12">
-            <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-[#0f766e]" />
+          <p className="mt-1 flex items-start gap-2 rounded-xl bg-[var(--brand-deep)]/8 px-3.5 py-3 text-[12.5px] leading-5 text-[var(--brand-ink-dark)] ring-1 ring-inset ring-[var(--brand-deep)]/12">
+            <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-[var(--brand-deep)]" />
             <span>
               Security emails, such as email verification codes and password reset codes, are always sent and can't be
               turned off.

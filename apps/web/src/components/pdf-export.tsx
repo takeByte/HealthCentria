@@ -81,7 +81,7 @@ export function PdfOptionsPanel({
       <label
         className={cn(
           'flex items-start gap-3 rounded-xl px-3.5 py-3 ring-1 ring-inset',
-          upload ? 'bg-[#eaf3fc]/60 ring-[#1f55a8]/25' : 'bg-white ring-slate-200',
+          upload ? 'bg-[var(--brand-tint)]/60 ring-[var(--brand-deep)]/25' : 'bg-white ring-slate-200',
           driveReady && !disabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
         )}
       >
@@ -90,7 +90,7 @@ export function PdfOptionsPanel({
           checked={upload}
           disabled={!driveReady || disabled}
           onChange={(e) => setUploadChoice(e.target.checked)}
-          className="mt-0.5 size-4 shrink-0 accent-[#1f55a8]"
+          className="mt-0.5 size-4 shrink-0 accent-[var(--brand-deep)]"
         />
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] font-semibold text-slate-900">Upload to Google Drive</span>
@@ -173,7 +173,7 @@ export function PdfOptionsPanel({
                         checked={checked}
                         disabled={full || !upload}
                         onChange={() => toggle(r.id)}
-                        className="size-4 shrink-0 accent-[#1f55a8]"
+                        className="size-4 shrink-0 accent-[var(--brand-deep)]"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-semibold text-slate-900">
@@ -185,7 +185,7 @@ export function PdfOptionsPanel({
                       <span
                         className={cn(
                           'shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.05em]',
-                          r.role === 'admin' ? 'bg-sky-600/10 text-sky-800' : 'bg-[#1f55a8]/10 text-[#1a448a]',
+                          r.role === 'admin' ? 'bg-sky-600/10 text-sky-800' : 'bg-[var(--brand-deep)]/10 text-[var(--brand-deep)]',
                         )}
                       >
                         {r.role}
@@ -228,7 +228,7 @@ export function PdfExportNote({ result, error }: { result: PdfExportResult | nul
             href={result.driveLink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 font-semibold text-[#1a448a] underline-offset-4 hover:underline"
+            className="inline-flex items-center gap-1 font-semibold text-[var(--brand-deep)] underline-offset-4 hover:underline"
           >
             Open in Drive <ExternalLink size={14} aria-hidden />
           </a>

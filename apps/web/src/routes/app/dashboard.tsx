@@ -103,7 +103,7 @@ function WeekStrip({ day, today }: { day: string; today: string }) {
     (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i),
   );
   return (
-    <div className="mt-4 rounded-xl border border-[#eaf0f6] bg-[#fbfdfe] p-2">
+    <div className="mt-4 rounded-xl border border-[var(--palette-veil)] bg-[var(--palette-veil)] p-2">
       <ol className="grid grid-cols-7 gap-1" aria-label="Week of your visit">
         {week.map((d) => {
           const ymd = toYMD(d);
@@ -120,9 +120,9 @@ function WeekStrip({ day, today }: { day: string; today: string }) {
               className={cn(
                 'flex flex-col items-center rounded-lg py-1.5',
                 isVisit
-                  ? 'bg-gradient-to-b from-[#1695de] to-[#1a448a] text-white shadow-[0_6px_14px_-6px_rgba(31,85,168,0.6)]'
+                  ? 'bg-gradient-to-b from-[var(--brand-bright)] to-[var(--brand-deep)] text-white shadow-[0_6px_14px_-6px_rgba(13,71,161,0.6)]'
                   : isToday
-                    ? 'bg-white ring-1 ring-inset ring-[#1f55a8]/45'
+                    ? 'bg-white ring-1 ring-inset ring-[var(--brand-deep)]/45'
                     : '',
               )}
             >
@@ -145,7 +145,7 @@ function WeekStrip({ day, today }: { day: string; today: string }) {
               <span
                 className={cn(
                   'h-3 max-w-full truncate px-0.5 text-[8.5px] font-semibold uppercase leading-3',
-                  isVisit ? 'text-white/85' : 'text-[#1f55a8]/70',
+                  isVisit ? 'text-white/85' : 'text-[var(--brand-deep)]/70',
                 )}
               >
                 {tag ?? ''}
@@ -226,17 +226,17 @@ function PatientDashboard() {
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(22,149,222,0.16),transparent_70%)]"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(33,150,243,0.16),transparent_70%)]"
         />
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#1f55a8]">
-              <span aria-hidden className="h-px w-5 bg-[#1f55a8]/45" />
+            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--brand-deep)]">
+              <span aria-hidden className="h-px w-5 bg-[var(--brand-deep)]/45" />
               {service.name} today
             </p>
             <h2
               id="patient-greeting"
-              className="mt-2 font-display text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[#0b2c4f] sm:text-[32px]"
+              className="mt-2 font-display text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-[var(--brand-ink-dark)] sm:text-[32px]"
             >
               {greeting()}, {name}
             </h2>
@@ -290,7 +290,7 @@ function PatientDashboard() {
             ) : next ? (
               <>
                 <div className="flex items-start gap-3">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#1f55a8]/10 text-[#1f55a8]">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-deep)]/10 text-[var(--brand-deep)]">
                     <CalendarCheck size={20} aria-hidden />
                   </span>
                   <div className="min-w-0">
@@ -330,7 +330,7 @@ function PatientDashboard() {
                   )}
                   <Link
                     to="/app/appointments"
-                    className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#1f55a8] hover:underline hover:underline-offset-4"
+                    className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--brand-deep)] hover:underline hover:underline-offset-4"
                   >
                     Manage
                     <ArrowRight size={15} aria-hidden />
@@ -367,7 +367,7 @@ function PatientDashboard() {
             action={
               <Link
                 to="/app/announcements"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#1f55a8] hover:underline hover:underline-offset-4"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--brand-deep)] hover:underline hover:underline-offset-4"
               >
                 View all
                 <ArrowRight size={15} aria-hidden />
@@ -382,22 +382,22 @@ function PatientDashboard() {
             ) : announcements.length === 0 ? (
               <EmptyNote>No announcements yet. New posts from the center will show up here.</EmptyNote>
             ) : (
-              <ul className="divide-y divide-[#eaf0f6]">
+              <ul className="divide-y divide-[var(--palette-veil)]">
                 {announcements.slice(0, 3).map((a) => (
                   <li key={a.id} className="py-3.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-[#eaf3fc] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[#1a448a] ring-1 ring-inset ring-[#1f55a8]/15">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-tint)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--brand-deep)] ring-1 ring-inset ring-[var(--brand-deep)]/15">
                         <Megaphone size={10} aria-hidden />
                         {CATEGORY_LABELS[a.category]}
                       </span>
                       <span className="text-[11px] tabular-nums text-[#94a3b8]">{formatShortDate(a.publishedAt)}</span>
                       {a.pinned && (
-                        <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#1f55a8]">
+                        <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--brand-deep)]">
                           Pinned
                         </span>
                       )}
                     </div>
-                    <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-[#0b2c4f]">{a.title}</p>
+                    <p className="mt-1.5 text-[13.5px] font-semibold leading-snug text-[var(--brand-ink-dark)]">{a.title}</p>
                     <p className="mt-1 line-clamp-2 text-[12.5px] leading-5 text-[#64748b]">{a.body}</p>
                   </li>
                 ))}

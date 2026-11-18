@@ -63,8 +63,8 @@ export function ServiceUtilization({
           <div className="space-y-3" aria-hidden>
             {[0, 1, 2].map((i) => (
               <div key={i} className="animate-pulse">
-                <div className="h-2.5 w-1/2 rounded-full bg-[#edf4f8]" />
-                <div className="mt-2 h-1.5 rounded-full bg-[#f2f7fb]" />
+                <div className="h-2.5 w-1/2 rounded-full bg-[var(--palette-veil)]" />
+                <div className="mt-2 h-1.5 rounded-full bg-[var(--palette-veil)]" />
               </div>
             ))}
           </div>
@@ -84,7 +84,7 @@ export function ServiceUtilization({
                       {r.count}
                     </p>
                   </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#edf4f8]">
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--palette-veil)]">
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-[var(--brand-bright)] to-[var(--brand-deep)]"
                       style={{ width: `${Math.max(4, share)}%` }}

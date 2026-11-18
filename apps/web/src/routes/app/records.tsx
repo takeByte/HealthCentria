@@ -29,7 +29,7 @@ export const Route = createFileRoute('/app/records')({
 
 /** Text-link action — the quietest way to offer a next step inside a card. */
 const textLink =
-  'inline-flex items-center gap-1 text-[13px] font-semibold text-[#1f55a8] hover:underline hover:underline-offset-4';
+  'inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--brand-deep)] hover:underline hover:underline-offset-4';
 
 function serviceName(a: Appointment): string {
   return typeof a.service === 'object' ? a.service.name : 'Service';
@@ -53,7 +53,7 @@ function VisitCard({ visit, featured, delay }: { visit: Appointment; featured?: 
       className={cn(
         'app-card',
         cardPadding,
-        featured && 'md:col-span-2 ring-1 ring-inset ring-[#0f766e]/25',
+        featured && 'md:col-span-2 ring-1 ring-inset ring-[var(--brand-deep)]/25',
       )}
     >
       <div className="flex items-start gap-3">
@@ -64,7 +64,7 @@ function VisitCard({ visit, featured, delay }: { visit: Appointment; featured?: 
           <h3 className="font-display text-[15.5px] font-semibold leading-snug tracking-[-0.01em] text-slate-900">
             {serviceName(visit)}
             {featured && (
-              <span className="ml-2 rounded-md bg-[#0f766e]/10 px-1.5 py-0.5 align-middle text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#0f766e]">
+              <span className="ml-2 rounded-md bg-[var(--brand-deep)]/10 px-1.5 py-0.5 align-middle text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--brand-deep)]">
                 Latest visit
               </span>
             )}
@@ -208,9 +208,9 @@ function MyRecords() {
       <motion.p
         {...rise}
         transition={{ type: 'spring', bounce: 0, duration: 0.35 }}
-        className="flex items-start gap-2.5 rounded-xl bg-[#1f55a8]/8 px-4 py-3 text-[12.5px] leading-5 text-[#123c78] ring-1 ring-inset ring-[#1f55a8]/12"
+        className="flex items-start gap-2.5 rounded-xl bg-[var(--brand-deep)]/8 px-4 py-3 text-[12.5px] leading-5 text-[var(--brand-ink)] ring-1 ring-inset ring-[var(--brand-deep)]/12"
       >
-        <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-[#1f55a8]" />
+        <Info size={15} aria-hidden className="mt-0.5 shrink-0 text-[var(--brand-deep)]" />
         <span>
           Read-only — these are written by center staff. For corrections, ask the front desk.
         </span>

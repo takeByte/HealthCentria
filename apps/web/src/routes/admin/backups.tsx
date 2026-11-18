@@ -296,7 +296,7 @@ function AdminBackups() {
                   type="checkbox"
                   checked={form.enabled}
                   onChange={(event) => setForm({ ...form, enabled: event.target.checked })}
-                  className="mt-0.5 size-4 accent-[#1f55a8]"
+                  className="mt-0.5 size-4 accent-[var(--brand-deep)]"
                 />
                 <span>
                   <span className="block text-[13.5px] font-semibold text-slate-900">

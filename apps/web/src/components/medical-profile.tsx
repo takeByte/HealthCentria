@@ -44,7 +44,7 @@ function Chips({ items, tone }: { items: string[]; tone?: 'alert' }) {
             'rounded-lg px-2.5 py-1 text-[12.5px] font-medium ring-1 ring-inset',
             tone === 'alert'
               ? 'bg-red-50 text-red-800 ring-red-600/20'
-              : 'bg-[#edf3f8] text-slate-700 ring-[#cbd7e2]/70',
+              : 'bg-[var(--palette-veil)] text-slate-700 ring-[var(--palette-line)]/70',
           )}
         >
           {item}
@@ -174,7 +174,7 @@ function TagField({
           {items.map((item) => (
             <li
               key={item}
-              className="inline-flex items-center gap-1 rounded-lg bg-[#edf3f8] py-1 pl-2.5 pr-1 text-[12.5px] font-medium text-slate-700 ring-1 ring-inset ring-[#cbd7e2]/70"
+              className="inline-flex items-center gap-1 rounded-lg bg-[var(--palette-veil)] py-1 pl-2.5 pr-1 text-[12.5px] font-medium text-slate-700 ring-1 ring-inset ring-[var(--palette-line)]/70"
             >
               {item}
               <button

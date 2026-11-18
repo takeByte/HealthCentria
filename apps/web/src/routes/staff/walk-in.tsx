@@ -261,7 +261,7 @@ function WalkIn() {
         className={panel}
       >
         <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#1f55a8]/10 text-[#1f55a8]">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-deep)]/10 text-[var(--brand-deep)]">
             <CalendarCheck size={18} aria-hidden />
           </span>
           <div className="min-w-0">
@@ -328,7 +328,7 @@ function WalkIn() {
                 </p>
               )}
               {found && (
-                <p role="status" className="mt-1.5 text-[12.5px] font-semibold text-[#1a448a]">
+                <p role="status" className="mt-1.5 text-[12.5px] font-semibold text-[var(--brand-deep)]">
                   Found: {found.name} ({found.email})
                 </p>
               )}

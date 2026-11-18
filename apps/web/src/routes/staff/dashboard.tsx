@@ -239,10 +239,10 @@ function StaffDashboard() {
               <div className="mt-4 space-y-2.5" aria-hidden>
                 {[0, 1].map((i) => (
                   <div key={i} className="flex items-center gap-2.5">
-                    <div className="size-7 animate-pulse rounded-full bg-[#edf4f8]" />
+                    <div className="size-7 animate-pulse rounded-full bg-[var(--palette-veil)]" />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-[#edf4f8]" />
-                      <div className="h-2 w-2/3 animate-pulse rounded-full bg-[#f2f7fb]" />
+                      <div className="h-2.5 w-1/2 animate-pulse rounded-full bg-[var(--palette-veil)]" />
+                      <div className="h-2 w-2/3 animate-pulse rounded-full bg-[var(--palette-veil)]" />
                     </div>
                   </div>
                 ))}
@@ -250,7 +250,7 @@ function StaffDashboard() {
             )}
 
             {canAppointments && requests.length > 0 && (
-              <ul className="mt-3.5 divide-y divide-[#eaf0f6]">
+              <ul className="mt-3.5 divide-y divide-[var(--palette-veil)]">
                 {requests.map((a) => (
                   <li key={a.id} className="flex items-center gap-2.5 py-2 first:pt-0 last:pb-0">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#fdf5e4] text-[10px] font-bold text-[#8a5a10]">

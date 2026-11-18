@@ -271,7 +271,7 @@ function MyProfilePage() {
           <div className="flex min-w-0 items-center gap-3.5">
             <span
               aria-hidden
-              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1695de] to-[#123c78] text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+              className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[var(--brand-bright)] to-[var(--brand-ink)] text-[18px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
             >
               {avatarUrl ? (
                 <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
@@ -313,7 +313,7 @@ function MyProfilePage() {
             <div className="flex flex-wrap items-center gap-4">
               <span
                 aria-hidden
-                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1695de] to-[#123c78] text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[var(--brand-bright)] to-[var(--brand-ink)] text-[20px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
               >
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="size-full object-cover" />
@@ -538,9 +538,9 @@ function MyProfilePage() {
           }
         />
         {isAdmin ? (
-          <div className="mt-3 flex items-center gap-2 rounded-xl border border-sky-600/20 bg-sky-50/70 px-3.5 py-3">
-            <ShieldCheck size={17} aria-hidden className="shrink-0 text-sky-700" />
-            <p className="text-[12.5px] text-sky-900">Full access to every action and screen.</p>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-[var(--brand-sky)]/70 bg-[var(--brand-sky)]/25 px-3.5 py-3">
+            <ShieldCheck size={17} aria-hidden className="shrink-0 text-[var(--brand-deep)]" />
+            <p className="text-[12.5px] text-[var(--brand-ink)]">Full access to every action and screen.</p>
           </div>
         ) : granted.length === 0 ? (
           <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-600/20 bg-amber-50/70 px-3.5 py-3">

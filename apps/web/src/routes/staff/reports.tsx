@@ -59,13 +59,13 @@ const RANGE_OPTIONS = [
 
 const RANGE_DAYS: Record<ReportRange, number> = { today: 1, week: 7, month: 30 };
 
-const SERIES_COLORS = ['#123c78', '#5ab7f0', '#d9a441'] as const;
-const SERVICE_COLORS = ['#1f55a8', '#1695de', '#a9d8f7', '#d7eafb'] as const;
+const SERIES_COLORS = ['var(--brand-ink)', 'var(--brand-sky)', '#d9a441'] as const;
+const SERVICE_COLORS = ['var(--brand-deep)', 'var(--brand-bright)', 'var(--brand-sky)', 'var(--brand-tint)'] as const;
 
 const AGE_GROUPS = [
-  { label: 'Children (0–17)', min: 0, max: 17, color: '#d7eafb' },
-  { label: 'Youth (18–35)', min: 18, max: 35, color: '#a9d8f7' },
-  { label: 'Adults (36–59)', min: 36, max: 59, color: '#1f55a8' },
+  { label: 'Children (0–17)', min: 0, max: 17, color: 'var(--brand-tint)' },
+  { label: 'Youth (18–35)', min: 18, max: 35, color: 'var(--brand-sky)' },
+  { label: 'Adults (36–59)', min: 36, max: 59, color: 'var(--brand-deep)' },
   { label: 'Seniors (60+)', min: 60, max: Number.POSITIVE_INFINITY, color: '#d9a441' },
 ] as const;
 
@@ -222,15 +222,15 @@ function Reports() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#1f55a8]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--brand-deep)]">
             Report &amp; Analysis
           </p>
-          <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight tracking-[-0.02em] text-[#123c78]">
+          <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight tracking-[-0.02em] text-[var(--brand-ink)]">
             Reports &amp; Analysis
           </h1>
           <p className="mt-1 text-[12.5px] text-slate-500">
             View service trends, patient demographics and appointment outcomes.
-            {loading && <span className="ml-1.5 font-medium text-[#1f55a8]">Updating…</span>}
+            {loading && <span className="ml-1.5 font-medium text-[var(--brand-deep)]">Updating…</span>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 print-hide">
@@ -288,7 +288,7 @@ function Reports() {
           note={`Completed consultations · last ${visits?.days ?? rangeDays} days`}
           delta={busiest ? `Busiest: ${busiest.serviceName}` : 'No completed visits yet'}
           icon={Stethoscope}
-          tone="bg-[#eaf3fc] text-[#1f55a8]"
+          tone="bg-[var(--brand-tint)] text-[var(--brand-deep)]"
         />
         <KpiCard
           label="Services used"
@@ -296,7 +296,7 @@ function Reports() {
           note="With at least one completed visit"
           delta={busiest ? `${busiest.count} visits for the busiest service` : 'Nothing in this period'}
           icon={CalendarCheck}
-          tone="bg-[#edf4f8] text-[#475569]"
+          tone="bg-[var(--palette-veil)] text-[#475569]"
         />
         <KpiCard
           label="Pending review"
@@ -331,7 +331,7 @@ function Reports() {
           transition={{ ...riseTransition, delay: 0.03 }}
           className={cn(card, 'p-5 xl:col-span-2')}
         >
-          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">
             Monthly Service Trends
           </h2>
           <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -378,7 +378,7 @@ function Reports() {
           transition={{ ...riseTransition, delay: 0.06 }}
           className={cn(card, 'p-5')}
         >
-          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">
             Top Services breakdown
           </h2>
           <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -405,7 +405,7 @@ function Reports() {
                         </span>
                       </span>
                     </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#eef4f8]">
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--palette-veil)]">
                       <div
                         className="h-full rounded-full"
                         style={{
@@ -435,7 +435,7 @@ function Reports() {
           className={cn(card, 'overflow-hidden xl:col-span-2')}
         >
           <div className="px-5 pt-5">
-            <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
+            <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">
               Service outcomes
             </h2>
             <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -460,7 +460,7 @@ function Reports() {
           transition={{ ...riseTransition, delay: 0.12 }}
           className={cn(card, 'p-5')}
         >
-          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[#123c78]">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-[var(--brand-ink)]">
             Patient Demographics
           </h2>
           <p className="mt-0.5 text-[11.5px] text-slate-500">
@@ -532,14 +532,14 @@ function KpiCard({
           <Icon size={15} aria-hidden />
         </span>
       </div>
-      <p className="mt-2 font-display text-[26px] font-semibold leading-none tracking-[-0.02em] text-[#123c78]">
+      <p className="mt-2 font-display text-[26px] font-semibold leading-none tracking-[-0.02em] text-[var(--brand-ink)]">
         {value}
       </p>
       <p className="mt-2 text-[11.5px] text-slate-500">{note}</p>
       <p
         className={cn(
           'mt-0.5 text-[11px] font-semibold',
-          deltaTone === 'amber' ? 'text-[#a16a12]' : 'text-[#1f55a8]',
+          deltaTone === 'amber' ? 'text-[#a16a12]' : 'text-[var(--brand-deep)]',
         )}
       >
         {delta}
@@ -582,7 +582,7 @@ function TrendChart({
     >
       {ticks.map((value) => (
         <g key={value}>
-          <line x1={44} x2={right} y1={y(value)} y2={y(value)} stroke="#eaf1f7" />
+          <line x1={44} x2={right} y1={y(value)} y2={y(value)} stroke="var(--palette-veil)" />
           <text
             x={34}
             y={y(value) + 3}
@@ -643,7 +643,7 @@ function OutcomesTable({ rows }: { rows: AppointmentsByStatusRow[] }) {
     <div className="mt-3 overflow-x-auto">
       <table className="w-full min-w-[560px] border-collapse text-left">
         <thead>
-          <tr className="border-y border-[#eef4f8] bg-[#f8fbfd] text-[9.5px] uppercase tracking-[0.08em] text-slate-500">
+          <tr className="border-y border-[var(--palette-veil)] bg-[var(--palette-veil)] text-[9.5px] uppercase tracking-[0.08em] text-slate-500">
             <th className="px-5 py-2.5 font-bold">Service</th>
             <th className="px-3 py-2.5 text-right font-bold">Completed</th>
             <th className="px-3 py-2.5 text-right font-bold">Pending</th>
@@ -658,7 +658,7 @@ function OutcomesTable({ rows }: { rows: AppointmentsByStatusRow[] }) {
             const rate = row.total > 0 ? Math.round((row.completed / row.total) * 100) : 0;
             return (
               <Fragment key={row.serviceId}>
-                <tr className="border-b border-[#eef4f8] text-[12px]">
+                <tr className="border-b border-[var(--palette-veil)] text-[12px]">
                   <td className="px-5 py-3 font-semibold text-slate-800">{row.serviceName}</td>
                   <td className="px-3 py-3 text-right tabular-nums text-slate-600">
                     {row.completed}
@@ -674,7 +674,7 @@ function OutcomesTable({ rows }: { rows: AppointmentsByStatusRow[] }) {
                       className={cn(
                         'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset',
                         rate >= 60
-                          ? 'bg-[#eaf3fc] text-[#1f55a8] ring-[#1f55a8]/15'
+                          ? 'bg-[var(--brand-tint)] text-[var(--brand-deep)] ring-[var(--brand-deep)]/15'
                           : 'bg-amber-50 text-amber-800 ring-amber-600/20',
                       )}
                     >
@@ -687,14 +687,14 @@ function OutcomesTable({ rows }: { rows: AppointmentsByStatusRow[] }) {
                       onClick={() => setOpen(isOpen ? null : row.serviceId)}
                       aria-expanded={isOpen}
                       aria-label={`${isOpen ? 'Hide' : 'View'} the ${row.serviceName} outcome breakdown`}
-                      className="inline-flex size-8 items-center justify-center rounded-lg border border-[#dde9f2] text-slate-500 transition-colors hover:bg-[#eef4f8] hover:text-[#1f55a8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1f55a8]"
+                      className="inline-flex size-8 items-center justify-center rounded-lg border border-[var(--palette-line)] text-slate-500 transition-colors hover:bg-[var(--palette-veil)] hover:text-[var(--brand-deep)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-deep)]"
                     >
                       <Eye size={14} aria-hidden />
                     </button>
                   </td>
                 </tr>
                 {isOpen && (
-                  <tr className="border-b border-[#eef4f8] bg-[#f8fbfd]">
+                  <tr className="border-b border-[var(--palette-veil)] bg-[var(--palette-veil)]">
                     <td colSpan={6} className="px-5 py-3 text-[11.5px] text-slate-600">
                       {row.completed} of {row.total} appointments completed · {row.pending}{' '}
                       pending · {row.confirmed} confirmed · {row.declined} declined ·{' '}
@@ -729,7 +729,7 @@ function DemographicsDonut({
         .map((group) => `${group.label}: ${group.pct}%`)
         .join(', ')}.`}
     >
-      <circle cx="60" cy="60" r="46" fill="none" stroke="#eef4f8" strokeWidth="14" />
+      <circle cx="60" cy="60" r="46" fill="none" stroke="var(--palette-veil)" strokeWidth="14" />
       {total > 0 &&
         groups.map((group) => {
           const dashOffset = -offset;
@@ -751,7 +751,7 @@ function DemographicsDonut({
             />
           );
         })}
-      <text x="60" y="57" textAnchor="middle" fontSize="16" fontWeight="600" fill="#123c78">
+      <text x="60" y="57" textAnchor="middle" fontSize="16" fontWeight="600" fill="var(--brand-ink)">
         {total.toLocaleString()}
       </text>
       <text x="60" y="71" textAnchor="middle" fontSize="8" fill="#94a3b8">

@@ -35,6 +35,11 @@
   --palette-bright: #2196f3;
   --palette-deep: #0d47a1;
 
+  /* Tints of the palette for near-white surfaces and hairlines, so quiet
+     panels stay in the same family instead of drifting to stray blues. */
+  --palette-veil: color-mix(in srgb, var(--palette-mist) 42%, white);
+  --palette-line: color-mix(in srgb, var(--palette-sky) 42%, white);
+
   /* Brand ramp. Role names stay because markup and charts reference them;
      values are pinned to the palette, so re-theming is a four-line edit. */
   --brand-deep: var(--palette-deep);
@@ -265,7 +270,7 @@ body {
 
   .app-card-quiet {
     border-radius: 1.25rem;
-    border: 1px solid #d5e6f5;
+    border: 1px solid var(--palette-line);
     background-color: color-mix(in srgb, var(--palette-mist) 45%, white);
   }
 
@@ -389,7 +394,7 @@ body {
 
   .app-card,
   .app-card-quiet {
-    border: 1px solid #d7dee6 !important;
+    border: 1px solid var(--palette-line) !important;
     background: #fff !important;
     box-shadow: none !important;
     backdrop-filter: none !important;

@@ -75,7 +75,7 @@ function PermissionPicker({
         <button
           type="button"
           onClick={() => onChange([...PERMISSION_KEYS])}
-          className="text-[11.5px] font-semibold text-[#1f55a8] hover:underline"
+          className="text-[11.5px] font-semibold text-[var(--brand-deep)] hover:underline"
         >
           Select all
         </button>
@@ -95,14 +95,14 @@ function PermissionPicker({
               key={p.key}
               className={cn(
                 'flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition-colors',
-                checked ? 'border-[#1f55a8]/30 bg-[#1f55a8]/5' : 'border-slate-200 bg-white',
+                checked ? 'border-[var(--brand-deep)]/30 bg-[var(--brand-deep)]/5' : 'border-slate-200 bg-white',
               )}
             >
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggle(p.key)}
-                className="mt-0.5 size-4 shrink-0 accent-[#1f55a8]"
+                className="mt-0.5 size-4 shrink-0 accent-[var(--brand-deep)]"
               />
               <span className="min-w-0">
                 <span className="block text-[12.5px] font-semibold text-slate-800">{p.label}</span>

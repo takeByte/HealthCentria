@@ -17,15 +17,15 @@ export const panel = 'app-card p-5 sm:p-6';
 
 /** Full-width action — brand blue, soft lift, one per screen. */
 export const primaryButton =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[var(--brand-bright)] to-[var(--brand-deep-strong)] px-5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_10px_22px_-12px_rgba(31,85,168,0.65)] transition-[transform,filter] hover:brightness-[1.06] active:scale-[0.98] disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[var(--brand-bright)] to-[var(--brand-deep-strong)] px-5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_10px_22px_-12px_rgba(13,71,161,0.65)] transition-[transform,filter] hover:brightness-[1.06] active:scale-[0.98] disabled:opacity-60';
 
 /** The quieter companion action: paper surface, hairline edge. */
 export const secondaryButton =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#dde8f0] bg-white px-5 text-sm font-semibold text-[#1e293b] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-[#c6d8e4] hover:bg-[#f6fafd] active:scale-[0.98] disabled:opacity-60';
+  'inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[var(--palette-line)] bg-white px-5 text-sm font-semibold text-[#1e293b] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors hover:border-[var(--palette-line)] hover:bg-[var(--palette-veil)] active:scale-[0.98] disabled:opacity-60';
 
 /** Small pill action used inside cards and rows. */
 export const chipButton =
-  'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#dde8f0] bg-white px-3 text-[13px] font-semibold text-[#1e293b] transition-colors hover:border-[#c6d8e4] hover:bg-[#f6fafd] active:scale-[0.97]';
+  'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--palette-line)] bg-white px-3 text-[13px] font-semibold text-[#1e293b] transition-colors hover:border-[var(--palette-line)] hover:bg-[var(--palette-veil)] active:scale-[0.97]';
 
 /** Destructive twin of the chip button — cancels, declines, deactivates. */
 export const dangerChipButton =
@@ -38,12 +38,12 @@ export const cardPadding = 'p-5 sm:p-6';
 export const fieldLabel = 'mb-1.5 block text-[12.5px] font-semibold text-[#334155]';
 
 export const inputClass =
-  'h-11 w-full rounded-xl border border-[#dde8f0] bg-white px-3 text-[13.5px] text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[var(--brand-deep)] focus:ring-2 focus:ring-[var(--brand-deep)]/20';
+  'h-11 w-full rounded-xl border border-[var(--palette-line)] bg-white px-3 text-[13.5px] text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[var(--palette-line)] focus:border-[var(--brand-deep)] focus:ring-2 focus:ring-[var(--brand-deep)]/20';
 
 export const selectClass = inputClass;
 
 export const textareaClass =
-  'w-full rounded-xl border border-[#dde8f0] bg-white px-3 py-2.5 text-[13.5px] leading-6 text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[#cbd9e5] focus:border-[var(--brand-deep)] focus:ring-2 focus:ring-[var(--brand-deep)]/20';
+  'w-full rounded-xl border border-[var(--palette-line)] bg-white px-3 py-2.5 text-[13.5px] leading-6 text-[#0f172a] outline-none transition-colors placeholder:text-[#94a3b8] hover:border-[var(--palette-line)] focus:border-[var(--brand-deep)] focus:ring-2 focus:ring-[var(--brand-deep)]/20';
 
 /* ----------------------------------------------------------- status pills --- */
 
@@ -51,8 +51,8 @@ const STATUS_STYLE: Record<Appointment['status'], { pill: string; dot: string }>
   pending: { pill: 'bg-[#fdf5e4] text-[#8a5a10] ring-[#e2c07a]/50', dot: 'bg-[#c99a3d]' },
   confirmed: { pill: 'bg-[var(--brand-tint)] text-[var(--brand-deep-strong)] ring-[var(--brand-deep)]/20', dot: 'bg-[var(--brand-deep)]' },
   declined: { pill: 'bg-red-50 text-red-700 ring-red-600/20', dot: 'bg-red-500' },
-  completed: { pill: 'bg-[#edf3f8] text-[#475569] ring-[#cbd7e2]/70', dot: 'bg-[#64748b]' },
-  cancelled: { pill: 'bg-[#f2f6fa] text-[#64748b] ring-[#d5dee8]/80', dot: 'bg-[#94a3b8]' },
+  completed: { pill: 'bg-[var(--palette-veil)] text-[#475569] ring-[var(--palette-line)]/70', dot: 'bg-[#64748b]' },
+  cancelled: { pill: 'bg-[var(--palette-veil)] text-[#64748b] ring-[#d5dee8]/80', dot: 'bg-[#94a3b8]' },
 };
 
 export function StatusChip({ status, className }: { status: Appointment['status']; className?: string }) {
@@ -72,10 +72,10 @@ export function StatusChip({ status, className }: { status: Appointment['status'
 
 const TONE_STYLE = {
   teal: 'bg-[var(--brand-tint)] text-[var(--brand-deep-strong)] ring-[var(--brand-deep)]/20',
-  sky: 'bg-sky-600/10 text-sky-800 ring-sky-600/20',
+  sky: 'bg-[var(--brand-sky)]/30 text-[var(--brand-ink)] ring-[var(--brand-sky)]/70',
   amber: 'bg-[#fdf5e4] text-[#8a5a10] ring-[#e2c07a]/50',
   red: 'bg-red-500/10 text-red-700 ring-red-600/20',
-  slate: 'bg-[#edf3f8] text-[#475569] ring-[#cbd7e2]/70',
+  slate: 'bg-[var(--palette-veil)] text-[#475569] ring-[var(--palette-line)]/70',
 } as const;
 
 export type PillTone = keyof typeof TONE_STYLE;
@@ -132,7 +132,7 @@ export function PageHero({
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(22,149,222,0.16),transparent_70%)]"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-24 bg-[radial-gradient(80%_140%_at_12%_-40%,rgba(33,150,243,0.16),transparent_70%)]"
       />
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
@@ -201,9 +201,9 @@ export function StatTile({
     tone === 'amber'
       ? 'bg-[#fdf5e4] text-[#a4761a] ring-[#e2c07a]/45'
       : tone === 'slate'
-        ? 'bg-[#edf3f8] text-[#475569] ring-[#cfdbe5]/70'
+        ? 'bg-[var(--palette-veil)] text-[#475569] ring-[#cfdbe5]/70'
         : tone === 'sky'
-          ? 'bg-[#e9f3fb] text-[#2a6f9e] ring-[#bcd8ea]/60'
+          ? 'bg-[var(--brand-tint)] text-[var(--brand-deep)] ring-[var(--palette-line)]/60'
           : 'bg-[var(--brand-chip)] text-[var(--brand-deep)] ring-[var(--brand-deep)]/15';
 
   return (
@@ -252,7 +252,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className={cn('flex shrink-0 rounded-xl bg-[#edf4f8] p-1 ring-1 ring-inset ring-[#e1e9f1]', className)}
+      className={cn('flex shrink-0 rounded-xl bg-[var(--palette-veil)] p-1 ring-1 ring-inset ring-[#e1e9f1]', className)}
     >
       {options.map((o) => {
         const Icon = o.icon;
@@ -283,7 +283,7 @@ export function EmptyNote({ children, className }: { children: ReactNode; classN
   return (
     <p
       className={cn(
-        'rounded-xl border border-dashed border-[#d3e0ea] bg-[#f9fcfe] px-4 py-3.5 text-[13px] leading-5 text-[#64748b]',
+        'rounded-xl border border-dashed border-[#d3e0ea] bg-[var(--palette-veil)] px-4 py-3.5 text-[13px] leading-5 text-[#64748b]',
         className,
       )}
     >

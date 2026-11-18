@@ -213,7 +213,7 @@ export function PinDialog({ request, onClose }: { request: PinRequest; onClose: 
       >
         {waiting ? (
           <>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-[#1f55a8]/10 text-[#1f55a8]">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--brand-deep)]/10 text-[var(--brand-deep)]">
               <MailCheck size={19} aria-hidden />
             </span>
             <h2
@@ -232,7 +232,7 @@ export function PinDialog({ request, onClose }: { request: PinRequest; onClose: 
               aria-live="polite"
               className="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700"
             >
-              <LoaderCircle size={16} className="shrink-0 animate-spin text-[#1f55a8]" aria-hidden />
+              <LoaderCircle size={16} className="shrink-0 animate-spin text-[var(--brand-deep)]" aria-hidden />
               {busy
                 ? 'Confirmed. Applying the change…'
                 : remaining > 0
@@ -247,7 +247,7 @@ export function PinDialog({ request, onClose }: { request: PinRequest; onClose: 
           </>
         ) : (
           <>
-            <span className="flex size-10 items-center justify-center rounded-xl bg-[#1f55a8]/10 text-[#1f55a8]">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-[var(--brand-deep)]/10 text-[var(--brand-deep)]">
               <KeyRound size={19} aria-hidden />
             </span>
             <h2

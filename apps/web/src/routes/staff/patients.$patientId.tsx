@@ -445,7 +445,7 @@ function PatientDetailPage() {
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       aria-hidden
-                      className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#1695de] to-[#123c78] text-[16px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
+                      className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand-bright)] to-[var(--brand-ink)] text-[16px] font-bold text-white shadow-[0_2px_8px_rgba(15,60,90,0.18)]"
                     >
                       {patient.name
                         .split(' ')
