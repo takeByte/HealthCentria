@@ -108,7 +108,8 @@ function SidebarBody({
 
   return (
     <div className="flex h-full flex-col px-3 py-3.5">
-      <div className="-mx-1 flex-1 overflow-y-auto px-1">
+      {/* Still scrolls (wheel, touch, keyboard); only the scrollbar track is hidden. */}
+      <div className="-mx-1 flex-1 overflow-y-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {/* Brand lockup — the E-Kalinga seal on a paper card anchors the top-left. */}
         <div className="flex items-center gap-3 rounded-2xl bg-white/96 p-2.5 shadow-[0_10px_28px_-18px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/40">
           <img src={appLogo} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
