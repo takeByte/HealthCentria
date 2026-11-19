@@ -114,6 +114,48 @@ try {
   const codes = [r1.status, r2.status].sort();
   check('two simultaneous edits from the same version: exactly one wins, one gets 409', codes[0] === 200 && codes[1] === 409, JSON.stringify(codes));
 
+  // ============ A2. MVCC `version` on announcements ============
+  console.log('\nA2. MVCC version field (announcements)');
+  const { Announcement } = await import(base + 'models/announcement.model.js');
+  r = await call('POST', '/api/v2/announcements', { token: adminToken, body: { title: 'Task', body: 'v0 text', category: 'general' }, headers: { 'Idempotency-Key': 'mvcc-key-aaaaaaaaaaaaaaaa-1' } });
+  const annId = r.data?.announcement?.id;
+  let raw = await Announcement.collection.findOne({ _id: new mongoose.Types.ObjectId(annId) });
+  check('new announcement is stored with version 0 in the database', raw?.version === 0, `stored=${raw?.version}`);
+
+  // User A and User B both open it at version 0
+  const [ra, rb] = [
+    () => call('PATCH', `/api/v2/announcements/${annId}`, { token: adminToken, body: { body: 'edit by A', version: 0 } }),
+    () => call('PATCH', `/api/v2/announcements/${annId}`, { token: adminToken, body: { body: 'edit by B', version: 0 } }),
+  ];
+  const rbRes = await rb(); // B saves first
+  check('B saves from v0: 200 and version becomes 1', rbRes.status === 200 && rbRes.data.announcement.version === 1, `${rbRes.status}`);
+  raw = await Announcement.collection.findOne({ _id: new mongoose.Types.ObjectId(annId) });
+  check('database document now has version 1', raw.version === 1 && raw.body === 'edit by B', `v=${raw.version}`);
+  const raRes = await ra(); // A still holds v0
+  check('A saves from stale v0: refused with 409', raRes.status === 409 && raRes.data.code === 'EDIT_CONFLICT', `${raRes.status}`);
+  check('409 carries the latest data (version 1, B text) so A syncs without reload', raRes.data?.current?.version === 1 && raRes.data?.current?.body === 'edit by B');
+  raw = await Announcement.collection.findOne({ _id: new mongoose.Types.ObjectId(annId) });
+  check('A did not overwrite anything (still version 1)', raw.version === 1 && raw.body === 'edit by B');
+
+  // sync endpoint: detect change and fetch latest
+  r = await call('GET', `/api/sync/announcements/${annId}?since=0`, { token: adminToken });
+  check('sync with old version reports changed + latest data', r.data?.changed === true && r.data.version === 1 && r.data.announcement?.body === 'edit by B', JSON.stringify(r.data).slice(0, 100));
+  r = await call('GET', `/api/sync/announcements/${annId}?since=1`, { token: adminToken });
+  check('sync with current version reports unchanged (no data sent)', r.data?.changed === false && r.data.version === 1 && !r.data.announcement);
+
+  // simultaneous saves from the same version: exactly one wins, version goes up by exactly 1
+  const race = await Promise.all([1, 2, 3, 4, 5].map((n) => call('PATCH', `/api/v2/announcements/${annId}`, { token: adminToken, body: { body: `racer ${n}`, version: 1 } })));
+  const wins = race.filter((x) => x.status === 200).length;
+  const losses = race.filter((x) => x.status === 409).length;
+  raw = await Announcement.collection.findOne({ _id: new mongoose.Types.ObjectId(annId) });
+  check('5 simultaneous saves from v1: exactly one succeeds, four get 409', wins === 1 && losses === 4, `wins=${wins} losses=${losses}`);
+  check('version increased by exactly 1 (now 2)', raw.version === 2, `v=${raw.version}`);
+
+  // legacy document without a version field is treated as version 0
+  const legacy = await Announcement.collection.insertOne({ title: 'Legacy', body: 'no version', category: 'general', images: [], pinned: false, active: true, publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date() });
+  r = await call('PATCH', `/api/v2/announcements/${legacy.insertedId}`, { token: adminToken, body: { body: 'migrated by edit', version: 0 } });
+  check('legacy document (no version field) accepts version 0 and becomes version 1', r.status === 200 && r.data.announcement.version === 1, `${r.status}`);
+
   // ============ B. idempotent creates ============
   console.log('\nB. Double submits (idempotency)');
   const nextMonday = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7)); return d.toISOString().slice(0, 10); })();

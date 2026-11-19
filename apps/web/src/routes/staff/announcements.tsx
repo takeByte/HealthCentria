@@ -1,7 +1,7 @@
-import { useLiveRefresh } from '../../lib/realtime';
+import { subscribeLive, useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LoaderCircle, Plus, Search } from 'lucide-react';
 import { AnnouncementFeed } from '../../components/announcement-feed';
 import { ImageUploader } from '../../components/image-uploader';
@@ -27,7 +27,9 @@ import {
   CATEGORY_LABELS,
   createAnnouncement,
   deleteAnnouncement,
+  isEditConflict,
   listAnnouncements,
+  syncAnnouncement,
   updateAnnouncement,
   type Announcement,
   type AnnouncementImage,
@@ -59,6 +61,18 @@ interface ComposerState {
 
 const emptyComposer: ComposerState = { title: '', body: '', category: 'general', pinned: false, images: [] };
 
+function composerFrom(a: Announcement): ComposerState {
+  return {
+    id: a.id,
+    version: a.version,
+    title: a.title,
+    body: a.body,
+    category: a.category,
+    pinned: a.pinned,
+    images: a.images ?? [],
+  };
+}
+
 function StaffAnnouncements() {
   const reduceMotion = useReducedMotion();
   const session = getSession();
@@ -75,6 +89,56 @@ function StaffAnnouncements() {
 
   const [liveTick, setLiveTick] = useState(0);
   useLiveRefresh(['announcements'], () => setLiveTick((t) => t + 1));
+
+  // --- Automatic sync of the open editor (no page reload) -------------------------------
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const composerRef = useRef<ComposerState | null>(null);
+  composerRef.current = composer;
+
+  /** Replace the editor and the list row with the latest copy from the server. */
+  const applyLatest = useCallback((latest: Announcement, note: string) => {
+    setItems((l) => (l ?? []).map((x) => (x.id === latest.id ? latest : x)));
+    setComposer((c) => (c?.id === latest.id ? composerFrom(latest) : c));
+    setSyncNote(note);
+  }, []);
+
+  /** Ask the server whether the open post moved past the version this editor holds. */
+  const syncOpenPost = useCallback(async () => {
+    const open = composerRef.current;
+    if (!open?.id || open.version === undefined) return;
+    try {
+      const r = await syncAnnouncement(open.id, open.version);
+      // The user may have closed or switched editors while we waited.
+      if (!r.changed || !r.announcement || composerRef.current?.id !== open.id) return;
+      if (r.announcement.version <= (composerRef.current?.version ?? 0)) return;
+      const who = r.announcement.updatedByName ? ` by ${r.announcement.updatedByName}` : '';
+      applyLatest(
+        r.announcement,
+        `Updated${who}. Now showing the latest version (v${r.announcement.version}); your unsaved changes were replaced.`,
+      );
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setComposer(null);
+        setError('This post was deleted by someone else while you were editing it.');
+      }
+      // Any other failure: stay quiet. The next push, focus or reconnect tries again.
+    }
+  }, [applyLatest]);
+
+  useEffect(
+    () =>
+      subscribeLive(['announcements'], (info) => {
+        const open = composerRef.current;
+        if (!open?.id) return;
+        // A push names the record and its new version: ignore other posts and old news.
+        if (info.reason === 'push') {
+          if (info.id && info.id !== open.id) return;
+          if (info.version !== undefined && info.version <= (open.version ?? 0)) return;
+        }
+        void syncOpenPost();
+      }),
+    [syncOpenPost],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +189,7 @@ function StaffAnnouncements() {
           composer.version ?? 0,
         );
         setItems((l) => (l ?? []).map((x) => (x.id === r.announcement.id ? r.announcement : x)));
+        setSyncNote(null);
       } else {
         const r = await createAnnouncement({
           title: composer.title.trim(),
@@ -137,7 +202,15 @@ function StaffAnnouncements() {
       }
       setComposer(null);
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Could not publish. Try again.');
+      if (isEditConflict(err) && err.current) {
+        // Someone saved first. Nothing was overwritten; show their version right here.
+        applyLatest(
+          err.current as Announcement,
+          `Someone else saved first (now v${err.currentVersion ?? '?'}). Your changes were not saved; the latest version is shown. Re-apply your edit and save again.`,
+        );
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'Could not publish. Try again.');
+      }
     } finally {
       setPending(false);
     }
@@ -187,6 +260,7 @@ function StaffAnnouncements() {
             type="button"
             onClick={() => {
               setFormError(null);
+              setSyncNote(null);
               setComposer({ ...emptyComposer });
             }}
             className={`${primaryButton} h-10 shrink-0 px-4 text-[13px]`}
@@ -248,15 +322,8 @@ function StaffAnnouncements() {
                   type="button"
                   onClick={() => {
                     setFormError(null);
-                    setComposer({
-                      id: a.id,
-                      version: a.version,
-                      title: a.title,
-                      body: a.body,
-                      category: a.category,
-                      pinned: a.pinned,
-                      images: a.images ?? [],
-                    });
+                    setSyncNote(null);
+                    setComposer(composerFrom(a));
                   }}
                   className={chipButton}
                 >
@@ -310,7 +377,15 @@ function StaffAnnouncements() {
             >
               <h2 className="font-display text-[17px] font-semibold tracking-[-0.02em] text-slate-900">
                 {composer.id ? 'Edit post' : 'New post'}
+                {composer.id && composer.version !== undefined && (
+                  <span className="ml-2 text-[12px] font-medium text-slate-500">v{composer.version}</span>
+                )}
               </h2>
+              {syncNote && composer.id && (
+                <div role="status" aria-live="polite" className="mt-2">
+                  <InlineNotice>{syncNote}</InlineNotice>
+                </div>
+              )}
               <p className="mt-1 text-[12.5px] leading-5 text-slate-500">
                 Patients see this in their feed and receive a notification.
               </p>

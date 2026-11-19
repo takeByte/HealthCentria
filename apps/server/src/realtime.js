@@ -170,9 +170,10 @@ export const live = {
       /* best effort */
     }
   },
-  announcements(id, req) {
+  announcements(id, req, extra = {}) {
     try {
-      publish('all', 'announcements', id, req);
+      // `extra.version` lets other open tabs see at once that they hold an older version.
+      publish('all', 'announcements', id, req, extra);
     } catch {
       /* best effort */
     }

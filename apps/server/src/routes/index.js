@@ -14,12 +14,14 @@ import { settingsRouter } from './settings.routes.js';
 import { approvalRouter } from './su-approval.routes.js';
 import { assistantRouter } from './assistant.routes.js';
 import { v2Router } from './v2.routes.js';
+import { syncRouter } from './sync.routes.js';
 
 export const apiRouter = Router();
 
 apiRouter.use('/auth', authRouter);
 // v2: same resources as v1 with version-checked edits and idempotent creates.
 apiRouter.use('/v2', v2Router);
+apiRouter.use('/sync', syncRouter);
 apiRouter.use('/assistant', assistantRouter);
 apiRouter.use('/activity', activityRouter);
 apiRouter.use('/announcements', announcementRouter);

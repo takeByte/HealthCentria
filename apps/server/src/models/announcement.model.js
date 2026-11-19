@@ -25,8 +25,14 @@ const announcementSchema = new mongoose.Schema(
     publishedAt: { type: Date, default: Date.now },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // MVCC version stamp. Starts at 0 and goes up by exactly 1 on every successful edit.
+    // It is a real, visible field in Atlas. It is changed ONLY by versionedUpdate()
+    // (controllers/mvcc.controller.js), in the same atomic write as the edit itself.
+    version: { type: Number, default: 0, min: 0 },
   },
-  { timestamps: true, optimisticConcurrency: true },
+  // versionKey:false -> Mongoose's hidden __v is not used for this collection any more;
+  // `version` above replaces it. (Existing __v values in old documents are simply ignored.)
+  { timestamps: true, versionKey: false },
 );
 
 export const Announcement =

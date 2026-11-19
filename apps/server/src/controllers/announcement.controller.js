@@ -1,5 +1,5 @@
 import { live } from '../realtime.js';
-import { versionMatches } from '../utils/concurrency.js';
+import { sendVersionConflict, versionedUpdate } from './mvcc.controller.js';
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/asyncHandler.js';
@@ -32,7 +32,7 @@ const imageInput = z.object({
   alt: z.string().trim().max(300).optional().default(''),
 });
 
-const POPULATE = [
+export const POPULATE = [
   { path: 'createdBy', select: 'fullName role' },
   { path: 'updatedBy', select: 'fullName' },
 ];
@@ -54,10 +54,10 @@ function requireDB(res) {
   return true;
 }
 
-function present(a) {
+export function present(a) {
   return {
     id: String(a._id),
-    version: Number(a.__v ?? 0),
+    version: Number(a.version ?? 0),
     title: a.title,
     body: a.body,
     category: a.category,
@@ -146,19 +146,28 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
       .status(400)
       .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
   }
-  const item = await Announcement.findById(req.params.id);
-  if (!item) return res.status(404).json({ success: false, message: 'Announcement not found.' });
-  if (!versionMatches(req, res, item, 'announcement')) return;
+  // Copy of the "before" values, only used for the activity log. The real version check
+  // is the atomic update below, not this read.
+  const before = await Announcement.findById(req.params.id).lean();
+  if (!before) return res.status(404).json({ success: false, message: 'Announcement not found.' });
 
+  // MVCC: compare version + write + increment version in ONE atomic MongoDB operation.
+  const result = await versionedUpdate({
+    Model: Announcement,
+    id: req.params.id,
+    expectedVersion: req.expectedVersion, // set by the v2 requireVersion middleware
+    changes: { ...parsed.data, updatedBy: req.user.id },
+    populate: POPULATE,
+  });
+  if (result.status === 'not_found') {
+    return res.status(404).json({ success: false, message: 'Announcement not found.' });
+  }
+  // Stale version: nothing was written. Send the latest data back so the client syncs to it.
+  if (result.status === 'conflict') return sendVersionConflict(res, result.current, present, 'announcement');
+
+  const item = result.doc;
   const tracked = ['title', 'body', 'category', 'pinned', 'active'];
-  const imagesBefore = item.images?.length ?? 0;
-  const before = {};
-  for (const field of tracked) before[field] = item.get(field);
-
-  for (const [field, value] of Object.entries(parsed.data)) item.set(field, value);
-  item.updatedBy = req.user.id;
-  await item.save();
-
+  const imagesBefore = before.images?.length ?? 0;
   const imagesAfter = item.images?.length ?? 0;
   const imageChange = imagesBefore !== imagesAfter ? [['images', String(imagesBefore), String(imagesAfter)]] : [];
   await logActivity({
@@ -166,12 +175,11 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
     action: 'announcement.update',
     target: { type: 'announcement', id: item._id, label: item.title },
     changes: [...snapshotChanges(before, item, tracked), ...imageChange],
-    detail: `Announcement updated: ${Object.keys(parsed.data).join(', ')}.`,
+    detail: `Announcement updated (v${result.previousVersion} -> v${item.version}): ${Object.keys(parsed.data).join(', ')}.`,
   });
 
-  await item.populate(POPULATE);
-  live.announcements(item._id, req);
-  res.json({ success: true, announcement: present(item.toObject()) });
+  live.announcements(item._id, req, { version: item.version });
+  res.json({ success: true, announcement: present(item) });
 });
 
 export const deleteAnnouncement = asyncHandler(async (req, res) => {

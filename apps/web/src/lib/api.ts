@@ -85,12 +85,15 @@ export class EditConflictError extends ApiError {
   /** Version now stored on the server, when the response carried it. */
   currentVersion?: number;
   updatedAt?: string | null;
+  /** The latest copy of the record, when the server sent it (announcements do). */
+  current?: unknown;
 
   constructor(status: number, message: string, code: string, data?: Record<string, unknown>) {
     super(status, message, undefined, code, data);
     this.name = 'EditConflictError';
     this.currentVersion = typeof data?.currentVersion === 'number' ? data.currentVersion : undefined;
     this.updatedAt = typeof data?.updatedAt === 'string' ? data.updatedAt : null;
+    this.current = data?.current;
   }
 }
 
@@ -166,7 +169,13 @@ const DB_UNAVAILABLE_RETRY_MS = 1500;
 
 async function apiFetch<T>(
   path: string,
-  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+    /** The caller syncs to the latest data itself, so skip the global "Reload latest" notice. */
+    handleConflict?: boolean;
+  } = {},
 ): Promise<T> {
   const token = getSession()?.token;
   const send = () =>
@@ -201,7 +210,9 @@ async function apiFetch<T>(
     const code = data?.code;
     if (res.status === 409 && code && EDIT_CONFLICT_CODES.has(code)) {
       const conflict = new EditConflictError(res.status, data?.message ?? CONFLICT_FALLBACK, code, data ?? undefined);
-      reportEditConflict({ message: conflict.message, currentVersion: conflict.currentVersion });
+      if (!options.handleConflict) {
+        reportEditConflict({ message: conflict.message, currentVersion: conflict.currentVersion });
+      }
       throw conflict;
     }
     throw new ApiError(res.status, message, data?.errors, code, data ?? undefined);
@@ -421,7 +432,22 @@ export function updateAnnouncement(
   }>,
   version: number,
 ): Promise<{ announcement: Announcement }> {
-  return apiFetch(`/api/v2/announcements/${id}`, { method: 'PATCH', body: { ...input, version } });
+  return apiFetch(`/api/v2/announcements/${id}`, {
+    method: 'PATCH',
+    body: { ...input, version },
+    handleConflict: true, // the editor syncs to the latest copy that comes back in the 409
+  });
+}
+
+/**
+ * Asks the server whether the announcement moved past `since`. Unchanged -> a tiny reply;
+ * changed -> the latest data. Used by the open editor to sync without a page reload.
+ */
+export function syncAnnouncement(
+  id: string,
+  since: number,
+): Promise<{ changed: boolean; version: number; announcement?: Announcement }> {
+  return apiFetch(`/api/sync/announcements/${encodeURIComponent(id)}?since=${since}`);
 }
 
 export function deleteAnnouncement(id: string): Promise<{ success: boolean }> {

@@ -20,7 +20,14 @@ export type LiveTopic = 'appointments' | 'notifications' | 'announcements' | 'se
 
 /** push = the server said so; focus = tab came back; poll = fallback timer; connect = (re)connected. */
 export type LiveReason = 'push' | 'focus' | 'poll' | 'connect';
-type Listener = (info: { topic: LiveTopic | 'all'; id?: string; patient?: string; reason: LiveReason }) => void;
+type Listener = (info: {
+  topic: LiveTopic | 'all';
+  id?: string;
+  patient?: string;
+  /** Record version the server just saved (only on pushes that carry one). */
+  version?: number;
+  reason: LiveReason;
+}) => void;
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5000';
 const FALLBACK_POLL_MS = 60_000;
@@ -35,10 +42,10 @@ let pollTimer: number | undefined;
 let hiddenAt = 0;
 let browserHooked = false;
 
-function fire(topic: LiveTopic | 'all', reason: LiveReason, id?: string, patient?: string) {
+function fire(topic: LiveTopic | 'all', reason: LiveReason, id?: string, patient?: string, version?: number) {
   const targets = topic === 'all' ? TOPICS : [topic];
   for (const t of targets) {
-    for (const listener of listeners.get(t) ?? []) listener({ topic: t, id, patient, reason });
+    for (const listener of listeners.get(t) ?? []) listener({ topic: t, id, patient, version, reason });
   }
 }
 
@@ -121,8 +128,11 @@ function ensureConnected() {
   };
   socket.on('disconnect', lost);
   socket.on('connect_error', lost);
-  socket.on('change', (msg: { topic?: string; id?: string; patient?: string }) => {
-    if (msg?.topic && (TOPICS as string[]).includes(msg.topic)) fire(msg.topic as LiveTopic, 'push', msg.id, msg.patient);
+  socket.on('change', (msg: { topic?: string; id?: string; patient?: string; version?: number }) => {
+    if (msg?.topic && (TOPICS as string[]).includes(msg.topic)) {
+      const version = typeof msg.version === 'number' ? msg.version : undefined;
+      fire(msg.topic as LiveTopic, 'push', msg.id, msg.patient, version);
+    }
   });
   startPolling();
 }
