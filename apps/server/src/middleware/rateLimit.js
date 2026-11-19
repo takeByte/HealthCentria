@@ -1,4 +1,5 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import { verifySession } from '../utils/tokens.js';
 
 /**
  * Rate limits for the public auth endpoints.
@@ -108,5 +109,97 @@ export const assistantLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => String(req.user?.id ?? 'anon'),
   message: limitResponse('You have sent a lot of messages. Please wait a few minutes and try again.'),
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+
+/**
+ * Signed-in people are counted by account so a shared clinic connection is not
+ * throttled together. Anyone else falls back to their IP address.
+ * `ipKeyGenerator` folds IPv6 addresses into one /56 range, so an attacker
+ * cannot dodge the limit by rotating through addresses in their own block.
+ */
+function userOrIpKey(req) {
+  if (req.user?.id) return `user:${req.user.id}`;
+  return `ip:${ipKeyGenerator(req.ip ?? '')}`;
+}
+
+/**
+ * Same idea for limiters that run BEFORE requireAuth: the account is read from
+ * the signed token (no database call). A bad or missing token is counted by IP.
+ */
+function tokenOrIpKey(req) {
+  const [scheme, token] = (req.headers.authorization ?? '').split(' ');
+  if (scheme === 'Bearer' && token) {
+    try {
+      const payload = verifySession(token);
+      if (payload?.sub) return `user:${payload.sub}`;
+    } catch {
+      // Invalid or expired token: counted by IP below.
+    }
+  }
+  return `ip:${ipKeyGenerator(req.ip ?? '')}`;
+}
+
+/**
+ * Catch-all for the whole API (refresh spam, scripts, any route without its own
+ * limit). Normal use stays far below it: a page load is a handful of requests,
+ * and the live-update socket means pages do not poll. Health checks and CORS
+ * preflights are skipped so uptime monitors are never blocked.
+ */
+export const apiLimiter = rateLimit({
+  windowMs: 60000,
+  limit: 150,
+  keyGenerator: tokenOrIpKey,
+  skip: (req) => req.method === 'OPTIONS' || req.path === '/health',
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many requests. Please wait a minute and try again.'),
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+
+/** Report exports (PDF, CSV, Google Sheets) are heavy to build. */
+export const reportExportLimiter = rateLimit({
+  windowMs: 600000,
+  limit: 5,
+  keyGenerator: userOrIpKey,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many report exports. Please wait a few minutes and try again.'),
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+
+/**
+ * Backup downloads and backup exports copy patient data out of the system.
+ * Mount this AFTER the superadmin PIN check so only approved exports count.
+ */
+export const backupExportLimiter = rateLimit({
+  windowMs: 3600000,
+  limit: 3,
+  keyGenerator: userOrIpKey,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many backup exports. Please wait up to an hour and try again.'),
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+
+/** Activity-log exports (CSV, PDF, Google Sheets). Admin only. */
+export const activityExportLimiter = rateLimit({
+  windowMs: 3600000,
+  limit: 3,
+  keyGenerator: userOrIpKey,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('Too many activity log exports. Please wait up to an hour and try again.'),
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+});
+
+/** A patient mashing "Book" should not fill the schedule with requests. */
+export const bookingLimiter = rateLimit({
+  windowMs: 600000,
+  limit: 10,
+  keyGenerator: userOrIpKey,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: limitResponse('You have sent many booking requests. Please wait a few minutes and try again.'),
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
 });

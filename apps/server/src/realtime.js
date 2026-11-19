@@ -26,12 +26,64 @@ import { verifySession } from './utils/tokens.js';
 
 let io = null;
 
+/**
+ * Connection limits. REST rate limits do not cover the WebSocket, so a script
+ * could otherwise open thousands of sockets (each one holds memory) or hammer
+ * the handshake, which reads the user from the database.
+ *  - at most MAX_SOCKETS_PER_USER open at once per account (several tabs are fine)
+ *  - at most HANDSHAKES_PER_MINUTE connection attempts per IP address
+ * Counters are in memory, like the rest of the realtime layer (one server process).
+ */
+const MAX_SOCKETS_PER_USER = 5;
+const HANDSHAKES_PER_MINUTE = 60;
+const HANDSHAKE_WINDOW_MS = 60_000;
+const openSockets = new Map(); // userId -> number of open sockets
+const handshakes = new Map(); // ip -> { count, resetAt }
+
+/** Client IP. Only trusts X-Forwarded-For when TRUST_PROXY says a proxy is in front. */
+function clientIp(socket) {
+  if (env.TRUST_PROXY > 0) {
+    const hops = String(socket.handshake.headers['x-forwarded-for'] ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const trusted = hops[hops.length - env.TRUST_PROXY];
+    if (trusted) return trusted;
+  }
+  return socket.handshake.address || 'unknown';
+}
+
+/** Counts a connection attempt; false once this IP is over its limit for the window. */
+function allowHandshake(ip) {
+  const now = Date.now();
+  const entry = handshakes.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    handshakes.set(ip, { count: 1, resetAt: now + HANDSHAKE_WINDOW_MS });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= HANDSHAKES_PER_MINUTE;
+}
+
+// Drop expired entries so the map cannot grow without bound.
+const handshakeCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of handshakes) if (entry.resetAt <= now) handshakes.delete(ip);
+}, HANDSHAKE_WINDOW_MS);
+handshakeCleanup.unref();
+
 export function initRealtime(httpServer) {
   io = new Server(httpServer, {
     cors: { origin: env.CLIENT_URL },
     serveClient: false,
     pingInterval: 25_000,
     pingTimeout: 20_000,
+  });
+
+  // Cheapest check first: too many connection attempts from one IP.
+  io.use((socket, next) => {
+    if (!allowHandshake(clientIp(socket))) return next(new Error('rate_limited'));
+    return next();
   });
 
   // Same login check as the REST API: a valid token for an active account.
@@ -42,6 +94,9 @@ export function initRealtime(httpServer) {
       if (!user || !user.active || user.deletedAt || (user.tokenVersion ?? 0) !== Number(payload.ver ?? 0)) {
         return next(new Error('unauthorized'));
       }
+      if ((openSockets.get(String(user._id)) ?? 0) >= MAX_SOCKETS_PER_USER) {
+        return next(new Error('too_many_connections'));
+      }
       socket.data.user = { id: String(user._id), role: user.role, permissions: effectivePermissions(user) };
       return next();
     } catch {
@@ -51,6 +106,12 @@ export function initRealtime(httpServer) {
 
   io.on('connection', (socket) => {
     const user = socket.data.user;
+    openSockets.set(user.id, (openSockets.get(user.id) ?? 0) + 1);
+    socket.on('disconnect', () => {
+      const left = (openSockets.get(user.id) ?? 1) - 1;
+      if (left > 0) openSockets.set(user.id, left);
+      else openSockets.delete(user.id);
+    });
     socket.join(`user:${user.id}`);
     socket.join('all');
     if (user.role !== 'patient') {

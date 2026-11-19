@@ -12,13 +12,14 @@ import {
 } from '../controllers/staff-appointment.controller.js';
 import { getVisitContext } from '../controllers/patient.controller.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/requireAuth.js';
+import { bookingLimiter } from '../middleware/rateLimit.js';
 import { requireCompleteProfile } from '../middleware/requireCompleteProfile.js';
 
 export const appointmentRouter = Router();
 
 // Patients book and manage their own requests. Booking is the only patient
 // action gated by profile completion; viewing and cancelling stay available.
-appointmentRouter.post('/', requireAuth, requireRole('patient'), requireCompleteProfile, bookAppointment);
+appointmentRouter.post('/', requireAuth, requireRole('patient'), bookingLimiter, requireCompleteProfile, bookAppointment);
 appointmentRouter.get('/mine', requireAuth, requireRole('patient'), myAppointments);
 appointmentRouter.patch('/:id/cancel', requireAuth, requireRole('patient'), cancelAppointment);
 

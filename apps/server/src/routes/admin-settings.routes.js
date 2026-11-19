@@ -63,6 +63,8 @@ import {
   updateBackupSettings,
 } from '../controllers/backup-settings.controller.js';
 
+import { backupExportLimiter } from '../middleware/rateLimit.js';
+
 export const adminSettingsRouter = Router();
 
 // Google redirects the browser here after the Drive consent screen, so it
@@ -170,23 +172,26 @@ adminSettingsRouter.put(
   updateBackupSettings,
 );
 adminSettingsRouter.post('/backup/run', requireSuperPin('Manual data backup'), runBackupNow);
-adminSettingsRouter.get('/backup/download/:name', downloadBackup);
+adminSettingsRouter.get('/backup/download/:name', backupExportLimiter, downloadBackup);
 // Exports of one backup: the admin picks the tables. They copy patient data
 // out of the system, so each one needs the superadmin PIN.
 adminSettingsRouter.get('/backup/:name/tables', listBackupTables);
 adminSettingsRouter.post(
   '/backup/:name/export/csv',
   requireSuperPin((req) => `Backup exported as CSV (${(req.body?.tables ?? []).length} table(s))`),
+  backupExportLimiter,
   exportBackupCsv,
 );
 adminSettingsRouter.post(
   '/backup/:name/export/sheets',
   requireSuperPin((req) => `Backup exported to Google Sheets (${(req.body?.tables ?? []).length} table(s))`),
+  backupExportLimiter,
   exportBackupSheets,
 );
 adminSettingsRouter.post(
   '/backup/:name/export/pdf',
   requireSuperPin((req) => `Backup exported as PDF (${(req.body?.tables ?? []).length} table(s))`),
+  backupExportLimiter,
   exportBackupPdf,
 );
 adminSettingsRouter.delete('/backup/:name', requireSuperPin('Backup file deletion'), removeBackup);
