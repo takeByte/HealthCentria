@@ -203,12 +203,39 @@ export const deleteAssistantSettings = asyncHandler(async (req, res) => {
   res.json({ success: true, ...present(await resolveAssistantConfig()) });
 });
 
-/** POST /api/admin/settings/ai/test — a one-line request with the active credentials. */
+/**
+ * POST /api/admin/settings/ai/test — a one-line request to Cloudflare.
+ * Uses the account ID, token and model typed in the form; a blank (or masked)
+ * field falls back to the active value. Saves nothing.
+ */
 export const testAssistantSettings = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
-  const config = await resolveAssistantConfig();
-  if (!config.configured) {
+  const parsed = updateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+  }
+  const active = await resolveAssistantConfig();
+  const draftAccount = parsed.data.accountId ?? '';
+  const draftToken = parsed.data.apiToken ?? '';
+  const draftModel = parsed.data.model ?? '';
+  const config = {
+    accountId: draftAccount && draftAccount !== maskClientId(active.accountId) ? draftAccount : active.accountId,
+    token: draftToken && draftToken !== maskClientSecret(active.token) ? draftToken : active.token,
+    model: draftModel && draftModel !== active.model ? draftModel : active.model,
+  };
+  if (!config.accountId || !config.token) {
     return res.status(400).json({ success: false, message: 'No account ID or API token is set yet.' });
+  }
+  if (!ACCOUNT_ID_PATTERN.test(config.accountId)) {
+    return validationError(res, 'accountId', 'The account ID is 32 letters and numbers. Copy it again from Cloudflare.');
+  }
+  if (!TOKEN_PATTERN.test(config.token)) {
+    return validationError(res, 'apiToken', 'That does not look like a Cloudflare API token.');
+  }
+  if (!MODEL_PATTERN.test(config.model)) {
+    return validationError(res, 'model', 'Enter a Workers AI model name, like @cf/meta/llama-3.1-8b-instruct.');
   }
   const failure = await checkWithCloudflare(config);
   if (failure) return res.status(failure.status === 400 ? 502 : failure.status).json({ success: false, message: failure.message });

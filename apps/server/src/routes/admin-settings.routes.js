@@ -5,6 +5,7 @@ import {
   getGoogleSettings,
   syncGoogleCalendarSettings,
   testGoogleCalendarSettings,
+  testGoogleSettings,
   updateGoogleCalendarSettings,
   updateGoogleSettings,
 } from '../controllers/admin-settings.controller.js';
@@ -37,6 +38,7 @@ import {
   resetDriveCredentials,
   resetDriveFolder,
   startDriveConnect,
+  testDriveCredentials,
   testDriveSettings,
   updateDriveCredentials,
   updateDriveFolder,
@@ -84,6 +86,7 @@ adminSettingsRouter.get('/google', getGoogleSettings);
 // Every save, reset and switch below needs the superadmin PIN (SU_PIN).
 // Read-only, test and sync endpoints do not: they change no settings.
 adminSettingsRouter.put('/google', requireSuperPin('Google sign-in credentials'), updateGoogleSettings);
+adminSettingsRouter.post('/google/test', testGoogleSettings);
 adminSettingsRouter.delete('/google', requireSuperPin('Google sign-in credentials (reset to default)'), deleteGoogleSettings);
 
 // reCAPTCHA keys. The site key is public; the secret key is encrypted at rest.
@@ -146,6 +149,7 @@ adminSettingsRouter.delete(
   disconnectDriveSettings,
 );
 adminSettingsRouter.post('/google-drive/test', testDriveSettings);
+adminSettingsRouter.post('/google-drive/credentials/test', testDriveCredentials);
 adminSettingsRouter.put('/google-drive/folder', requireSuperPin('Google Drive upload folder'), updateDriveFolder);
 adminSettingsRouter.delete(
   '/google-drive/folder',

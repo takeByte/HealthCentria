@@ -1046,6 +1046,17 @@ export function updateGoogleIntegrationSettings(
   return apiFetch('/api/admin/settings/google', { method: 'PUT', body: input, headers: pinHeader(pin) });
 }
 
+/**
+ * Asks Google whether this Client ID + Client Secret pair is real. Saves nothing.
+ * A blank field means "use the active value".
+ */
+export function testGoogleIntegrationSettings(input: {
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<{ success: true; message: string }> {
+  return apiFetch('/api/admin/settings/google/test', { method: 'POST', body: input });
+}
+
 export function resetGoogleIntegrationSettings(pin: string): Promise<{ success: true } & GoogleIntegrationSettings> {
   return apiFetch('/api/admin/settings/google', { method: 'DELETE', headers: pinHeader(pin) });
 }
@@ -1106,8 +1117,10 @@ export function resetAssistantIntegrationSettings(pin: string): Promise<{ succes
 }
 
 /** Sends a one-line test request to Cloudflare with the active credentials. */
-export function testAssistantIntegration(): Promise<{ success: true; message: string; model: string }> {
-  return apiFetch('/api/admin/settings/ai/test', { method: 'POST' });
+export function testAssistantIntegration(
+  input: { accountId?: string; apiToken?: string; model?: string } = {},
+): Promise<{ success: true; message: string; model: string }> {
+  return apiFetch('/api/admin/settings/ai/test', { method: 'POST', body: input });
 }
 
 export interface UploadThingIntegrationSettings {
@@ -1169,7 +1182,9 @@ export function resetEmailIntegrationSettings(pin: string): Promise<{ success: t
   return apiFetch('/api/admin/settings/email', { method: 'DELETE', headers: pinHeader(pin) });
 }
 
-export function testEmailDelivery(input: { to?: string } = {}): Promise<{
+export function testEmailDelivery(
+  input: { to?: string; host?: string; port?: number; user?: string; password?: string; fromAddress?: string } = {},
+): Promise<{
   success: true;
   to: string;
   message: string;

@@ -6,6 +6,7 @@ import { encryptSecret, hasEncryptionKey } from '../utils/secret-crypto.js';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { logActivity } from '../services/activity.js';
+import { googleVerdictResponse, verifyGoogleOAuthClient } from '../services/google-oauth-verify.js';
 import {
   buildConnectUrl,
   completeConnect,
@@ -181,6 +182,16 @@ export const updateDriveCredentials = asyncHandler(async (req, res) => {
   }
   if (!nextSecret) return fieldError(res, 'clientSecret', 'Client Secret is required.');
 
+  // Ask Google about the pair being saved (not the stored or .env one) before writing anything.
+  const rejection = googleVerdictResponse(
+    await verifyGoogleOAuthClient({
+      clientId: nextId,
+      clientSecret: nextSecret,
+      redirectUri: current.redirectUri,
+    }),
+  );
+  if (rejection) return res.status(rejection.status).json(rejection.body);
+
   const clientChanged = nextId !== current.clientId || nextSecret !== current.clientSecret;
   await IntegrationSetting.findOneAndUpdate(
     { provider: GOOGLE_DRIVE_PROVIDER },
@@ -209,6 +220,39 @@ export const updateDriveCredentials = asyncHandler(async (req, res) => {
     detail: `Custom Google Drive OAuth credentials saved${clientChanged ? '; reconnect required' : ''}.`,
   });
   res.json({ success: true, ...(await present()) });
+});
+
+/**
+ * POST /api/admin/settings/google-drive/credentials/test — checks the values in the form
+ * with Google. Saves nothing. A blank (or masked) field means "use the active value".
+ */
+export const testDriveCredentials = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = credentialsSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+  }
+  const current = await resolveDriveClient();
+  const submittedId = parsed.data.clientId ?? '';
+  const submittedSecret = parsed.data.clientSecret ?? '';
+  const clientId = submittedId && submittedId !== maskClientId(current.clientId) ? submittedId : current.clientId;
+  const clientSecret =
+    submittedSecret && submittedSecret !== maskClientSecret(current.clientSecret)
+      ? submittedSecret
+      : current.clientSecret;
+  if (!clientId) return fieldError(res, 'clientId', 'Client ID is required.');
+  if (!clientId.endsWith(CLIENT_ID_SUFFIX)) {
+    return fieldError(res, 'clientId', `Client ID must end with ${CLIENT_ID_SUFFIX}.`);
+  }
+  if (!clientSecret) return fieldError(res, 'clientSecret', 'Client Secret is required.');
+
+  const rejection = googleVerdictResponse(
+    await verifyGoogleOAuthClient({ clientId, clientSecret, redirectUri: current.redirectUri }),
+  );
+  if (rejection) return res.status(rejection.status).json(rejection.body);
+  res.json({ success: true, message: 'Google accepted this Client ID and Client Secret.' });
 });
 
 /** DELETE /api/admin/settings/google-drive/credentials — back to .env. PIN (route). */

@@ -43,6 +43,7 @@ import {
   startGoogleDriveConnect,
   disconnectGoogleDrive,
   testGoogleDriveUpload,
+  testGoogleIntegrationSettings,
   updateGoogleDriveFolder,
   resetGoogleDriveFolder,
   type GoogleDriveSettings,
@@ -838,7 +839,11 @@ function AssistantCard({
     if (testing) return;
     setTesting(true);
     try {
-      const r = await testAssistantIntegration();
+      const r = await testAssistantIntegration({
+        accountId: accountDraft.trim(),
+        apiToken: tokenDraft.trim(),
+        model: modelDraft.trim(),
+      });
       onToast({ tone: 'success', message: r.message });
     } catch (err) {
       onToast({
@@ -1485,6 +1490,7 @@ function AdminSettings() {
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
   const [googleSaving, setGoogleSaving] = useState(false);
+  const [googleTesting, setGoogleTesting] = useState(false);
   const [googleResetting, setGoogleResetting] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -1921,6 +1927,28 @@ function AdminSettings() {
     }
   }
 
+  /** Asks Google about the values typed in the form (blank = the active value). Saves nothing. */
+  async function testGoogleCredentials() {
+    if (googleTesting) return;
+    setGoogleTesting(true);
+    try {
+      const clientId = googleClientId.trim();
+      const clientSecret = googleClientSecret.trim();
+      const r = await testGoogleIntegrationSettings({
+        ...(clientId ? { clientId } : {}),
+        ...(clientSecret ? { clientSecret } : {}),
+      });
+      setToast({ tone: 'success', message: r.message });
+    } catch (err) {
+      setToast({
+        tone: 'error',
+        message: err instanceof ApiError ? err.message : 'Could not test the Google credentials. Try again.',
+      });
+    } finally {
+      setGoogleTesting(false);
+    }
+  }
+
   async function resetGoogleCredentials() {
     if (googleResetting) return;
     setGoogleResetting(true);
@@ -1940,6 +1968,7 @@ function AdminSettings() {
       setToast({ tone: 'success', message: 'Google credentials reset to the server defaults.' });
     } catch (err) {
       if (err instanceof PinCancelled) return;
+      setResetOpen(false);
       setToast({
         tone: 'error',
         message: err instanceof ApiError ? err.message : 'Could not reset Google credentials. Try again.',
@@ -2021,7 +2050,14 @@ function AdminSettings() {
     setEmailError(null);
     setEmailMessage(null);
     try {
-      const r = await testEmailDelivery();
+      const portNumber = Number(emailPort.trim());
+      const r = await testEmailDelivery({
+        ...(emailHost.trim() ? { host: emailHost.trim() } : {}),
+        ...(Number.isInteger(portNumber) && portNumber > 0 ? { port: portNumber } : {}),
+        ...(emailUser.trim() ? { user: emailUser.trim() } : {}),
+        ...(emailPassword ? { password: emailPassword } : {}),
+        ...(emailFrom.trim() ? { fromAddress: emailFrom.trim() } : {}),
+      });
       setEmailMessage(r.message);
     } catch (err) {
       setEmailError(err instanceof ApiError ? err.message : 'Could not send the test email. Try again.');
@@ -2327,7 +2363,17 @@ function AdminSettings() {
                     ) : (
                       <KeyRound size={16} aria-hidden />
                     )}
-                    {googleSaving ? 'Saving…' : 'Save'}
+                    {googleSaving ? 'Verifying…' : 'Verify & save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={testGoogleCredentials}
+                    disabled={googleTesting || googleSaving || googleResetting}
+                    title="Ask Google whether these credentials are real. Nothing is saved."
+                    className={secondaryButton}
+                  >
+                    {googleTesting && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+                    {googleTesting ? 'Testing…' : 'Test configuration'}
                   </button>
                   <button
                     type="button"

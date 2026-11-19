@@ -80,8 +80,9 @@ export async function sendEmail(to, subject, text) {
  * Verify the resolved SMTP connection and send one test message. Throws with
  * the provider's message so the admin UI can show something actionable.
  */
-export async function sendTestEmail(to) {
-  const config = await resolveEmailConfig();
+export async function sendTestEmail(to, configOverride) {
+  // configOverride is the draft from the Settings form; without it the active config is used.
+  const config = configOverride ?? (await resolveEmailConfig());
   if (!isSmtpConfigured(config)) {
     const err = new Error('SMTP is not configured. Save a host, username, and password first.');
     err.code = 'SMTP_NOT_CONFIGURED';
@@ -113,4 +114,32 @@ export async function sendTestEmail(to) {
 
 export function announcementEmailText(a) {
   return `${a.title}\n\n${a.body}\n\n— HealthCentria Barangay Health Center`;
+}
+
+/**
+ * Opens a connection to the SMTP server and logs in, without sending anything.
+ * Returns verdict 'ok', 'invalid' (wrong login, unknown host) or 'unavailable'
+ * (could not reach the server, so we cannot tell). Never throws and never logs
+ * the password.
+ */
+export async function checkSmtpConnection(config) {
+  const transport = createSmtpTransport(config);
+  try {
+    await transport.verify();
+    return { verdict: 'ok' };
+  } catch (err) {
+    const code = String(err?.code ?? '');
+    if (code === 'EAUTH' || err?.responseCode === 535) {
+      return { verdict: 'invalid', field: 'password', message: 'The SMTP server rejected this username or password.' };
+    }
+    if (code === 'ENOTFOUND' || code === 'EDNS') {
+      return { verdict: 'invalid', field: 'host', message: 'That SMTP host could not be found. Check the host name.' };
+    }
+    return {
+      verdict: 'unavailable',
+      message: 'Could not reach the SMTP server to verify these settings. Check the host and port, then try again.',
+    };
+  } finally {
+    transport.close();
+  }
 }

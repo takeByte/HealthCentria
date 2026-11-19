@@ -10,6 +10,11 @@ import {
   syncUpcomingAppointments,
   testGoogleCalendarConnection as testCalendarConnection,
 } from '../services/google-calendar.js';
+import { env, googleOAuth } from '../config/env.js';
+import {
+  googleVerdictResponse,
+  verifyGoogleOAuthClient,
+} from '../services/google-oauth-verify.js';
 import { resolveGoogleCredentials } from '../utils/google-credentials.js';
 import { maskClientId, maskClientSecret } from '../utils/masking.js';
 import { encryptSecret } from '../utils/secret-crypto.js';
@@ -105,6 +110,17 @@ export const updateGoogleSettings = asyncHandler(async (req, res) => {
     });
   }
 
+  // Ask Google itself before anything is written. The pair being saved is checked,
+  // not the stored or .env one, so a fake value can never reach the database.
+  const rejection = googleVerdictResponse(
+    await verifyGoogleOAuthClient({
+      clientId: nextClientId,
+      clientSecret: nextClientSecret,
+      redirectUri: googleOAuth.callbackUrl,
+    }),
+  );
+  if (rejection) return res.status(rejection.status).json(rejection.body);
+
   let clientSecretEncrypted;
   try {
     clientSecretEncrypted = encryptSecret(nextClientSecret);
@@ -151,9 +167,80 @@ export const updateGoogleSettings = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * POST /api/admin/settings/google/test — checks the values in the form with Google.
+ * Saves nothing. A blank (or masked) field means "use the active value".
+ */
+export const testGoogleSettings = asyncHandler(async (req, res) => {
+  if (!requireDB(res)) return;
+  const parsed = updateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, message: 'Validation failed.', errors: parsed.error.flatten().fieldErrors });
+  }
+
+  const current = await resolveGoogleCredentials();
+  const submittedId = parsed.data.clientId ?? '';
+  const submittedSecret = parsed.data.clientSecret ?? '';
+  const clientId =
+    submittedId && submittedId !== maskClientId(current.clientId) ? submittedId : current.clientId;
+  const clientSecret =
+    submittedSecret && submittedSecret !== maskClientSecret(current.clientSecret)
+      ? submittedSecret
+      : current.clientSecret;
+
+  if (!clientId) return validationError(res, 'Client ID is required.');
+  if (!clientId.endsWith(CLIENT_ID_SUFFIX)) return validationError(res, `Client ID must end with ${CLIENT_ID_SUFFIX}.`);
+  if (!clientSecret) {
+    return res.status(400).json({
+      success: false,
+      message: 'Validation failed.',
+      errors: { clientSecret: ['Client Secret is required.'] },
+    });
+  }
+
+  const rejection = googleVerdictResponse(
+    await verifyGoogleOAuthClient({ clientId, clientSecret, redirectUri: googleOAuth.callbackUrl }),
+  );
+  if (rejection) return res.status(rejection.status).json(rejection.body);
+  res.json({ success: true, message: 'Google accepted this Client ID and Client Secret.' });
+});
+
 /** DELETE /api/admin/settings/google — drop custom credentials and use .env again. */
 export const deleteGoogleSettings = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
+
+  // "Reset to default" means "use the .env values". Make sure those are real BEFORE
+  // deleting anything, so a typo in .env can never replace working credentials.
+  const hasCustom = await IntegrationSetting.exists({ provider: GOOGLE_PROVIDER });
+  if (hasCustom) {
+    const defaultId = String(env.GOOGLE_CLIENT_ID ?? '').trim();
+    const defaultSecret = String(env.GOOGLE_CLIENT_SECRET ?? '').trim();
+    const verdict =
+      defaultId && defaultSecret
+        ? await verifyGoogleOAuthClient({
+            clientId: defaultId,
+            clientSecret: defaultSecret,
+            redirectUri: googleOAuth.callbackUrl,
+          })
+        : 'invalid';
+    if (verdict === 'invalid') {
+      return res.status(400).json({
+        success: false,
+        code: 'DEFAULT_CREDENTIALS_INVALID',
+        message:
+          'The default credentials in .env are invalid. Reset cancelled, your current settings are unchanged.',
+      });
+    }
+    if (verdict === 'unavailable') {
+      return res.status(503).json({
+        success: false,
+        code: 'GOOGLE_UNAVAILABLE',
+        message: 'Could not verify the .env defaults with Google, try again. Reset cancelled, your current settings are unchanged.',
+      });
+    }
+  }
 
   const removed = await IntegrationSetting.findOneAndDelete({ provider: GOOGLE_PROVIDER });
 

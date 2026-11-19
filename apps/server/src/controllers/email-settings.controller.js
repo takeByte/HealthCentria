@@ -5,7 +5,7 @@ import { EMAIL_SETTINGS_KEY, EmailSetting } from '../models/email-setting.model.
 import { User } from '../models/user.model.js';
 import { logActivity } from '../services/activity.js';
 import { isSmtpConfigured, resolveEmailConfig } from '../utils/email-credentials.js';
-import { sendTestEmail } from '../utils/email.js';
+import { checkSmtpConnection, sendTestEmail } from '../utils/email.js';
 import { maskEmail } from '../utils/masking.js';
 import { encryptSecret } from '../utils/secret-crypto.js';
 
@@ -103,6 +103,14 @@ export const updateEmailSettings = asyncHandler(async (req, res) => {
     return validationError(res, 'fromAddress', 'Enter a valid sender address.');
   }
 
+  // Log in to the SMTP server with the values being saved (not the stored or .env
+  // ones). A wrong host, user or password is refused and nothing is written.
+  const checked = await checkSmtpConnection({ host: nextHost, port: nextPort, user: nextUser, pass: nextPassword });
+  if (checked.verdict === 'invalid') return validationError(res, checked.field, checked.message);
+  if (checked.verdict === 'unavailable') {
+    return res.status(503).json({ success: false, message: checked.message });
+  }
+
   let passwordEncrypted;
   try {
     passwordEncrypted = encryptSecret(nextPassword);
@@ -187,6 +195,12 @@ export const deleteEmailSettings = asyncHandler(async (req, res) => {
 
 const testSchema = z.object({
   to: z.string().trim().toLowerCase().email('Enter a valid email address.').optional(),
+  // Optional draft from the form. When present the test runs with THESE values.
+  host: z.string().trim().max(255).optional(),
+  port: z.coerce.number().int().min(1).max(65535).optional(),
+  user: z.string().trim().max(320).optional(),
+  password: z.string().max(1024).optional(),
+  fromAddress: z.string().trim().max(320).optional(),
 });
 
 /** POST /api/admin/settings/email/test — verify the connection and send one message. */
@@ -212,11 +226,23 @@ export const testEmailSettings = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Enter an address to send the test to.' });
   }
 
-  const { doc } = await currentSettings();
+  const { config: current, doc } = await currentSettings();
+
+  // Blank fields (or the masked username) fall back to the active value, like Save does.
+  const draft = parsed.data;
+  const testConfig = {
+    host: (draft.host ?? '').trim() || current.host,
+    port: draft.port ?? current.port,
+    user: draft.user && draft.user !== maskEmail(current.user) ? draft.user : current.user,
+    pass: draft.password || current.pass,
+    from: (draft.fromAddress && draft.fromAddress !== current.from ? draft.fromAddress : '') || current.from,
+    source: current.source,
+  };
+  const hasDraft = Boolean(draft.host || draft.port || draft.user || draft.password || draft.fromAddress);
 
   try {
-    const result = await sendTestEmail(recipient);
-    if (doc) {
+    const result = await sendTestEmail(recipient, testConfig);
+    if (doc && !hasDraft) {
       await EmailSetting.updateOne(
         { key: EMAIL_SETTINGS_KEY },
         { $set: { lastTestedAt: new Date(), lastTestOk: true, lastTestError: '' } },
@@ -237,7 +263,7 @@ export const testEmailSettings = asyncHandler(async (req, res) => {
     const message = error instanceof Error ? error.message : 'unknown error';
     console.error('SMTP test failed:', message);
 
-    if (doc) {
+    if (doc && !hasDraft) {
       await EmailSetting.updateOne(
         { key: EMAIL_SETTINGS_KEY },
         { $set: { lastTestedAt: new Date(), lastTestOk: false, lastTestError: message.slice(0, 500) } },
