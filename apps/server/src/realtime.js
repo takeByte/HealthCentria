@@ -164,7 +164,11 @@ export const live = {
         'appointments',
         appt?._id,
         req,
-        patientId ? { patient: String(patientId) } : {},
+        {
+          ...(patientId ? { patient: String(patientId) } : {}),
+          // Lets an open editor see at once that it holds an older version of this visit.
+          ...(typeof appt?.version === 'number' ? { version: appt.version } : {}),
+        },
       );
     } catch {
       /* best effort */
@@ -186,9 +190,9 @@ export const live = {
     }
   },
   /** A patient's record changed (profile, medical profile, deletion). */
-  patient(patientId, req) {
+  patient(patientId, req, extra = {}) {
     try {
-      publish(['perm:patients.manage', 'perm:appointments.manage', `user:${patientId}`], 'patients', patientId, req);
+      publish(['perm:patients.manage', 'perm:appointments.manage', `user:${patientId}`], 'patients', patientId, req, extra);
     } catch {
       /* best effort */
     }

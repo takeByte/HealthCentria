@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LoaderCircle, Plus, Search } from 'lucide-react';
 import { AnnouncementFeed } from '../../components/announcement-feed';
+import { ConflictNotice, LostDraft, conflictLatest, nonEmptyDraft, type DraftItem } from '../../components/conflict-draft';
 import { ImageUploader } from '../../components/image-uploader';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
@@ -27,7 +28,6 @@ import {
   CATEGORY_LABELS,
   createAnnouncement,
   deleteAnnouncement,
-  isEditConflict,
   listAnnouncements,
   syncAnnouncement,
   updateAnnouncement,
@@ -91,15 +91,17 @@ function StaffAnnouncements() {
   useLiveRefresh(['announcements'], () => setLiveTick((t) => t + 1));
 
   // --- Automatic sync of the open editor (no page reload) -------------------------------
-  const [syncNote, setSyncNote] = useState<string | null>(null);
+  // Someone else saved this post: their copy waits here while the user's text stays on screen.
+  const [conflict, setConflict] = useState<{ latest: Announcement } | null>(null);
+  // The user's own text, kept for copying after the latest version has been loaded.
+  const [lostDraft, setLostDraft] = useState<DraftItem[] | null>(null);
   const composerRef = useRef<ComposerState | null>(null);
   composerRef.current = composer;
 
-  /** Replace the editor and the list row with the latest copy from the server. */
-  const applyLatest = useCallback((latest: Announcement, note: string) => {
+  /** The latest copy arrived (push, sync or a refused save). Never touches the editor's text. */
+  const noteNewerVersion = useCallback((latest: Announcement) => {
     setItems((l) => (l ?? []).map((x) => (x.id === latest.id ? latest : x)));
-    setComposer((c) => (c?.id === latest.id ? composerFrom(latest) : c));
-    setSyncNote(note);
+    setConflict((c) => (c && c.latest.version >= latest.version ? c : { latest }));
   }, []);
 
   /** Ask the server whether the open post moved past the version this editor holds. */
@@ -111,11 +113,7 @@ function StaffAnnouncements() {
       // The user may have closed or switched editors while we waited.
       if (!r.changed || !r.announcement || composerRef.current?.id !== open.id) return;
       if (r.announcement.version <= (composerRef.current?.version ?? 0)) return;
-      const who = r.announcement.updatedByName ? ` by ${r.announcement.updatedByName}` : '';
-      applyLatest(
-        r.announcement,
-        `Updated${who}. Now showing the latest version (v${r.announcement.version}); your unsaved changes were replaced.`,
-      );
+      noteNewerVersion(r.announcement);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setComposer(null);
@@ -123,7 +121,26 @@ function StaffAnnouncements() {
       }
       // Any other failure: stay quiet. The next push, focus or reconnect tries again.
     }
-  }, [applyLatest]);
+  }, [noteNewerVersion]);
+
+  /** The user chose to see the other version. Their own text is kept to copy from. */
+  function loadLatest() {
+    if (!conflict || !composer) return;
+    const latest = conflict.latest;
+    const mine: Array<[string, string, string]> = [
+      ['Title', composer.title, latest.title],
+      ['Message', composer.body, latest.body],
+      ['Category', CATEGORY_LABELS[composer.category], CATEGORY_LABELS[latest.category]],
+      ['Pinned', composer.pinned ? 'Yes' : 'No', latest.pinned ? 'Yes' : 'No'],
+    ];
+    const kept = nonEmptyDraft(
+      mine.filter(([, a, b]) => a.trim() !== b.trim()).map(([label, value]) => ({ label, value })),
+    );
+    setLostDraft(kept.length ? kept : null);
+    setComposer(composerFrom(latest));
+    setConflict(null);
+    setFormError(null);
+  }
 
   useEffect(
     () =>
@@ -168,7 +185,7 @@ function StaffAnnouncements() {
   }, [items, query, category]);
 
   async function submit() {
-    if (!composer) return;
+    if (!composer || conflict) return;
     if (!composer.title.trim() || !composer.body.trim()) {
       setFormError('Title and message are both required.');
       return;
@@ -189,7 +206,8 @@ function StaffAnnouncements() {
           composer.version ?? 0,
         );
         setItems((l) => (l ?? []).map((x) => (x.id === r.announcement.id ? r.announcement : x)));
-        setSyncNote(null);
+        setConflict(null);
+        setLostDraft(null);
       } else {
         const r = await createAnnouncement({
           title: composer.title.trim(),
@@ -202,12 +220,10 @@ function StaffAnnouncements() {
       }
       setComposer(null);
     } catch (err) {
-      if (isEditConflict(err) && err.current) {
-        // Someone saved first. Nothing was overwritten; show their version right here.
-        applyLatest(
-          err.current as Announcement,
-          `Someone else saved first (now v${err.currentVersion ?? '?'}). Your changes were not saved; the latest version is shown. Re-apply your edit and save again.`,
-        );
+      const c = conflictLatest<Announcement>(err);
+      if (c) {
+        // Nothing was saved. Keep the form as typed and wait for the user's decision.
+        noteNewerVersion(c.latest);
       } else {
         setFormError(err instanceof ApiError ? err.message : 'Could not publish. Try again.');
       }
@@ -260,7 +276,8 @@ function StaffAnnouncements() {
             type="button"
             onClick={() => {
               setFormError(null);
-              setSyncNote(null);
+              setConflict(null);
+              setLostDraft(null);
               setComposer({ ...emptyComposer });
             }}
             className={`${primaryButton} h-10 shrink-0 px-4 text-[13px]`}
@@ -322,7 +339,8 @@ function StaffAnnouncements() {
                   type="button"
                   onClick={() => {
                     setFormError(null);
-                    setSyncNote(null);
+                    setConflict(null);
+                    setLostDraft(null);
                     setComposer(composerFrom(a));
                   }}
                   className={chipButton}
@@ -381,9 +399,16 @@ function StaffAnnouncements() {
                   <span className="ml-2 text-[12px] font-medium text-slate-500">v{composer.version}</span>
                 )}
               </h2>
-              {syncNote && composer.id && (
-                <div role="status" aria-live="polite" className="mt-2">
-                  <InlineNotice>{syncNote}</InlineNotice>
+              {composer.id && (conflict || lostDraft) && (
+                <div className="mt-2 space-y-2">
+                  {conflict && (
+                    <ConflictNotice
+                      version={conflict.latest.version}
+                      updatedBy={conflict.latest.updatedByName || undefined}
+                      onLoadLatest={loadLatest}
+                    />
+                  )}
+                  {lostDraft && !conflict && <LostDraft items={lostDraft} onDismiss={() => setLostDraft(null)} />}
                 </div>
               )}
               <p className="mt-1 text-[12.5px] leading-5 text-slate-500">
@@ -451,7 +476,12 @@ function StaffAnnouncements() {
                 </label>
                 {formError && <InlineNotice>{formError}</InlineNotice>}
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={submit} disabled={pending} className={`${primaryButton} flex-1`}>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={pending || conflict !== null}
+                    className={`${primaryButton} flex-1`}
+                  >
                     {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                     {composer.id ? 'Save changes' : 'Publish to patients'}
                   </button>

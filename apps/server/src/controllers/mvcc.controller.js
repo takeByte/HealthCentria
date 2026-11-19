@@ -34,21 +34,31 @@ function versionFilter(expectedVersion) {
  * @param {number | undefined} args.expectedVersion  undefined = unversioned (legacy v1 client): last write wins, but still bumps the version
  * @param {Record<string, unknown>} args.changes      fields to $set
  * @param {Array<object | string>} [args.populate]
+ * @param {Record<string, unknown>} [args.extraFilter]  extra conditions the document must meet (e.g. { role: 'patient' })
+ * @param {boolean} [args.runValidators]  Mongoose update validators; turn off for schemas whose validators rely on `this` (User)
  * @returns {Promise<
  *   | { status: 'ok'; doc: object; previousVersion: number }
  *   | { status: 'not_found' }
  *   | { status: 'conflict'; current: object }
  * >}  `doc` / `current` are plain objects (lean).
  */
-export async function versionedUpdate({ Model, id, expectedVersion, changes, populate = [] }) {
-  const filter = { _id: id };
+export async function versionedUpdate({
+  Model,
+  id,
+  expectedVersion,
+  changes,
+  populate = [],
+  extraFilter = {},
+  runValidators = true,
+}) {
+  const filter = { _id: id, ...extraFilter };
   if (expectedVersion !== undefined) Object.assign(filter, versionFilter(expectedVersion));
 
   // The atomic step: compare version + write + increment in one operation.
   let query = Model.findOneAndUpdate(
     filter,
     { $set: changes, $inc: { version: 1 } },
-    { new: true, runValidators: true },
+    { new: true, runValidators },
   );
   for (const p of populate) query = query.populate(p);
   const doc = await query.lean();
@@ -59,7 +69,7 @@ export async function versionedUpdate({ Model, id, expectedVersion, changes, pop
 
   // Nothing matched: either the document is gone or the version was stale. Read the
   // latest copy so the caller can sync the user to it.
-  let read = Model.findById(id);
+  let read = Model.findOne({ _id: id, ...extraFilter });
   for (const p of populate) read = read.populate(p);
   const current = await read.lean();
   if (!current) return { status: 'not_found' };

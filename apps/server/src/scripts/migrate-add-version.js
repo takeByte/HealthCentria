@@ -13,7 +13,8 @@ import { env } from '../config/env.js';
 
 const apply = process.argv.includes('--apply');
 // Add more collection names here to version other collections later.
-const COLLECTIONS = ['announcements'];
+// Run it once after deploying the `version` field (announcements, users, appointments).
+const COLLECTIONS = ['announcements', 'users', 'appointments'];
 
 try {
   await connectDB(env.MONGODB_URI);

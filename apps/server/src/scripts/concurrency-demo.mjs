@@ -156,6 +156,77 @@ try {
   r = await call('PATCH', `/api/v2/announcements/${legacy.insertedId}`, { token: adminToken, body: { body: 'migrated by edit', version: 0 } });
   check('legacy document (no version field) accepts version 0 and becomes version 1', r.status === 200 && r.data.announcement.version === 1, `${r.status}`);
 
+  // ============ A3. MVCC `version` on patients, medical profile and visits ============
+  console.log('\nA3. MVCC version field (patient record, medical profile, visits)');
+  const rawUser = (id) => User.collection.findOne({ _id: new mongoose.Types.ObjectId(String(id)) });
+  const rawAppt = (id) => Appointment.collection.findOne({ _id: new mongoose.Types.ObjectId(String(id)) });
+  const pt = await User.create({
+    email: 'mvcc-patient@scratch.test', passwordHash: pw, role: 'patient', fullName: 'Mvcc Patient',
+    birthdate: new Date('1995-05-05'), sex: 'Female', address: 'Old address', contactNumber: '09171234567',
+  });
+  check('new patient is stored with a visible version field = 0', (await rawUser(pt.id)).version === 0, `v=${(await rawUser(pt.id)).version}`);
+
+  // patient record: B saves first, A (stale) is refused and gets the latest chart back
+  r = await call('PATCH', `/api/v2/patients/${pt.id}`, { token: adminToken, body: { address: 'Address by B', version: 0 } });
+  check('patient record: save from v0 -> 200, version 1', r.status === 200 && r.data.patient.version === 1, `${r.status}`);
+  check('patient record: database stores version 1', (await rawUser(pt.id)).version === 1);
+  r = await call('PATCH', `/api/v2/patients/${pt.id}`, { token: adminToken, body: { address: 'Address by A', version: 0 } });
+  check('patient record: stale save -> 409 with the latest chart', r.status === 409 && r.data.current?.version === 1 && r.data.current?.address === 'Address by B', `${r.status} ${JSON.stringify(r.data).slice(0, 90)}`);
+  check('patient record: stale save wrote nothing', (await rawUser(pt.id)).address === 'Address by B' && (await rawUser(pt.id)).version === 1);
+
+  // medical profile
+  const med = (extra) => ({ bloodType: 'O+', allergies: ['Penicillin'], conditions: [], medications: [], immunizations: [], ...extra });
+  r = await call('PATCH', `/api/v2/patients/${pt.id}/medical`, { token: adminToken, body: { ...med({}), version: 1 } });
+  check('medical: save from v1 -> 200, version 2', r.status === 200 && r.data.patient.version === 2 && r.data.patient.medical.allergies[0] === 'Penicillin', `${r.status} ${JSON.stringify(r.data).slice(0, 80)}`);
+  r = await call('PATCH', `/api/v2/patients/${pt.id}/medical`, { token: adminToken, body: { ...med({ allergies: ['Latex'] }), version: 1 } });
+  check('medical: stale save -> 409 with latest medical data', r.status === 409 && r.data.current?.version === 2 && r.data.current?.medical?.allergies?.[0] === 'Penicillin', `${r.status}`);
+  const medRace = await Promise.all([1, 2, 3, 4, 5].map((n) => call('PATCH', `/api/v2/patients/${pt.id}/medical`, { token: adminToken, body: { ...med({ conditions: [`c${n}`] }), version: 2 } })));
+  check('medical: 5 simultaneous saves from v2 -> exactly one wins', medRace.filter((x) => x.status === 200).length === 1 && medRace.filter((x) => x.status === 409).length === 4, medRace.map((x) => x.status).join(','));
+  check('medical: version went up by exactly 1 (now 3)', (await rawUser(pt.id)).version === 3, `v=${(await rawUser(pt.id)).version}`);
+
+  // legacy documents without a version field
+  await User.collection.updateOne({ _id: pt._id }, { $unset: { version: 1 } });
+  r = await call('PATCH', `/api/v2/patients/${pt.id}`, { token: adminToken, body: { address: 'After legacy', version: 0 } });
+  check('legacy patient (no version field) accepts version 0 -> becomes 1', r.status === 200 && (await rawUser(pt.id)).version === 1, `${r.status} v=${(await rawUser(pt.id)).version}`);
+  const legacyStaff = await User.create({ email: 'legacy-staff@scratch.test', passwordHash: pw, role: 'staff', fullName: 'Legacy Staff' });
+  await User.collection.updateOne({ _id: legacyStaff._id }, { $unset: { version: 1 } });
+  r = await call('PATCH', `/api/v2/staff-accounts/${legacyStaff.id}`, { token: adminToken, body: { fullName: 'Legacy Renamed', version: 0 } });
+  check('legacy staff account (save() path, no version field) still saves', r.status === 200, `${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
+
+  // visits: two staff complete the same confirmed visit at the same moment
+  const day3 = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() + 10); return d.toISOString().slice(0, 10); })();
+  const mkVisit = () => Appointment.create({ patient: pt._id, service: service._id, day: day3, date: new Date(day3 + 'T12:00:00Z'), status: 'confirmed', timePreference: 'any', createdBy: admin._id });
+  const visit = await mkVisit();
+  check('new visit is stored with version 0', (await rawAppt(visit.id)).version === 0);
+  const both = await Promise.all([
+    call('PATCH', `/api/appointments/${visit.id}/complete`, { token: adminToken, body: { diagnosis: 'Dx from A', prescription: 'rx A', visitNotes: '' } }),
+    call('PATCH', `/api/appointments/${visit.id}/complete`, { token: adminToken, body: { diagnosis: 'Dx from B', prescription: 'rx B', visitNotes: '' } }),
+  ]);
+  const completeStatuses = both.map((x) => x.status).sort();
+  check('complete visit: two simultaneous completes -> one 200, one 409', completeStatuses[0] === 200 && completeStatuses[1] === 409, JSON.stringify(completeStatuses));
+  const loser = both.find((x) => x.status === 409);
+  check('complete visit: the 409 carries the latest visit (completed, with the winner\'s notes)', loser.data.current?.status === 'completed' && /^Dx from [AB]$/.test(loser.data.current?.diagnosis ?? ''), JSON.stringify(loser.data).slice(0, 120));
+  let vRaw = await rawAppt(visit.id);
+  check('complete visit: database version is 1 and holds exactly one set of notes', vRaw.version === 1 && /^Dx from [AB]$/.test(vRaw.diagnosis), `v=${vRaw.version}`);
+
+  // visit record edits (the clinical notes on a completed visit)
+  r = await call('PATCH', `/api/v2/appointments/${visit.id}/record`, { token: adminToken, body: { diagnosis: 'Corrected by B', version: 1 } });
+  check('visit record: save from v1 -> 200, version 2', r.status === 200 && r.data.appointment.version === 2, `${r.status}`);
+  r = await call('PATCH', `/api/v2/appointments/${visit.id}/record`, { token: adminToken, body: { diagnosis: 'Corrected by A', version: 1 } });
+  check('visit record: stale save -> 409 with latest notes (version 2)', r.status === 409 && r.data.current?.version === 2 && r.data.current?.diagnosis === 'Corrected by B', `${r.status} ${JSON.stringify(r.data).slice(0, 90)}`);
+  const recRace = await Promise.all([1, 2, 3, 4, 5].map((n) => call('PATCH', `/api/v2/appointments/${visit.id}/record`, { token: adminToken, body: { visitNotes: `race ${n}`, version: 2 } })));
+  check('visit record: 5 simultaneous saves from v2 -> exactly one wins', recRace.filter((x) => x.status === 200).length === 1 && recRace.filter((x) => x.status === 409).length === 4, recRace.map((x) => x.status).join(','));
+  check('visit record: version went up by exactly 1 (now 3)', (await rawAppt(visit.id)).version === 3);
+
+  // confirm / decline race on a pending visit
+  const pending = await Appointment.create({ patient: pt._id, service: service._id, day: day3, date: new Date(day3 + 'T12:00:00Z'), status: 'pending', timePreference: 'any', createdBy: admin._id });
+  const cd = await Promise.all([
+    call('PATCH', `/api/appointments/${pending.id}/confirm`, { token: adminToken }),
+    call('PATCH', `/api/appointments/${pending.id}/decline`, { token: adminToken, body: { reason: 'Full' } }),
+  ]);
+  check('confirm vs decline at once: one wins, the other gets 409 + latest visit', cd.filter((x) => x.status === 200).length === 1 && cd.find((x) => x.status === 409)?.data?.current?.version === 1, cd.map((x) => x.status).join(','));
+  check('confirm/decline: database version is exactly 1', (await rawAppt(pending.id)).version === 1);
+
   // ============ B. idempotent creates ============
   console.log('\nB. Double submits (idempotency)');
   const nextMonday = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7 || 7)); return d.toISOString().slice(0, 10); })();

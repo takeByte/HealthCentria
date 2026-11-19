@@ -11,7 +11,15 @@ import {
   selectClass,
 } from './app-ui';
 import { formatDateTime } from './record-meta';
-import { ApiError, BLOOD_TYPES, type Immunization, type MedicalProfile, type MedicalProfileInput } from '../lib/api';
+import {
+  ApiError,
+  BLOOD_TYPES,
+  type Immunization,
+  type MedicalProfile,
+  type MedicalProfileInput,
+  type PatientDetail,
+} from '../lib/api';
+import { ConflictNotice, LostDraft, conflictLatest, type DraftItem } from './conflict-draft';
 import { cn } from '../lib/utils';
 
 /** True when nothing has been recorded yet. */
@@ -194,14 +202,32 @@ function TagField({
   );
 }
 
+/** Plain-text view of a medical profile, used to keep the user's draft when someone else saved first. */
+function draftLines(m: MedicalProfileInput): DraftItem[] {
+  const vaccines = m.immunizations
+    .filter((v) => v.name.trim())
+    .map((v) => [v.name.trim(), v.date, v.note.trim()].filter(Boolean).join(' · '))
+    .join('\n');
+  return [
+    { label: 'Blood type', value: m.bloodType },
+    { label: 'Allergies', value: m.allergies.join(', ') },
+    { label: 'Conditions', value: m.conditions.join(', ') },
+    { label: 'Current medications', value: m.medications.join(', ') },
+    { label: 'Immunizations', value: vaccines },
+  ];
+}
+
 function MedicalEditor({
   medical,
   onCancel,
   onSave,
+  onLoadLatest,
 }: {
   medical: MedicalProfile;
   onCancel: () => void;
   onSave: (input: MedicalProfileInput) => Promise<void>;
+  /** Called with the latest chart when the user chooses "Load latest version" after a conflict. */
+  onLoadLatest?: (latest: PatientDetail) => void;
 }) {
   const [bloodType, setBloodType] = useState<MedicalProfileInput['bloodType']>(medical.bloodType);
   const [allergies, setAllergies] = useState(medical.allergies);
@@ -210,6 +236,27 @@ function MedicalEditor({
   const [immunizations, setImmunizations] = useState<Immunization[]>(medical.immunizations);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Someone saved the chart first: their copy waits here while the user's edits stay on screen.
+  const [conflict, setConflict] = useState<{ latest: PatientDetail; version?: number } | null>(null);
+  const [lostDraft, setLostDraft] = useState<DraftItem[] | null>(null);
+
+  function loadLatest() {
+    if (!conflict) return;
+    const mine = draftLines({ bloodType, allergies, conditions, medications, immunizations });
+    const theirs = draftLines(conflict.latest.medical);
+    // Keep only what actually differs from the latest saved version, and is not empty.
+    const kept = mine.filter((item, i) => item.value.trim() !== '' && item.value !== theirs[i].value);
+    setLostDraft(kept.length ? kept : null);
+    const latest = conflict.latest.medical;
+    setBloodType(latest.bloodType);
+    setAllergies(latest.allergies);
+    setConditions(latest.conditions);
+    setMedications(latest.medications);
+    setImmunizations(latest.immunizations);
+    onLoadLatest?.(conflict.latest); // the page now holds the latest version number
+    setConflict(null);
+    setError(null);
+  }
 
   function updateVaccine(index: number, patch: Partial<Immunization>) {
     setImmunizations((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -217,7 +264,7 @@ function MedicalEditor({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (pending) return;
+    if (pending || conflict) return;
     if (immunizations.some((v) => !v.name.trim())) {
       setError('Each vaccine needs a name. Remove the empty rows or fill them in.');
       return;
@@ -234,6 +281,12 @@ function MedicalEditor({
       });
     } catch (err) {
       setPending(false);
+      const c = conflictLatest<PatientDetail>(err);
+      if (c) {
+        // Nothing was saved. Keep the form as typed and wait for the user's decision.
+        setConflict({ latest: c.latest, version: c.version ?? c.latest.version });
+        return;
+      }
       if (err instanceof ApiError) {
         const first = err.errors ? Object.values(err.errors).flat()[0] : undefined;
         setError(first ?? err.message);
@@ -325,6 +378,14 @@ function MedicalEditor({
         </button>
       </div>
 
+      {conflict && (
+        <ConflictNotice
+          version={conflict.version}
+          updatedBy={conflict.latest.updatedByName || undefined}
+          onLoadLatest={loadLatest}
+        />
+      )}
+      {lostDraft && !conflict && <LostDraft items={lostDraft} onDismiss={() => setLostDraft(null)} />}
       {error && (
         <p role="alert" className="text-[12.5px] font-medium text-destructive">
           {error}
@@ -335,7 +396,7 @@ function MedicalEditor({
         <button type="button" onClick={onCancel} disabled={pending} className={secondaryButton}>
           Cancel
         </button>
-        <button type="submit" disabled={pending} className={primaryButton}>
+        <button type="submit" disabled={pending || conflict !== null} className={primaryButton}>
           {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
           {pending ? 'Saving…' : 'Save medical profile'}
         </button>
@@ -354,9 +415,12 @@ export function MedicalProfileCard({
   note,
   className,
   actions,
+  onLoadLatest,
 }: {
   medical: MedicalProfile;
   onSave?: (input: MedicalProfileInput) => Promise<void>;
+  /** Staff only: called with the latest chart after a save conflict is resolved with "Load latest version". */
+  onLoadLatest?: (latest: PatientDetail) => void;
   note?: ReactNode;
   className?: string;
   actions?: ReactNode;
@@ -391,6 +455,7 @@ export function MedicalProfileCard({
           <MedicalEditor
             medical={medical}
             onCancel={() => setEditing(false)}
+            onLoadLatest={onLoadLatest}
             onSave={async (input) => {
               await onSave(input);
               setEditing(false);

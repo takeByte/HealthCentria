@@ -367,7 +367,7 @@ export function updateAppointmentRecord(
   clinical: { diagnosis?: string; prescription?: string; visitNotes?: string },
   version: number,
 ): Promise<{ appointment: StaffAppointment }> {
-  return apiFetch(`/api/v2/appointments/${id}/record`, { method: 'PATCH', body: { ...clinical, version } });
+  return apiFetch(`/api/v2/appointments/${id}/record`, { method: 'PATCH', body: { ...clinical, version }, handleConflict: true });
 }
 
 export type AnnouncementCategory = 'schedule-change' | 'vaccination-day' | 'health-advisory' | 'general';
@@ -663,7 +663,7 @@ export function updatePatientRecord(
   input: PatientRecordInput,
   version: number,
 ): Promise<{ patient: PatientDetail }> {
-  return apiFetch(`/api/v2/patients/${id}`, { method: 'PATCH', body: { ...input, version } });
+  return apiFetch(`/api/v2/patients/${id}`, { method: 'PATCH', body: { ...input, version }, handleConflict: true });
 }
 
 /** Staff/admin: replace a patient's medical profile. */
@@ -672,7 +672,7 @@ export function updatePatientMedical(
   input: MedicalProfileInput,
   version: number,
 ): Promise<{ patient: PatientDetail }> {
-  return apiFetch(`/api/v2/patients/${id}/medical`, { method: 'PATCH', body: { ...input, version } });
+  return apiFetch(`/api/v2/patients/${id}/medical`, { method: 'PATCH', body: { ...input, version }, handleConflict: true });
 }
 
 export type ReportRange = 'today' | 'week' | 'month';

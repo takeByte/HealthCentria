@@ -138,8 +138,9 @@ try {
 
   console.log('\nWhat the messages contain');
   const everything = [...adm.events, ...stf.events, ...pa.events, ...pb.events];
-  const allowed = new Set(['topic', 'id', 'patient']);
-  check('messages carry only a topic and ids, never names, addresses or notes',
+  // `version` is the record's MVCC counter (a plain number), so open editors can tell they are behind.
+  const allowed = new Set(['topic', 'id', 'patient', 'version']);
+  check('messages carry only a topic, ids and a version number, never names, addresses or notes',
     everything.every((e) => Object.keys(e).every((k) => allowed.has(k))) && !JSON.stringify(everything).includes('New address'),
     JSON.stringify(everything).slice(0, 200));
 } catch (err) {

@@ -17,6 +17,13 @@ import {
   secondaryButton,
   textareaClass,
 } from '../../components/app-ui';
+import {
+  ConflictNotice,
+  LostDraft,
+  conflictLatest,
+  nonEmptyDraft,
+  type DraftItem,
+} from '../../components/conflict-draft';
 import { MedicalProfileCard } from '../../components/medical-profile';
 import { RecordMeta } from '../../components/record-meta';
 import { Toast, type ToastMessage } from '../../components/toast';
@@ -30,6 +37,7 @@ import {
   type MedicalProfileInput,
   type PatientDetail,
   type PatientVisit,
+  type StaffAppointment,
   type VisitContext,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
@@ -94,11 +102,16 @@ function VisitPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
+  // Someone saved this visit first: their copy waits here while the user's text stays on screen.
+  const [conflict, setConflict] = useState<{ latest: StaffAppointment; version?: number } | null>(null);
+  // The user's own text, kept for copying after the latest version has been loaded.
+  const [lostDraft, setLostDraft] = useState<DraftItem[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
     setCtx(null);
+    setConflict(null);
     getVisitContext(appointmentId)
       .then((r) => {
         if (cancelled) return;
@@ -121,9 +134,53 @@ function VisitPage() {
   const editingDone = appt?.status === 'completed';
   const readOnly = appt !== null && !completing && !editingDone;
 
+  /** What the user typed that differs from the given saved copy (so only real edits are kept). */
+  function draftDifferingFrom(saved: { diagnosis: string; prescription: string; visitNotes: string }): DraftItem[] {
+    const same = (a: string, b: string) => a.trim() === (b ?? '').trim();
+    return nonEmptyDraft(
+      [
+        { label: 'Diagnosis', value: diagnosis, saved: saved.diagnosis },
+        { label: 'Prescription', value: prescription, saved: saved.prescription },
+        { label: 'Visit notes', value: visitNotes, saved: saved.visitNotes },
+      ]
+        .filter((f) => !same(f.value, f.saved))
+        .map(({ label, value }) => ({ label, value })),
+    );
+  }
+
+  /** Show the other person's version; keep the user's own text next to it. */
+  function loadLatest() {
+    if (!conflict) return;
+    const latest = conflict.latest;
+    const kept = draftDifferingFrom(latest);
+    setLostDraft(kept.length ? kept : null);
+    setCtx((c) =>
+      c
+        ? {
+            ...c,
+            appointment: {
+              ...c.appointment,
+              status: latest.status,
+              version: latest.version,
+              diagnosis: latest.diagnosis,
+              prescription: latest.prescription,
+              visitNotes: latest.visitNotes,
+              updatedAt: latest.updatedAt,
+              updatedByName: latest.updatedByName,
+            },
+          }
+        : c,
+    );
+    setDiagnosis(latest.diagnosis);
+    setPrescription(latest.prescription);
+    setVisitNotes(latest.visitNotes);
+    setConflict(null);
+    setFormError(null);
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!appt) return;
+    if (!appt || conflict) return;
     setFormError(null);
     setSaving(true);
     const clinical = {
@@ -142,7 +199,13 @@ function VisitPage() {
       setCtx((c) => (c ? { ...c, appointment: { ...c.appointment, version: saved.appointment.version } } : c));
       setToast({ tone: 'success', message: 'Visit record updated.' });
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Could not save. Try again.');
+      const c = conflictLatest<StaffAppointment>(err);
+      if (c) {
+        // Nothing was saved. Keep the form as typed and wait for the user's decision.
+        setConflict({ latest: c.latest, version: c.version ?? c.latest.version });
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'Could not save. Try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -183,6 +246,11 @@ function VisitPage() {
         <LiveBanner
           stale={liveStale.stale}
           onReload={() => {
+            // Reloading replaces the form, so keep anything the user typed for them to copy.
+            if (appt) {
+              const kept = draftDifferingFrom(appt);
+              if (kept.length) setLostDraft(kept);
+            }
             liveStale.clear();
             setReloadKey((k) => k + 1);
           }}
@@ -275,10 +343,22 @@ function VisitPage() {
                     className={textareaClass}
                   />
                 </div>
+                {conflict && (
+                  <ConflictNotice
+                    version={conflict.version}
+                    updatedBy={conflict.latest.updatedByName || undefined}
+                    onLoadLatest={loadLatest}
+                  />
+                )}
+                {lostDraft && !conflict && <LostDraft items={lostDraft} onDismiss={() => setLostDraft(null)} />}
                 {formError && <InlineNotice>{formError}</InlineNotice>}
                 {!readOnly && (
                   <div className="flex flex-wrap gap-2">
-                    <button type="submit" disabled={saving} className={`${primaryButton} h-10 px-5`}>
+                    <button
+                      type="submit"
+                      disabled={saving || conflict !== null}
+                      className={`${primaryButton} h-10 px-5`}
+                    >
                       {saving && <LoaderCircle size={15} className="animate-spin" aria-hidden />}
                       {completing ? 'Save & complete visit' : 'Save changes'}
                     </button>
@@ -328,6 +408,7 @@ function VisitPage() {
 
               <MedicalProfileCard
                 medical={patient.medical}
+                onLoadLatest={setPatient}
                 onSave={
                   canEditMedical
                     ? async (input: MedicalProfileInput) => {

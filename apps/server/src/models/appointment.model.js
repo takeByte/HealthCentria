@@ -29,7 +29,9 @@ const appointmentSchema = new mongoose.Schema(
   // Two staff acting on one request must not silently overwrite each other.
   // Status transitions below also guard on the expected status; this covers
   // any remaining read-then-save path (Mongoose VersionError → HTTP 409).
-  { timestamps: true, optimisticConcurrency: true },
+  // versionKey 'version': the MVCC counter is a visible field in Atlas (starts at 0,
+  // +1 per successful write) instead of Mongoose's hidden __v.
+  { timestamps: true, optimisticConcurrency: true, versionKey: 'version' },
 );
 
 export const Appointment = mongoose.models.Appointment ?? mongoose.model('Appointment', appointmentSchema);

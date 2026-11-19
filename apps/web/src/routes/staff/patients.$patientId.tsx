@@ -22,6 +22,13 @@ import {
   selectClass,
   textareaClass,
 } from '../../components/app-ui';
+import {
+  ConflictNotice,
+  LostDraft,
+  conflictLatest,
+  nonEmptyDraft,
+  type DraftItem,
+} from '../../components/conflict-draft';
 import { DeletePatientSection, PATIENTS_FLASH_KEY } from '../../components/delete-patient';
 import { MedicalProfileCard } from '../../components/medical-profile';
 import { RecordMeta } from '../../components/record-meta';
@@ -37,6 +44,7 @@ import {
   type MedicalProfileInput,
   type PatientDetail,
   type PatientVisit,
+  type StaffAppointment,
 } from '../../lib/api';
 import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
@@ -185,6 +193,11 @@ function PatientDetailPage() {
     visitNotes: string;
   } | null>(null);
   const [recordSaving, setRecordSaving] = useState(false);
+  // Someone saved first: their copy waits here while the user's text stays on screen.
+  const [patientConflict, setPatientConflict] = useState<{ latest: PatientDetail; version?: number } | null>(null);
+  const [patientLost, setPatientLost] = useState<DraftItem[] | null>(null);
+  const [recordConflict, setRecordConflict] = useState<{ latest: StaffAppointment; version?: number } | null>(null);
+  const [recordLost, setRecordLost] = useState<DraftItem[] | null>(null);
   const [toast, setToast] = useState<ToastMessage | null>(null);
   const navigate = useNavigate();
   const { withPin, dialog: pinDialog } = useSuperPin();
@@ -196,6 +209,7 @@ function PatientDetailPage() {
     setVisits(null);
     setEditing(false);
     setFieldErrors({});
+    setPatientConflict(null);
     getPatient(patientId)
       .then((r) => {
         if (!cancelled) {
@@ -226,12 +240,16 @@ function PatientDetailPage() {
 
   function startEdit() {
     if (!patient) return;
+    setPatientConflict(null);
+    setPatientLost(null);
     setForm(formFromPatient(patient));
     setFieldErrors({});
     setEditing(true);
   }
 
   function cancelEdit() {
+    setPatientConflict(null);
+    setPatientLost(null);
     if (patient) setForm(formFromPatient(patient));
     setFieldErrors({});
     setEditing(false);
@@ -239,7 +257,7 @@ function PatientDetailPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!patient) return;
+    if (!patient || patientConflict) return;
     const nextErrors = validate(form);
     setFieldErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -271,6 +289,12 @@ function PatientDetailPage() {
       setFieldErrors({});
       setToast({ tone: 'success', message: 'Patient record updated.' });
     } catch (err) {
+      const conflict = conflictLatest<PatientDetail>(err);
+      if (conflict) {
+        // Nothing was saved. Keep the form as typed and wait for the user's decision.
+        setPatientConflict({ latest: conflict.latest, version: conflict.version ?? conflict.latest.version });
+        return;
+      }
       if (err instanceof ApiError) {
         if (err.errors) {
           const serverErrors: RecordErrors = {};
@@ -289,7 +313,78 @@ function PatientDetailPage() {
     }
   }
 
+  /** Show the other person's chart; keep the user's own text next to it. */
+  function loadPatientLatest() {
+    if (!patientConflict) return;
+    const latest = patientConflict.latest;
+    const theirs = formFromPatient(latest);
+    const labels: Array<[keyof RecordForm, string]> = [
+      ['fullName', 'Full name'],
+      ['birthdate', 'Birthdate'],
+      ['sex', 'Sex'],
+      ['address', 'Address'],
+      ['barangay', 'Barangay'],
+      ['householdNumber', 'Household number'],
+      ['contactNumber', 'Contact number'],
+      ['philHealthNumber', 'PhilHealth number'],
+      ['emergencyName', 'Emergency contact name'],
+      ['emergencyNumber', 'Emergency contact number'],
+    ];
+    const kept = nonEmptyDraft(
+      labels
+        .filter(([key]) => String(form[key]).trim() !== String(theirs[key]).trim())
+        .map(([key, label]) => ({ label, value: String(form[key]) })),
+    );
+    setPatientLost(kept.length ? kept : null);
+    setPatient(latest);
+    setForm(theirs);
+    setFieldErrors({});
+    setPatientConflict(null);
+  }
+
+  /** Same for a visit's clinical notes edited from the chart. */
+  function loadRecordLatest() {
+    if (!recordConflict || !recordEdit) return;
+    const latest = recordConflict.latest;
+    const pairs: Array<[string, string, string]> = [
+      ['Diagnosis', recordEdit.diagnosis, latest.diagnosis ?? ''],
+      ['Prescription', recordEdit.prescription, latest.prescription ?? ''],
+      ['Visit notes', recordEdit.visitNotes, latest.visitNotes ?? ''],
+    ];
+    const kept = nonEmptyDraft(
+      pairs.filter(([, mine, theirs]) => mine.trim() !== theirs.trim()).map(([label, mine]) => ({ label, value: mine })),
+    );
+    setRecordLost(kept.length ? kept : null);
+    setVisits((list) =>
+      list
+        ? list.map((visit) =>
+            visit.id === recordEdit.id
+              ? {
+                  ...visit,
+                  status: latest.status,
+                  diagnosis: latest.diagnosis,
+                  prescription: latest.prescription,
+                  visitNotes: latest.visitNotes,
+                  version: latest.version,
+                  updatedAt: latest.updatedAt,
+                  updatedByName: latest.updatedByName,
+                }
+              : visit,
+          )
+        : list,
+    );
+    setRecordEdit({
+      id: recordEdit.id,
+      diagnosis: latest.diagnosis ?? '',
+      prescription: latest.prescription ?? '',
+      visitNotes: latest.visitNotes ?? '',
+    });
+    setRecordConflict(null);
+  }
+
   function startRecordEdit(visit: PatientVisit) {
+    setRecordConflict(null);
+    setRecordLost(null);
     setRecordEdit({
       id: visit.id,
       diagnosis: visit.diagnosis ?? '',
@@ -299,11 +394,13 @@ function PatientDetailPage() {
   }
 
   function cancelRecordEdit() {
+    setRecordConflict(null);
+    setRecordLost(null);
     setRecordEdit(null);
   }
 
   async function saveRecordEdit() {
-    if (!recordEdit) return;
+    if (!recordEdit || recordConflict) return;
     setRecordSaving(true);
     try {
       const result = await updateAppointmentRecord(
@@ -335,6 +432,12 @@ function PatientDetailPage() {
       setRecordEdit(null);
       setToast({ tone: 'success', message: 'Visit record updated.' });
     } catch (err) {
+      const conflict = conflictLatest<StaffAppointment>(err);
+      if (conflict) {
+        // Nothing was saved. Keep the notes as typed and wait for the user's decision.
+        setRecordConflict({ latest: conflict.latest, version: conflict.version ?? conflict.latest.version });
+        return;
+      }
       setToast({
         tone: 'error',
         message:
@@ -657,11 +760,25 @@ function PatientDetailPage() {
                       />
                     </div>
 
+                    {(patientConflict || patientLost) && (
+                      <div className="space-y-3 sm:col-span-2">
+                        {patientConflict && (
+                          <ConflictNotice
+                            version={patientConflict.version}
+                            updatedBy={patientConflict.latest.updatedByName || undefined}
+                            onLoadLatest={loadPatientLatest}
+                          />
+                        )}
+                        {patientLost && !patientConflict && (
+                          <LostDraft items={patientLost} onDismiss={() => setPatientLost(null)} />
+                        )}
+                      </div>
+                    )}
                     <div className="flex flex-col gap-2.5 sm:col-span-2 sm:flex-row sm:justify-end">
                       <button type="button" onClick={cancelEdit} className={secondaryButton} disabled={pending}>
                         Cancel
                       </button>
-                      <button type="submit" disabled={pending} className={primaryButton}>
+                      <button type="submit" disabled={pending || patientConflict !== null} className={primaryButton}>
                         {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                         {pending ? 'Saving…' : 'Save changes'}
                       </button>
@@ -685,6 +802,7 @@ function PatientDetailPage() {
                 <motion.div {...rise} transition={{ ...riseTransition, delay: 0.1 }} className="lg:col-span-3">
                   <MedicalProfileCard
                     medical={patient.medical}
+                    onLoadLatest={setPatient}
                     onSave={async (input: MedicalProfileInput) => {
                       const result = await updatePatientMedical(patient.id, input, patient.version);
                       setPatient(result.patient);
@@ -793,6 +911,16 @@ function PatientDetailPage() {
                               className={textareaClass}
                             />
                           </div>
+                          {recordConflict && (
+                            <ConflictNotice
+                              version={recordConflict.version}
+                              updatedBy={recordConflict.latest.updatedByName || undefined}
+                              onLoadLatest={loadRecordLatest}
+                            />
+                          )}
+                          {recordLost && !recordConflict && (
+                            <LostDraft items={recordLost} onDismiss={() => setRecordLost(null)} />
+                          )}
                           <div className="flex justify-end gap-2">
                             <button
                               type="button"
@@ -802,7 +930,7 @@ function PatientDetailPage() {
                             >
                               Cancel
                             </button>
-                            <button type="submit" className={primaryButton} disabled={recordSaving}>
+                            <button type="submit" className={primaryButton} disabled={recordSaving || recordConflict !== null}>
                               {recordSaving && (
                                 <LoaderCircle size={16} className="animate-spin" aria-hidden />
                               )}

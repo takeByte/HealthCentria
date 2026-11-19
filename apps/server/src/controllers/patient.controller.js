@@ -13,7 +13,7 @@ import { logActivity, snapshotChanges } from '../services/activity.js';
 import { presentUser } from '../utils/present-user.js';
 import { avatarSchema } from '../utils/avatar.js';
 import { prefAllows } from '../utils/notifications.js';
-import { versionMatches } from '../utils/concurrency.js';
+import { sendVersionConflict, versionedUpdate } from './mvcc.controller.js';
 import { runInTransaction } from '../utils/transaction.js';
 
 const listQuery = z.object({
@@ -148,6 +148,9 @@ function presentMedical(u) {
   };
 }
 
+/** A live (not deleted) patient account. */
+const PATIENT_FILTER = (id) => ({ _id: id, role: 'patient', deletedAt: null });
+
 function requireDB(res) {
   if (mongoose.connection.readyState !== 1) {
     res.status(503).json({ success: false, message: 'Database is not connected. Try again later.' });
@@ -173,7 +176,7 @@ function presentProfile(u) {
   const birthdate = u.birthdate ? new Date(u.birthdate) : null;
   return {
     id: String(u._id),
-    version: Number(u.__v ?? 0),
+    version: Number(u.version ?? 0),
     name: u.fullName,
     email: u.email,
     birthdate: birthdate && !Number.isNaN(birthdate.getTime()) ? birthdate.toISOString().slice(0, 10) : '',
@@ -217,7 +220,7 @@ function presentVisit(a) {
   const obj = typeof a.toObject === 'function' ? a.toObject() : a;
   return {
     id: String(obj._id),
-    version: Number(obj.__v ?? 0),
+    version: Number(obj.version ?? 0),
     service:
       obj.service && typeof obj.service === 'object'
         ? { id: String(obj.service._id), name: obj.service.name }
@@ -323,55 +326,69 @@ export const updatePatientRecord = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'No changes provided.' });
   }
 
-  const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null });
-  if (!patient) {
+  // Pre-read: only used for the "before" values (activity log) and the profile-complete check.
+  // The real version check is the atomic update below.
+  const before = await User.findOne(PATIENT_FILTER(req.params.id)).lean();
+  if (!before) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
-  if (!versionMatches(req, res, patient, 'patient record')) return;
 
   const data = parsed.data;
-  // Snapshot the tracked fields before writing so the log shows real diffs.
-  const before = {};
-  for (const field of Object.keys(data)) before[field] = patient.get(field);
-  if (data.fullName !== undefined) patient.fullName = data.fullName;
-  if (data.birthdate !== undefined) patient.birthdate = new Date(`${data.birthdate}T00:00:00`);
-  if (data.sex) patient.sex = data.sex;
-  if (data.address !== undefined) patient.address = data.address;
-  if (data.barangay !== undefined) patient.barangay = data.barangay;
-  if (data.householdNumber !== undefined) patient.householdNumber = data.householdNumber;
-  if (data.contactNumber !== undefined) patient.contactNumber = data.contactNumber;
-  if (data.philHealthNumber !== undefined) patient.philHealthNumber = data.philHealthNumber;
-  if (data.emergencyName !== undefined) patient.emergencyName = data.emergencyName;
-  if (data.emergencyNumber !== undefined) patient.emergencyNumber = data.emergencyNumber;
+  const changes = {};
+  if (data.fullName !== undefined) changes.fullName = data.fullName;
+  if (data.birthdate !== undefined) changes.birthdate = new Date(`${data.birthdate}T00:00:00`);
+  if (data.sex) changes.sex = data.sex;
+  if (data.address !== undefined) changes.address = data.address;
+  if (data.barangay !== undefined) changes.barangay = data.barangay;
+  if (data.householdNumber !== undefined) changes.householdNumber = data.householdNumber;
+  if (data.contactNumber !== undefined) changes.contactNumber = data.contactNumber;
+  if (data.philHealthNumber !== undefined) changes.philHealthNumber = data.philHealthNumber;
+  if (data.emergencyName !== undefined) changes.emergencyName = data.emergencyName;
+  if (data.emergencyNumber !== undefined) changes.emergencyNumber = data.emergencyNumber;
 
   // Preserve legacy complete records; only promote an incomplete chart once
   // staff have supplied every field the booking gate expects.
-  if (patient.profileComplete === false) {
+  if (before.profileComplete === false) {
+    const merged = { ...before, ...changes };
     const complete = Boolean(
-      patient.fullName?.trim() &&
-        patient.birthdate &&
-        patient.sex &&
-        patient.address?.trim() &&
-        patient.barangay?.trim() &&
-        patient.contactNumber?.trim(),
+      merged.fullName?.trim() &&
+        merged.birthdate &&
+        merged.sex &&
+        merged.address?.trim() &&
+        merged.barangay?.trim() &&
+        merged.contactNumber?.trim(),
     );
-    if (complete) patient.profileComplete = true;
+    if (complete) changes.profileComplete = true;
   }
+  changes.updatedBy = req.user.id;
 
-  patient.updatedBy = req.user.id;
-  await patient.save();
-  // Populate so the response carries the editor's name for "Updated by".
-  await patient.populate('updatedBy', 'fullName');
+  // MVCC: compare version + write + increment version in ONE atomic MongoDB operation.
+  const result = await versionedUpdate({
+    Model: User,
+    id: req.params.id,
+    extraFilter: { role: 'patient', deletedAt: null },
+    expectedVersion: req.expectedVersion, // set by the v2 requireVersion middleware
+    changes,
+    populate: [{ path: 'updatedBy', select: 'fullName' }],
+    runValidators: false, // zod already validated; User schema validators rely on `this`
+  });
+  if (result.status === 'not_found') {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+  // Stale version: nothing was written. Send the latest chart back so the client can sync.
+  if (result.status === 'conflict') return sendVersionConflict(res, result.current, presentProfile, 'patient record');
+
+  const patient = result.doc;
   await logActivity({
     req,
     action: 'patient.update',
     target: { type: 'patient', id: patient._id, label: patient.fullName },
     changes: snapshotChanges(before, patient, Object.keys(data)),
-    detail: `Patient chart updated: ${Object.keys(data).join(', ')}.`,
+    detail: `Patient chart updated (v${result.previousVersion} -> v${patient.version}): ${Object.keys(data).join(', ')}.`,
     patient: patient._id,
   });
 
-  live.patient(patient._id, req);
+  live.patient(patient._id, req, { version: patient.version });
   res.json({ success: true, patient: presentProfile(patient) });
 });
 
@@ -394,13 +411,12 @@ export const updatePatientMedical = asyncHandler(async (req, res) => {
       errors: parsed.error.flatten().fieldErrors,
     });
   }
-  const patient = await User.findOne({ _id: req.params.id, role: 'patient', deletedAt: null });
-  if (!patient) {
+  const existing = await User.findOne(PATIENT_FILTER(req.params.id)).lean();
+  if (!existing) {
     return res.status(404).json({ success: false, message: 'Patient not found.' });
   }
-  if (!versionMatches(req, res, patient, 'patient record')) return;
 
-  const before = presentMedical(patient);
+  const before = presentMedical(existing);
   const data = parsed.data;
   const next = {
     bloodType: data.bloodType,
@@ -411,22 +427,36 @@ export const updatePatientMedical = asyncHandler(async (req, res) => {
   };
   const changed = Object.keys(next).filter((key) => JSON.stringify(before[key]) !== JSON.stringify(next[key]));
 
-  patient.medicalProfile = { ...next, recordedAt: new Date(), recordedBy: req.user.id };
-  patient.updatedBy = req.user.id;
-  await patient.save();
-  await patient.populate('updatedBy', 'fullName');
+  // MVCC: compare version + write + increment version in ONE atomic MongoDB operation.
+  const result = await versionedUpdate({
+    Model: User,
+    id: req.params.id,
+    extraFilter: { role: 'patient', deletedAt: null },
+    expectedVersion: req.expectedVersion,
+    changes: {
+      medicalProfile: { ...next, recordedAt: new Date(), recordedBy: req.user.id },
+      updatedBy: req.user.id,
+    },
+    populate: [{ path: 'updatedBy', select: 'fullName' }],
+    runValidators: false,
+  });
+  if (result.status === 'not_found') {
+    return res.status(404).json({ success: false, message: 'Patient not found.' });
+  }
+  if (result.status === 'conflict') return sendVersionConflict(res, result.current, presentProfile, 'patient record');
 
+  const patient = result.doc;
   if (changed.length) {
     await logActivity({
       req,
       action: 'patient.medical_update',
       target: { type: 'patient', id: patient._id, label: patient.fullName },
-      detail: `Medical profile updated: ${changed.join(', ')}.`,
+      detail: `Medical profile updated (v${result.previousVersion} -> v${patient.version}): ${changed.join(', ')}.`,
       patient: patient._id,
     });
   }
 
-  live.patient(patient._id, req);
+  live.patient(patient._id, req, { version: patient.version });
   res.json({ success: true, patient: presentProfile(patient) });
 });
 

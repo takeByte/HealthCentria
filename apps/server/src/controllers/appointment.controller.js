@@ -35,7 +35,7 @@ function cancelDeadline(day) {
 function present(a) {
   return {
     id: String(a._id),
-    version: Number(a.__v ?? 0),
+    version: Number(a.version ?? 0),
     service: a.service && typeof a.service === 'object' ? { id: String(a.service._id), name: a.service.name } : a.service,
     day: a.day,
     timePreference: a.timePreference,
@@ -154,7 +154,7 @@ export const cancelAppointment = asyncHandler(async (req, res) => {
   // silently overwritten by the cancel.
   const appt = await Appointment.findOneAndUpdate(
     { _id: req.params.id, patient: req.user.id, status: before.status },
-    { $set: { status: 'cancelled' }, $inc: { __v: 1 } },
+    { $set: { status: 'cancelled' }, $inc: { version: 1 } },
     { new: true },
   );
   if (!appt) {

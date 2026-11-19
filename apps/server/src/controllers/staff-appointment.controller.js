@@ -17,7 +17,7 @@ import { hashPassword, isValidPassword } from '../utils/password.js';
 import { sendEmail } from '../utils/email.js';
 import { env } from '../config/env.js';
 import { notifyPatientEmail, notifyUser } from '../utils/notifications.js';
-import { versionFilter, versionMatches } from '../utils/concurrency.js';
+import { sendVersionConflict, versionedUpdate } from './mvcc.controller.js';
 import { TransactionAbort, runInTransaction } from '../utils/transaction.js';
 
 const listQuery = z.object({
@@ -57,7 +57,7 @@ function present(a) {
   const obj = typeof a.toObject === 'function' ? a.toObject() : a;
   return {
     id: String(obj._id),
-    version: Number(obj.__v ?? 0),
+    version: Number(obj.version ?? 0),
     patient:
       obj.patient && typeof obj.patient === 'object'
         ? { id: String(obj.patient._id), name: obj.patient.fullName, email: obj.patient.email }
@@ -110,12 +110,28 @@ async function logAppointment(req, action, appt, { changes = [], detail = '', se
  * A guarded update matched nothing: either the appointment is gone or someone
  * else changed its status first. 404 vs 409 lets the UI tell those apart.
  */
+const APPOINTMENT_POPULATE = [
+  { path: 'patient', select: 'fullName email' },
+  { path: 'service', select: 'name' },
+  { path: 'updatedBy', select: 'fullName' },
+];
+
 async function appointmentConflict(res, id, message) {
-  const exists = mongoose.isValidObjectId(id) && (await Appointment.exists({ _id: id }));
-  if (!exists) {
+  const latest = mongoose.isValidObjectId(id)
+    ? await Appointment.findById(id).populate(APPOINTMENT_POPULATE).lean()
+    : null;
+  if (!latest) {
     return res.status(404).json({ success: false, message: 'Appointment not found.' });
   }
-  return res.status(409).json({ success: false, code: 'APPOINTMENT_CONFLICT', message });
+  // `current` is the latest copy of the visit, so the screen can sync to it (and keep the
+  // user's unsaved text for them to copy) without a reload.
+  return res.status(409).json({
+    success: false,
+    code: 'APPOINTMENT_CONFLICT',
+    message,
+    currentVersion: Number(latest.version ?? 0),
+    current: present(latest),
+  });
 }
 
 export const queueAppointments = asyncHandler(async (req, res) => {
@@ -148,7 +164,7 @@ export const confirmAppointment = asyncHandler(async (req, res) => {
   // one matches no document and is told to reload instead of overwriting it.
   const appt = await Appointment.findOneAndUpdate(
     { _id: req.params.id, status: 'pending' },
-    { $set: { status: 'confirmed', updatedBy: req.user.id }, $inc: { __v: 1 } },
+    { $set: { status: 'confirmed', updatedBy: req.user.id }, $inc: { version: 1 } },
     { new: true },
   );
   if (!appt) {
@@ -202,7 +218,7 @@ export const declineAppointment = asyncHandler(async (req, res) => {
         declineReason: parsed.data.reason,
         updatedBy: req.user.id,
       },
-      $inc: { __v: 1 },
+      $inc: { version: 1 },
     },
     { new: true },
   );
@@ -257,11 +273,11 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   const before = await Appointment.findById(req.params.id).lean();
   if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
   if (before.status !== 'confirmed') {
-    return res.status(409).json({
-      success: false,
-      code: 'APPOINTMENT_CONFLICT',
-      message: 'Only confirmed appointments can be completed. Reload the queue to see its current status.',
-    });
+    return appointmentConflict(
+      res,
+      req.params.id,
+      'Only confirmed appointments can be completed. Reload the queue to see its current status.',
+    );
   }
   const clinicalChanges = diffChanges([
     ['status', before.status, 'completed'],
@@ -286,7 +302,7 @@ export const completeAppointment = asyncHandler(async (req, res) => {
             visitNotes: parsed.data.visitNotes,
             updatedBy: req.user.id,
           },
-          $inc: { __v: 1 },
+          $inc: { version: 1 },
         },
         { new: true, session },
       );
@@ -345,13 +361,8 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
   const before = await Appointment.findById(req.params.id).lean();
   if (!before) return res.status(404).json({ success: false, message: 'Appointment not found.' });
   if (before.status !== 'completed') {
-    return res.status(409).json({
-      success: false,
-      code: 'APPOINTMENT_CONFLICT',
-      message: 'Clinical notes can only be edited after the visit is completed.',
-    });
+    return appointmentConflict(res, req.params.id, 'Clinical notes can only be edited after the visit is completed.');
   }
-  if (!versionMatches(req, res, before, 'visit record')) return;
 
   const changes = diffChanges(
     ['diagnosis', 'prescription', 'visitNotes']
@@ -364,28 +375,26 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
     if (parsed.data[field] !== undefined) patch[field] = parsed.data[field];
   }
 
-  const appt = await Appointment.findOneAndUpdate(
-    { _id: req.params.id, status: 'completed', ...versionFilter(req) },
-    { $set: patch, $inc: { __v: 1 } },
-    { new: true },
-  ).populate([
-    { path: 'patient', select: 'fullName email' },
-    { path: 'service', select: 'name' },
-    { path: 'updatedBy', select: 'fullName' },
-  ]);
-  if (!appt) {
-    return appointmentConflict(
-      res,
-      req.params.id,
-      req.expectedVersion === undefined
-        ? 'This visit is no longer completed. Reload the patient record.'
-        : 'This visit was changed by someone else while you were editing it. Reload to see the latest version, then make your change again.',
-    );
+  // MVCC: compare version + write + increment version in ONE atomic MongoDB operation.
+  const result = await versionedUpdate({
+    Model: Appointment,
+    id: req.params.id,
+    extraFilter: { status: 'completed' },
+    expectedVersion: req.expectedVersion, // set by the v2 requireVersion middleware
+    changes: patch,
+    populate: APPOINTMENT_POPULATE,
+  });
+  if (result.status === 'not_found') {
+    return res.status(404).json({ success: false, message: 'Appointment not found.' });
   }
+  // Stale version (or the visit is no longer completed): nothing was written. Send the
+  // latest copy back so the client can sync to it.
+  if (result.status === 'conflict') return sendVersionConflict(res, result.current, present, 'visit record');
 
+  const appt = result.doc;
   await logAppointment(req, 'record.update', appt, {
     changes,
-    detail: 'Clinical visit record edited after the visit.',
+    detail: `Clinical visit record edited after the visit (v${result.previousVersion} -> v${appt.version}).`,
   });
   // Keep the mirrored calendar entry's description in step.
   void syncAppointmentToCalendar(appt).catch(() => {});

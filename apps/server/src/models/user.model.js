@@ -103,7 +103,9 @@ const userSchema = new mongoose.Schema(
   },
   // Admin edits and self-service profile/password changes can race. A stale
   // save raises Mongoose's VersionError, which the API reports as HTTP 409.
-  { timestamps: true, optimisticConcurrency: true },
+  // versionKey 'version': the MVCC counter is a normal, visible field in Atlas
+  // (starts at 0, +1 per successful write) instead of Mongoose's hidden __v.
+  { timestamps: true, optimisticConcurrency: true, versionKey: 'version' },
 );
 
 // Patient profile fields are optional while a Google-created account is still
