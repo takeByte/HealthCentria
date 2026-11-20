@@ -229,10 +229,11 @@ function VisitPage() {
           : c,
       );
       // Saving ends this editing session: hand the sections back so the other
-      // editor's "being edited by" banner clears. They are claimed again on the
-      // next keystroke (ensureClaim below).
+      // editor's "being edited by" banner clears, and return to the queue so the
+      // updated record is visible where the user came from.
       void sectionLocks.release();
-      setToast({ tone: 'success', message: 'Visit record updated.' });
+      void navigate({ to: '/staff/appointments' });
+      return;
     } catch (err) {
       if (isFieldLocked(err)) {
         setFormError(err.message);
