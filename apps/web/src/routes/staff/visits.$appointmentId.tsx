@@ -198,7 +198,10 @@ function VisitPage() {
       Object.entries(clinical).filter(([field, value]) => value !== (appt[field as VisitLockSection] ?? '')),
     ) as { diagnosis?: string; prescription?: string; visitNotes?: string };
     if (!completing && Object.keys(changed).length === 0) {
-      setToast({ tone: 'success', message: 'No changes to save.' });
+      // Nothing to write, but the button still means "done here": go back to
+      // the queue and give the sections back, like a successful save.
+      void sectionLocks.release();
+      void navigate({ to: '/staff/appointments' });
       return;
     }
     setSaving(true);
