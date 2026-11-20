@@ -124,7 +124,7 @@ Staff B opens the same visit     -> 423 FIELD_LOCKED for each section A holds
 Staff A saves or cancels         -> sections released, B can type
 ```
 
-The appointments queue shows the same holders at record level: while any section is held, the card says **"A is currently editing this visit"** and its **Complete visit** / **View / edit record** button is disabled. The queue re-reads this every 5 seconds, so the badge appears and clears without a reload. The holder still sees the card (as "you are editing this in another tab"), and confirm/decline stay available.
+The appointments queue shows the same holders at record level: while any section is held, the card says **"A is currently editing this visit"**, its **Complete visit** / **View / edit record** button is disabled, and the remaining lease is shown ("in about 8 min"). The queue re-reads this every 5 seconds, so the badge and the countdown update without a reload. The holder still sees the card (as "you are editing this in another tab"), and confirm/decline stay available.
 
 How it behaves:
 
@@ -138,6 +138,8 @@ How it behaves:
 | How is a stale claim taken over? | One atomic `findOneAndUpdate`, so a renewal and a takeover cannot both win. A unique index on `(appointmentId, section)` prevents two claims from existing. |
 | How does the other tab find out? | It polls `GET /api/appointments/:id/record/locks` every 5 seconds while the screen is open. The holder renews every 60 seconds. A release is picked up on the next poll, and the blocked notice also has a **Reload this page** button for an immediate refresh. |
 | Is it enforced? | The save is refused with **423 FIELD_LOCKED** only when another owner holds a section that the request would actually change. An unchanged field never blocks a save. |
+| Does the queue button work for keyboard users? | It is `aria-disabled`, not natively `disabled`, and is described by the visible notice. A native disabled control cannot be focused, so keyboard and screen-reader users would never hear why it does not open. |
+| How does the badge clear so quickly after a save? | The save waits for the release (capped at 1 s) before navigating, so the queue does not briefly show this tab as the editor. If the release never lands, the 10-minute lease still clears it. |
 | Does it replace the version check? | **No.** The lock is advisory: a script, an older client, or the patient chart can call the API without claiming anything. The version check is still the guarantee. |
 
 Endpoints (same permission as the record edit):

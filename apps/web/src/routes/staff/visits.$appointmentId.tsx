@@ -184,6 +184,25 @@ function VisitPage() {
     refresh: refreshVisit,
   });
 
+  /**
+   * Hand the sections back before leaving the screen, so the queue does not
+   * briefly show this tab as the editor. Capped at 1 s: a slow release must not
+   * trap the user on a saved screen; the lease cleans up if it never lands.
+   */
+  async function releaseBeforeLeaving() {
+    let timer: number | undefined;
+    try {
+      await Promise.race([
+        sectionLocks.release(),
+        new Promise<void>((resolve) => {
+          timer = window.setTimeout(resolve, 1_000);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) window.clearTimeout(timer);
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!appt) return;
@@ -201,7 +220,7 @@ function VisitPage() {
     if (!completing && Object.keys(changed).length === 0) {
       // Nothing to write, but the button still means "done here": go back to
       // the queue and give the sections back, like a successful save.
-      void sectionLocks.release();
+      await releaseBeforeLeaving();
       flash('No changes to save.');
       void navigate({ to: '/staff/appointments' });
       return;
@@ -210,7 +229,7 @@ function VisitPage() {
     try {
       if (completing) {
         await completeAppointment(appt.id, clinical, sectionLocks.owner);
-        void sectionLocks.release();
+        await releaseBeforeLeaving();
         flash('Visit completed and record saved.');
         void navigate({ to: '/staff/appointments' });
         return;
@@ -237,7 +256,7 @@ function VisitPage() {
       // Saving ends this editing session: hand the sections back so the other
       // editor's "being edited by" banner clears, and return to the queue so the
       // updated record is visible where the user came from.
-      void sectionLocks.release();
+      await releaseBeforeLeaving();
       flash('Visit record saved.');
       void navigate({ to: '/staff/appointments' });
       return;

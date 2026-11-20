@@ -152,7 +152,8 @@ export async function sectionsHeldByOthers({ appointmentId, sections, owner }) {
  *
  * One query for the whole page, keyed by appointment id. `mine` compares the
  * account, not the tab, so the queue can say "you are editing this in another
- * tab" instead of pretending a stranger holds it.
+ * tab" instead of pretending a stranger holds it. `expiresAt` is the latest
+ * section expiry: the moment the whole record is free again.
  */
 export async function locksByAppointment(appointmentIds, viewerId) {
   const map = new Map();
@@ -168,8 +169,10 @@ export async function locksByAppointment(appointmentIds, viewerId) {
       heldBy: row.userName,
       mine: false,
       sections: [],
+      expiresAt: row.expiresAt,
     };
     current.sections.push(row.section);
+    if (row.expiresAt > current.expiresAt) current.expiresAt = row.expiresAt;
     if (String(row.userId) === String(viewerId)) current.mine = true;
     map.set(row.appointmentId, current);
   }

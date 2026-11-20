@@ -58,6 +58,8 @@ export interface StaffAppointment extends Appointment {
     /** True when the holder is this account (but another tab). */
     mine: boolean;
     sections: VisitLockSection[];
+    /** When the last held section's lease runs out (ISO timestamp). */
+    expiresAt?: string;
   } | null;
 }
 

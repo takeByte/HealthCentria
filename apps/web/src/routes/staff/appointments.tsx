@@ -78,6 +78,47 @@ function serviceName(a: StaffAppointment): string {
   return typeof a.service === 'object' ? a.service.name : 'Service';
 }
 
+type EditingInfo = NonNullable<StaffAppointment['editing']>;
+
+/** "in about 8 min" from the lease timestamp; the queue re-renders every 5 s. */
+function lockRemaining(expiresAt?: string): string {
+  const ms = expiresAt ? new Date(expiresAt).getTime() - Date.now() : Number.NaN;
+  if (!Number.isFinite(ms) || ms <= 0) return 'in a moment';
+  const minutes = Math.ceil(ms / 60_000);
+  return minutes <= 1 ? 'in under a minute' : `in about ${minutes} min`;
+}
+
+/**
+ * A visit link whose record is held by another screen. Deliberately focusable:
+ * a native `disabled` button cannot be focused, so keyboard and screen-reader
+ * users would never hear why it does not open. The visible lock notice is the
+ * description; the click is inert because there is nothing safe to do.
+ */
+function LockedVisitButton({
+  label,
+  className,
+  editing,
+  describedBy,
+}: {
+  label: string;
+  className: string;
+  editing: EditingInfo;
+  describedBy: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-disabled="true"
+      aria-describedby={describedBy}
+      title={editing.mine ? 'Already open in another tab' : `Locked by ${editing.heldBy}`}
+      className={`${secondaryButton} cursor-not-allowed text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-deep)]/30 ${className}`}
+    >
+      <Lock size={14} aria-hidden />
+      {label}
+    </button>
+  );
+}
+
 function formatDay(ymd: string): string {
   const [y, m, d] = ymd.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -176,6 +217,7 @@ function QueueCard({
 
       {editing && (
         <p
+          id={`visit-lock-${appt.id}`}
           role="status"
           className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20"
         >
@@ -186,7 +228,7 @@ function QueueCard({
                 ? 'You are editing this visit in another tab.'
                 : `${editing.heldBy} is currently editing this visit.`}
             </span>{' '}
-            It unlocks on save, on leaving the screen, or after 10 minutes without activity.
+            It unlocks on save, on leaving the screen, or {lockRemaining(editing.expiresAt)}.
           </span>
         </p>
       )}
@@ -263,15 +305,12 @@ function QueueCard({
 
       {appt.status === 'confirmed' &&
         (editing ? (
-          <button
-            type="button"
-            disabled
-            className={`${secondaryButton} mt-3.5 h-9 cursor-not-allowed px-3.5 text-[13px]`}
-            title={editing.mine ? 'Already open in another tab' : `Locked by ${editing.heldBy}`}
-          >
-            <Lock size={14} aria-hidden />
-            Complete visit
-          </button>
+          <LockedVisitButton
+            label="Complete visit"
+            className="mt-3.5 h-9 px-3.5 text-[13px]"
+            editing={editing}
+            describedBy={`visit-lock-${appt.id}`}
+          />
         ) : (
           <Link
             to="/staff/visits/$appointmentId"
@@ -306,15 +345,12 @@ function QueueCard({
       )}
       {appt.status === 'completed' &&
         (editing ? (
-          <button
-            type="button"
-            disabled
-            className={`${secondaryButton} mt-3 h-9 cursor-not-allowed px-3.5 text-[13px]`}
-            title={editing.mine ? 'Already open in another tab' : `Locked by ${editing.heldBy}`}
-          >
-            <Lock size={14} aria-hidden />
-            View / edit record
-          </button>
+          <LockedVisitButton
+            label="View / edit record"
+            className="mt-3 h-9 px-3.5 text-[13px]"
+            editing={editing}
+            describedBy={`visit-lock-${appt.id}`}
+          />
         ) : (
           <Link
             to="/staff/visits/$appointmentId"
