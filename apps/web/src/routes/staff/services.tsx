@@ -185,6 +185,7 @@ function ServicesManage() {
   const [eVersion, setEVersion] = useState(0);
   const [eBusy, setEBusy] = useState(false);
   const [eError, setEError] = useState<string | null>(null);
+  // One editor at a time: opening the form claims the service.
 
   async function reload() {
     try {
@@ -411,7 +412,11 @@ function ServicesManage() {
                   </label>
                   {eError && <InlineNotice>{eError}</InlineNotice>}
                   <div className="flex gap-2">
-                    <button type="submit" disabled={eBusy} className={`${primaryButton} flex-1`}>
+                    <button
+                      type="submit"
+                      disabled={eBusy}
+                      className={`${primaryButton} flex-1`}
+                    >
                       {eBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                       Save
                     </button>

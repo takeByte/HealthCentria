@@ -1,8 +1,8 @@
 import { LiveBanner } from '../../components/live-banner';
-import { useLiveStale } from '../../lib/realtime';
+import { useLiveSync } from '../../lib/realtime';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, CalendarCheck, ClipboardList, FileText, LoaderCircle, Pencil, Pill } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
@@ -172,9 +172,8 @@ function PatientDetailPage() {
   const [visits, setVisits] = useState<PatientVisit[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // Someone else changed this patient: say so, but never replace what is being typed.
-  const liveStale = useLiveStale(['patients', 'appointments'], patientId);
   const [editing, setEditing] = useState(false);
+  const [medicalEditing, setMedicalEditing] = useState(false);
   const [form, setForm] = useState<RecordForm>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<RecordErrors>({});
   const [pending, setPending] = useState(false);
@@ -189,12 +188,34 @@ function PatientDetailPage() {
   const navigate = useNavigate();
   const { withPin, dialog: pinDialog } = useSuperPin();
 
+  // While a draft is open the screen reports changes instead of replacing them;
+  // otherwise the record quietly re-fetches and its version stays current.
+  const recordDirty = editing || recordEdit !== null || medicalEditing;
+
+  const refreshPatient = useCallback(async () => {
+    try {
+      const r = await getPatient(patientId);
+      setPatient(r.patient);
+      setVisits(r.visits);
+    } catch {
+      // Best effort: a missed refresh just means the next push or focus retries.
+    }
+  }, [patientId]);
+
+  const liveSync = useLiveSync({
+    topics: ['patients', 'appointments'],
+    dirty: recordDirty,
+    patientId,
+    refresh: refreshPatient,
+  });
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
     setPatient(null);
     setVisits(null);
     setEditing(false);
+    setMedicalEditing(false);
     setFieldErrors({});
     getPatient(patientId)
       .then((r) => {
@@ -385,9 +406,10 @@ function PatientDetailPage() {
         </motion.div>
 
         <LiveBanner
-          stale={liveStale.stale}
+          stale={liveSync.stale}
           onReload={() => {
-            liveStale.clear();
+            liveSync.clear();
+            // A full reload drops any open draft, which is what "Reload" promises.
             setReloadKey((key) => key + 1);
           }}
         />
@@ -661,7 +683,11 @@ function PatientDetailPage() {
                       <button type="button" onClick={cancelEdit} className={secondaryButton} disabled={pending}>
                         Cancel
                       </button>
-                      <button type="submit" disabled={pending} className={primaryButton}>
+                      <button
+                        type="submit"
+                        disabled={pending}
+                        className={primaryButton}
+                      >
                         {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                         {pending ? 'Saving…' : 'Save changes'}
                       </button>
@@ -685,6 +711,7 @@ function PatientDetailPage() {
                 <motion.div {...rise} transition={{ ...riseTransition, delay: 0.1 }} className="lg:col-span-3">
                   <MedicalProfileCard
                     medical={patient.medical}
+                    onEditingChange={setMedicalEditing}
                     onSave={async (input: MedicalProfileInput) => {
                       const result = await updatePatientMedical(patient.id, input, patient.version);
                       setPatient(result.patient);

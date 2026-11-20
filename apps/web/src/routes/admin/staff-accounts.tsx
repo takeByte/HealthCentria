@@ -552,7 +552,11 @@ function StaffAccounts() {
                 </div>
                 {eError && <InlineNotice className="sm:col-span-2">{eError}</InlineNotice>}
                 <div className="flex gap-2 sm:col-span-2">
-                  <button type="submit" disabled={eBusy} className={`${primaryButton} h-9 flex-1 px-3 text-[13px]`}>
+                  <button
+                    type="submit"
+                    disabled={eBusy}
+                    className={`${primaryButton} h-9 flex-1 px-3 text-[13px]`}
+                  >
                     {eBusy && <LoaderCircle size={14} className="animate-spin" aria-hidden />}
                     Save
                   </button>

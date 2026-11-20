@@ -12,8 +12,8 @@ import { getSession } from './auth';
  *  3. A slow timer, running ONLY while the WebSocket is not connected (a firewall
  *     or proxy that blocks it), so pages still catch up every so often.
  *
- * Pages use useLiveRefresh (quietly re-fetch) or useLiveStale (show an "updated,
- * reload" banner so nothing is replaced while someone is typing).
+ * Pages use useLiveRefresh (quietly re-fetch a list), or useLiveSync (resync a
+ * record screen, but never replace a draft someone is typing).
  */
 
 export type LiveTopic = 'appointments' | 'notifications' | 'announcements' | 'services' | 'patients';
@@ -167,25 +167,61 @@ export function useLiveRefresh(topics: LiveTopic[], refetch: () => void): void {
 }
 
 /**
- * For screens where someone may be typing: instead of replacing the data, report that
- * it changed. `stale` turns true when the server pushes a change for these topics.
- * Pass `patientId` to care only about that patient (their record, or their appointments).
- * Call `clear` after reloading.
+ * Live resync for a record screen.
+ *
+ * When nothing is being typed (`dirty` is false), a pushed change quietly
+ * re-fetches the record, so the screen and its version number are always the
+ * latest ones. The next save succeeds instead of being refused for a version
+ * that moved on while the form sat open.
+ *
+ * While the person is typing (`dirty` is true) nothing is replaced; the change
+ * is only reported through `stale`, so a half-written draft is never overwritten.
  */
-export function useLiveStale(topics: LiveTopic[], patientId?: string): { stale: boolean; clear: () => void } {
+export function useLiveSync({
+  topics,
+  dirty = false,
+  patientId,
+  refresh,
+}: {
+  topics: LiveTopic[];
+  dirty?: boolean;
+  patientId?: string;
+  refresh: () => void;
+}): { stale: boolean; clear: () => void } {
+  const latestRefresh = useRef(refresh);
+  latestRefresh.current = refresh;
+  const latestDirty = useRef(dirty);
+  latestDirty.current = dirty;
   const [stale, setStale] = useState(false);
   const key = topics.join(',');
+
   useEffect(() => {
+    let timer: number | undefined;
+    const mountedAt = Date.now();
     setStale(false);
-    return subscribeLive(topics, (info) => {
-      if (info.reason !== 'push') return;
+    const off = subscribeLive(topics, (info) => {
       if (patientId) {
         const about = info.topic === 'patients' ? info.id : info.patient;
         if (about && about !== patientId) return;
       }
-      setStale(true);
+      if (latestDirty.current) {
+        if (info.reason === 'push') setStale(true);
+        return;
+      }
+      // The page has just loaded its own data; its own connect is not news.
+      if (info.reason === 'connect' && Date.now() - mountedAt < 5_000) return;
+      setStale(false);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (!latestDirty.current) latestRefresh.current();
+      }, 400);
     });
+    return () => {
+      off();
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, patientId]);
+
   return { stale, clear: () => setStale(false) };
 }

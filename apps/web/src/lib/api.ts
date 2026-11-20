@@ -98,6 +98,29 @@ export function isEditConflict(error: unknown): error is EditConflictError {
   return error instanceof EditConflictError;
 }
 
+/**
+ * A clinical section is held by another editor (423 FIELD_LOCKED). Retrying the
+ * same save cannot work while that claim is live: wait for the holder to save,
+ * cancel, or let the lease expire.
+ */
+export class FieldLockedError extends ApiError {
+  /** The locked sections, e.g. ['diagnosis']. */
+  sections: string[];
+  /** Name of the person currently editing, when the server sent it. */
+  heldBy?: string;
+
+  constructor(status: number, message: string, data?: Record<string, unknown>) {
+    super(status, message, undefined, 'FIELD_LOCKED', data);
+    this.name = 'FieldLockedError';
+    this.sections = Array.isArray(data?.sections) ? (data.sections as string[]) : [];
+    this.heldBy = typeof data?.heldBy === 'string' ? data.heldBy : undefined;
+  }
+}
+
+export function isFieldLocked(error: unknown): error is FieldLockedError {
+  return error instanceof FieldLockedError;
+}
+
 const EDIT_CONFLICT_CODES = new Set(['EDIT_CONFLICT', 'VERSION_CONFLICT']);
 const CONFLICT_FALLBACK =
   'This record was changed by someone else. Reload to see the latest version, then make your change again.';
@@ -199,6 +222,9 @@ async function apiFetch<T>(
   if (!res.ok) {
     const message = data?.message ?? `Request failed (${res.status}).`;
     const code = data?.code;
+    if (res.status === 423 && code === 'FIELD_LOCKED') {
+      throw new FieldLockedError(res.status, message, data ?? undefined);
+    }
     if (res.status === 409 && code && EDIT_CONFLICT_CODES.has(code)) {
       const conflict = new EditConflictError(res.status, data?.message ?? CONFLICT_FALLBACK, code, data ?? undefined);
       reportEditConflict({ message: conflict.message, currentVersion: conflict.currentVersion });
@@ -346,8 +372,13 @@ export function declineAppointment(id: string, reason: string): Promise<{ appoin
 export function completeAppointment(
   id: string,
   clinical: { diagnosis?: string; prescription?: string; visitNotes?: string } = {},
+  owner?: string,
 ): Promise<{ appointment: StaffAppointment }> {
-  return apiFetch(`/api/appointments/${id}/complete`, { method: 'PATCH', body: clinical });
+  return apiFetch(`/api/appointments/${id}/complete`, {
+    method: 'PATCH',
+    body: clinical,
+    headers: owner ? { 'X-Edit-Owner': owner } : {},
+  });
 }
 
 /** Correct the clinical notes on an already-completed visit. */
@@ -355,8 +386,59 @@ export function updateAppointmentRecord(
   id: string,
   clinical: { diagnosis?: string; prescription?: string; visitNotes?: string },
   version: number,
+  owner?: string,
 ): Promise<{ appointment: StaffAppointment }> {
-  return apiFetch(`/api/v2/appointments/${id}/record`, { method: 'PATCH', body: { ...clinical, version } });
+  return apiFetch(`/api/v2/appointments/${id}/record`, {
+    method: 'PATCH',
+    body: { ...clinical, version },
+    headers: owner ? { 'X-Edit-Owner': owner } : {},
+  });
+}
+
+/** The three clinical sections a visit screen can lock. */
+export type VisitLockSection = 'diagnosis' | 'prescription' | 'visitNotes';
+
+export interface VisitSectionLock {
+  section: VisitLockSection;
+  /** Display name of the person editing it. */
+  heldBy: string;
+  expiresAt: string;
+  /** True when this tab holds it. */
+  mine: boolean;
+}
+
+export type VisitLocks = Record<VisitLockSection, VisitSectionLock | null>;
+
+function lockHeaders(owner: string, nonce?: string): Record<string, string> {
+  return {
+    'X-Edit-Owner': owner,
+    ...(nonce ? { 'X-Edit-Nonce': nonce } : {}),
+  };
+}
+
+/** Who is editing each section right now. */
+export function getVisitLocks(id: string, owner: string): Promise<{ locks: VisitLocks }> {
+  return apiFetch(`/api/appointments/${id}/record/locks`, { headers: lockHeaders(owner) });
+}
+
+/** Claim all three sections when the visit screen opens. */
+export function acquireVisitLocks(
+  id: string,
+  owner: string,
+  nonce: string,
+): Promise<{ locks: VisitLocks; blocked: VisitLockSection[]; heartbeatMs: number }> {
+  return apiFetch(`/api/appointments/${id}/record/locks/acquire`, {
+    method: 'POST',
+    headers: lockHeaders(owner, nonce),
+  });
+}
+
+/** Give the sections back (save, cancel, or leaving the screen). */
+export function releaseVisitLocks(id: string, owner: string, nonce?: string): Promise<{ released: number }> {
+  return apiFetch(`/api/appointments/${id}/record/locks/release`, {
+    method: 'POST',
+    headers: lockHeaders(owner, nonce),
+  });
 }
 
 export type AnnouncementCategory = 'schedule-change' | 'vaccination-day' | 'health-advisory' | 'general';

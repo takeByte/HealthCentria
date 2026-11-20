@@ -351,17 +351,30 @@ function MedicalEditor({
 export function MedicalProfileCard({
   medical,
   onSave,
+  onEditingChange,
   note,
   className,
   actions,
 }: {
   medical: MedicalProfile;
   onSave?: (input: MedicalProfileInput) => Promise<void>;
+  /** Lets the page know a draft is open, so live refresh does not replace it. */
+  onEditingChange?: (editing: boolean) => void;
   note?: ReactNode;
   className?: string;
   actions?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
+
+  function startEditing() {
+    setEditing(true);
+    onEditingChange?.(true);
+  }
+
+  function stopEditing() {
+    setEditing(false);
+    onEditingChange?.(false);
+  }
 
   return (
     <section className={cn(panel, className)} aria-label="Medical profile">
@@ -379,7 +392,7 @@ export function MedicalProfileCard({
         <div className="flex items-center gap-2">
           {actions}
           {onSave && !editing && (
-            <button type="button" onClick={() => setEditing(true)} className={chipButton}>
+            <button type="button" onClick={startEditing} className={chipButton}>
               <Pencil size={14} aria-hidden /> {isMedicalEmpty(medical) ? 'Add details' : 'Edit'}
             </button>
           )}
@@ -390,10 +403,10 @@ export function MedicalProfileCard({
         {editing && onSave ? (
           <MedicalEditor
             medical={medical}
-            onCancel={() => setEditing(false)}
+            onCancel={stopEditing}
             onSave={async (input) => {
               await onSave(input);
-              setEditing(false);
+              stopEditing();
             }}
           />
         ) : (

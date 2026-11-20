@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
+import { attemptsLeft } from '../middleware/rateLimit.js';
 import { User } from '../models/user.model.js';
 import { isGoogleSignInEnabled } from '../models/app-settings.model.js';
 import { buildGoogleAuthUrl, exchangeCodeForTokens, verifyGoogleIdToken } from '../utils/google.js';
@@ -138,6 +139,25 @@ export const register = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, token: signSession(user), user: presentUser(user) });
 });
 
+/**
+ * 401 body for a failed sign-in. Mirrors the superadmin PIN lock: the account
+ * limiter's remaining count is included so the browser can warn before the lock.
+ */
+function invalidSignIn(req) {
+  const left = attemptsLeft(req);
+  const suffix =
+    typeof left !== 'number'
+      ? ''
+      : left <= 0
+        ? ' The next incorrect try locks sign-in for this account for 15 minutes.'
+        : ` ${left} ${left === 1 ? 'try' : 'tries'} left before a 15-minute lock.`;
+  return {
+    success: false,
+    message: `Invalid email or password.${suffix}`,
+    ...(typeof left === 'number' ? { attemptsLeft: left } : {}),
+  };
+}
+
 export const login = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const parsed = loginSchema.safeParse(req.body);
@@ -154,7 +174,7 @@ export const login = asyncHandler(async (req, res) => {
       });
     }
     // Generic message on purpose — do not reveal whether the email exists.
-    return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    return res.status(401).json(invalidSignIn(req));
   }
   const { email, password } = parsed.data;
 
@@ -168,7 +188,7 @@ export const login = asyncHandler(async (req, res) => {
       target: { type: 'auth', label: email },
       detail: user ? 'Account is deactivated.' : 'No account with this email.',
     });
-    return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    return res.status(401).json(invalidSignIn(req));
   }
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) {
@@ -180,7 +200,7 @@ export const login = asyncHandler(async (req, res) => {
       target: { type: 'auth', label: email },
       detail: 'Wrong password.',
     });
-    return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    return res.status(401).json(invalidSignIn(req));
   }
 
   await logActivity({
@@ -337,7 +357,21 @@ export const changePassword = asyncHandler(async (req, res) => {
   }
   const currentOk = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
   if (!currentOk) {
-    return res.status(400).json({ success: false, message: 'Current password is incorrect.' });
+    // Same idea as the sign-in lock: say how many tries are left before the
+    // passwordChangeLimiter stops accepting attempts for 15 minutes.
+    const left = attemptsLeft(req);
+    const suffix =
+      typeof left !== 'number'
+        ? ''
+        : left <= 0
+          ? ' The next incorrect try locks password changes for 15 minutes.'
+          : ` ${left} ${left === 1 ? 'try' : 'tries'} left before a 15-minute lock.`;
+    return res.status(400).json({
+      success: false,
+      message: 'Current password is incorrect.',
+      ...(typeof left === 'number' ? { attemptsLeft: left } : {}),
+      errors: { currentPassword: [`Current password is incorrect.${suffix}`] },
+    });
   }
   const sameAsCurrent = await verifyPassword(parsed.data.newPassword, user.passwordHash);
   if (sameAsCurrent) {

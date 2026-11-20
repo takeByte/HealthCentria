@@ -17,8 +17,15 @@ import { hashPassword, isValidPassword } from '../utils/password.js';
 import { sendEmail } from '../utils/email.js';
 import { env } from '../config/env.js';
 import { notifyPatientEmail, notifyUser } from '../utils/notifications.js';
-import { versionFilter, versionMatches } from '../utils/concurrency.js';
+import { versionFilterFor, versionMatches } from '../utils/concurrency.js';
 import { TransactionAbort, runInTransaction } from '../utils/transaction.js';
+import { readEditOwner } from '../utils/edit-owner.js';
+import {
+  SECTION_LABELS,
+  VISIT_LOCK_SECTIONS,
+  releaseVisitLocks,
+  sectionsHeldByOthers,
+} from '../services/visit-locks.js';
 
 const listQuery = z.object({
   status: z.enum(['pending', 'confirmed', 'declined', 'completed', 'cancelled']).optional(),
@@ -116,6 +123,31 @@ async function appointmentConflict(res, id, message) {
     return res.status(404).json({ success: false, message: 'Appointment not found.' });
   }
   return res.status(409).json({ success: false, code: 'APPOINTMENT_CONFLICT', message });
+}
+
+/**
+ * 423 for a section another tab is already editing. 409 stays reserved for a
+ * stale version, so the UI can tell "wait for this person" from "reload".
+ */
+function fieldLocked(res, conflicts) {
+  const names = conflicts.map((c) => `${SECTION_LABELS[c.section] ?? c.section} (${c.heldBy})`);
+  return res.status(423).json({
+    success: false,
+    code: 'FIELD_LOCKED',
+    message: `${names.join(', ')} ${conflicts.length === 1 ? 'is' : 'are'} being edited by someone else. Wait for them to save or cancel, then try again.`,
+    sections: conflicts.map((c) => c.section),
+    heldBy: conflicts[0]?.heldBy ?? null,
+  });
+}
+
+/**
+ * Sections this request would actually change. Writing the same value back is
+ * not an edit, so it does not need the section lock.
+ */
+function changedVisitSections(before, data) {
+  return VISIT_LOCK_SECTIONS.filter(
+    (field) => data[field] !== undefined && data[field] !== (before[field] ?? ''),
+  );
 }
 
 export const queueAppointments = asyncHandler(async (req, res) => {
@@ -263,6 +295,16 @@ export const completeAppointment = asyncHandler(async (req, res) => {
       message: 'Only confirmed appointments can be completed. Reload the queue to see its current status.',
     });
   }
+  // Pessimistic pre-check: refuse to write a section another tab is typing in.
+  // The version guard below is still the guarantee; this is the courtesy.
+  const owner = readEditOwner(req);
+  const conflicts = await sectionsHeldByOthers({
+    appointmentId: req.params.id,
+    sections: changedVisitSections(before, parsed.data),
+    owner,
+  });
+  if (conflicts.length > 0) return fieldLocked(res, conflicts);
+
   const clinicalChanges = diffChanges([
     ['status', before.status, 'completed'],
     ['diagnosis', before.diagnosis ?? '', parsed.data.diagnosis],
@@ -322,6 +364,8 @@ export const completeAppointment = asyncHandler(async (req, res) => {
   }
   // Keep the calendar title/description in step with the completed status.
   void syncAppointmentToCalendar(appt).catch(() => {});
+  // The visit is saved, so this tab no longer needs to hold the sections.
+  void releaseVisitLocks({ appointmentId: req.params.id, owner }).catch(() => {});
   live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt) });
 });
@@ -353,6 +397,16 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
   }
   if (!versionMatches(req, res, before, 'visit record')) return;
 
+  // Pessimistic pre-check: another tab already typing into one of these
+  // sections gets a 423 instead of having its work overwritten.
+  const owner = readEditOwner(req);
+  const conflicts = await sectionsHeldByOthers({
+    appointmentId: req.params.id,
+    sections: changedVisitSections(before, parsed.data),
+    owner,
+  });
+  if (conflicts.length > 0) return fieldLocked(res, conflicts);
+
   const changes = diffChanges(
     ['diagnosis', 'prescription', 'visitNotes']
       .filter((field) => parsed.data[field] !== undefined)
@@ -364,31 +418,64 @@ export const updateAppointmentRecord = asyncHandler(async (req, res) => {
     if (parsed.data[field] !== undefined) patch[field] = parsed.data[field];
   }
 
-  const appt = await Appointment.findOneAndUpdate(
-    { _id: req.params.id, status: 'completed', ...versionFilter(req) },
-    { $set: patch, $inc: { __v: 1 } },
-    { new: true },
-  ).populate([
-    { path: 'patient', select: 'fullName email' },
-    { path: 'service', select: 'name' },
-    { path: 'updatedBy', select: 'fullName' },
-  ]);
-  if (!appt) {
-    return appointmentConflict(
-      res,
-      req.params.id,
-      req.expectedVersion === undefined
-        ? 'This visit is no longer completed. Reload the patient record.'
-        : 'This visit was changed by someone else while you were editing it. Reload to see the latest version, then make your change again.',
-    );
+  // One transaction: the clinical update and its activity-log entries are saved
+  // together or not at all (MVCC snapshot), and the update is pinned to the
+  // version read above, so a save landing in between makes it miss rather than
+  // overwrite.
+  let appt;
+  try {
+    appt = await runInTransaction(async (session) => {
+      const fresh = await Appointment.findById(req.params.id).session(session).lean();
+      if (!fresh) throw new TransactionAbort('NOT_FOUND');
+      if (fresh.status !== 'completed') throw new TransactionAbort('NOT_COMPLETED');
+      if (req.expectedVersion !== undefined && Number(fresh.__v ?? 0) !== req.expectedVersion) {
+        throw new TransactionAbort('STALE_VERSION');
+      }
+
+      const updated = await Appointment.findOneAndUpdate(
+        { _id: req.params.id, status: 'completed', ...versionFilterFor(req, fresh) },
+        { $set: patch, $inc: { __v: 1 } },
+        { new: true, session },
+      ).populate([
+        { path: 'patient', select: 'fullName email' },
+        { path: 'service', select: 'name' },
+        { path: 'updatedBy', select: 'fullName' },
+      ]);
+      if (!updated) throw new TransactionAbort('STALE_VERSION');
+
+      await logAppointment(req, 'record.update', updated, {
+        changes,
+        detail: 'Clinical visit record edited after the visit.',
+        session,
+      });
+      return updated;
+    });
+  } catch (err) {
+    if (err instanceof TransactionAbort) {
+      // Two ways to lose: the visit moved on (version changed) or it is no
+      // longer completed. Both mean this draft was written against a state
+      // that no longer exists, so the answer is always "reload and retry".
+      if (err.code === 'NOT_FOUND' || err.code === 'NOT_COMPLETED') {
+        return appointmentConflict(
+          res,
+          req.params.id,
+          'Clinical notes can only be edited after the visit is completed.',
+        );
+      }
+      return res.status(409).json({
+        success: false,
+        code: 'EDIT_CONFLICT',
+        message:
+          'This visit was changed by someone else while you were saving it. Reload to see the latest version, then make your change again.',
+      });
+    }
+    throw err;
   }
 
-  await logAppointment(req, 'record.update', appt, {
-    changes,
-    detail: 'Clinical visit record edited after the visit.',
-  });
   // Keep the mirrored calendar entry's description in step.
   void syncAppointmentToCalendar(appt).catch(() => {});
+  // The record is saved, so this tab no longer needs to hold the sections.
+  void releaseVisitLocks({ appointmentId: req.params.id, owner }).catch(() => {});
 
   live.appointment(appt, req);
   res.json({ success: true, appointment: present(appt) });

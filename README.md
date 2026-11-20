@@ -88,6 +88,16 @@ so the public registration form cannot be used to mail arbitrary inboxes.
 Verification is a reminder, not a gate: unverified patients keep full access.
 Codes expire after 30 minutes and a resend is allowed once per minute.
 
+## Concurrency control
+
+Two staff editing the same record never silently overwrite each other. Saves send
+the record's `version`, stale saves are refused with `409`, and the visit record
+screen claims its Diagnosis, Prescription and Visit notes sections with a
+90-second lease so a second editor is told who is already working in each one.
+Open screens also resync themselves when a record changes.
+
+See [`docs/concurrency-control.md`](docs/concurrency-control.md) for the design.
+
 ## Demo data
 
 Seed accounts, services, appointments/visit records, announcements and notifications

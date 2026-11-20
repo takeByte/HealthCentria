@@ -38,7 +38,22 @@ export function versionMatches(req, res, doc, what) {
   return false;
 }
 
-/** Mongo filter fragment that pins an update to the version the client loaded. */
-export function versionFilter(req) {
-  return req.expectedVersion === undefined ? {} : { __v: req.expectedVersion };
+/**
+ * Mongo filter fragment that pins an update to a version.
+ *
+ * Mongoose's `optimisticConcurrency` only protects `save()`. It does NOT add
+ * `__v` to `findOneAndUpdate`, `findByIdAndUpdate` or `updateOne`, so every
+ * update query on a versioned record must add the filter itself or it will
+ * silently overwrite a newer write.
+ *
+ * When the client sent a version (v2), pin that. When it did not (v1), pin the
+ * version that was just read: the write then becomes compare-and-set, so a
+ * change landing between the read and the write makes the update miss instead
+ * of overwriting it. v1 keeps working, but it is no longer last-write-wins.
+ *
+ * @param {import('express').Request & { expectedVersion?: number }} req
+ * @param {unknown} doc the record as it was read, before the update
+ */
+export function versionFilterFor(req, doc) {
+  return { __v: req.expectedVersion ?? currentVersion(doc) };
 }

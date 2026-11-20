@@ -7,6 +7,7 @@ import {
   approvalDescribe,
   approvalStatus,
 } from '../controllers/su-approval.controller.js';
+import { rateLimitHandler } from '../middleware/rateLimit.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 export const approvalRouter = Router();
@@ -28,7 +29,7 @@ const linkLimiter = rateLimit({
   limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, code: 'RATE_LIMITED', message: 'Too many attempts. Try again in a few minutes.' },
+  handler: rateLimitHandler('Too many attempts.'),
 });
 approvalRouter.get('/:token', linkLimiter, approvalDescribe);
 approvalRouter.post('/:token/confirm', linkLimiter, approvalConfirm);

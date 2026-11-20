@@ -11,6 +11,11 @@ import {
   walkInAppointment,
 } from '../controllers/staff-appointment.controller.js';
 import { getVisitContext } from '../controllers/patient.controller.js';
+import {
+  claimVisitLocks,
+  listVisitLocks,
+  releaseVisitLocksHandler,
+} from '../controllers/visit-lock.controller.js';
 import { requireAuth, requirePermission, requireRole } from '../middleware/requireAuth.js';
 import { requireCompleteProfile } from '../middleware/requireCompleteProfile.js';
 
@@ -84,4 +89,27 @@ appointmentRouter.patch(
   requireRole('staff', 'admin'),
   requirePermission('appointments.manage', 'patients.manage'),
   updateAppointmentRecord,
+);
+// Pessimistic section locks for the visit record screen. The screen claims all
+// three sections when it opens, so another tab can see who is editing each one.
+appointmentRouter.get(
+  '/:id/record/locks',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('appointments.manage', 'patients.manage'),
+  listVisitLocks,
+);
+appointmentRouter.post(
+  '/:id/record/locks/acquire',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('appointments.manage', 'patients.manage'),
+  claimVisitLocks,
+);
+appointmentRouter.post(
+  '/:id/record/locks/release',
+  requireAuth,
+  requireRole('staff', 'admin'),
+  requirePermission('appointments.manage', 'patients.manage'),
+  releaseVisitLocksHandler,
 );

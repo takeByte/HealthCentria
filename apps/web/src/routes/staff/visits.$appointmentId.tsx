@@ -1,8 +1,8 @@
 import { LiveBanner } from '../../components/live-banner';
-import { useLiveStale } from '../../lib/realtime';
+import { useLiveSync } from '../../lib/realtime';
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router';
 import { AnimatePresence } from 'motion/react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
@@ -25,13 +25,16 @@ import {
   ApiError,
   completeAppointment,
   getVisitContext,
+  isFieldLocked,
   updateAppointmentRecord,
   updatePatientMedical,
   type MedicalProfileInput,
   type PatientDetail,
   type PatientVisit,
   type VisitContext,
+  type VisitLockSection,
 } from '../../lib/api';
+import { isHeldByOther, useVisitLocks } from '../../lib/visit-lock';
 import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
 
@@ -45,6 +48,20 @@ export const Route = createFileRoute('/staff/visits/$appointmentId')({
 
 function serviceName(v: { service: { id: string; name: string } | string }): string {
   return typeof v.service === 'object' ? v.service.name : 'Service';
+}
+
+/** Human names for the three lockable clinical sections. */
+const SECTION_NAMES: Record<VisitLockSection, string> = {
+  diagnosis: 'Diagnosis',
+  prescription: 'Prescription',
+  visitNotes: 'Visit Notes',
+};
+
+/** "A"; "A and B"; "A, B, and C". */
+function listAnd(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
 function formatDay(ymd: string): string {
@@ -86,8 +103,7 @@ function VisitPage() {
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // Someone else changed this patient or visit: say so, but never replace what is being typed.
-  const liveStale = useLiveStale(['patients', 'appointments'], ctx?.patient.id);
+  const [medicalEditing, setMedicalEditing] = useState(false);
   const [diagnosis, setDiagnosis] = useState('');
   const [prescription, setPrescription] = useState('');
   const [visitNotes, setVisitNotes] = useState('');
@@ -104,6 +120,7 @@ function VisitPage() {
         if (cancelled) return;
         setCtx(r);
         setPatient(r.patient);
+        setMedicalEditing(false);
         setDiagnosis(r.appointment.diagnosis);
         setPrescription(r.appointment.prescription);
         setVisitNotes(r.appointment.visitNotes);
@@ -121,28 +138,108 @@ function VisitPage() {
   const editingDone = appt?.status === 'completed';
   const readOnly = appt !== null && !completing && !editingDone;
 
+  // Pessimistic section locks: claimed as soon as this screen opens, so another
+  // tab sees who is editing and cannot type into the same field.
+  const sectionLocks = useVisitLocks(appointmentId, !!appt && !readOnly);
+  const lockedByOther = (section: VisitLockSection) => isHeldByOther(sectionLocks.locks, section);
+  const holderOf = (section: VisitLockSection) =>
+    sectionLocks.locks?.[section]?.heldBy ?? 'Another staff member';
+  // After a save, or once another editor's lease runs out, this tab holds
+  // nothing. Typing claims the sections again so the screen stays protected.
+  const ensureClaim = () => {
+    if (!sectionLocks.holding) void sectionLocks.reclaim();
+  };
+
+  // A draft (clinical notes or the medical profile) is never replaced by a live
+  // refresh; the version is quietly re-read when the form is still untouched.
+  const formDirty =
+    !!appt &&
+    (diagnosis !== appt.diagnosis || prescription !== appt.prescription || visitNotes !== appt.visitNotes);
+  const dirtyRef = useRef(formDirty || medicalEditing);
+  dirtyRef.current = formDirty || medicalEditing;
+
+
+  const refreshVisit = useCallback(async () => {
+    // The same change may have released the other editor's section locks, so
+    // refresh who is editing at the same time as the record itself.
+    void sectionLocks.refresh();
+    try {
+      const r = await getVisitContext(appointmentId);
+      if (dirtyRef.current) return;
+      setCtx(r);
+      setPatient(r.patient);
+      setDiagnosis(r.appointment.diagnosis);
+      setPrescription(r.appointment.prescription);
+      setVisitNotes(r.appointment.visitNotes);
+    } catch {
+      // Best effort: the next push, focus or manual reload retries.
+    }
+  }, [appointmentId, sectionLocks.refresh]);
+
+  const liveSync = useLiveSync({
+    topics: ['patients', 'appointments'],
+    dirty: dirtyRef.current,
+    patientId: ctx?.patient.id,
+    refresh: refreshVisit,
+  });
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!appt) return;
     setFormError(null);
-    setSaving(true);
     const clinical = {
       diagnosis: diagnosis.trim(),
       prescription: prescription.trim(),
       visitNotes: visitNotes.trim(),
     };
+    // Only send sections that actually changed, so an untouched section held by
+    // somebody else does not block this save.
+    const changed = Object.fromEntries(
+      Object.entries(clinical).filter(([field, value]) => value !== (appt[field as VisitLockSection] ?? '')),
+    ) as { diagnosis?: string; prescription?: string; visitNotes?: string };
+    if (!completing && Object.keys(changed).length === 0) {
+      setToast({ tone: 'success', message: 'No changes to save.' });
+      return;
+    }
+    setSaving(true);
     try {
       if (completing) {
-        await completeAppointment(appt.id, clinical);
+        await completeAppointment(appt.id, clinical, sectionLocks.owner);
+        void sectionLocks.release();
         void navigate({ to: '/staff/appointments' });
         return;
       }
-      const saved = await updateAppointmentRecord(appt.id, clinical, appt.version);
-      // Keep the new version so a second save from this page is not mistaken for a conflict.
-      setCtx((c) => (c ? { ...c, appointment: { ...c.appointment, version: saved.appointment.version } } : c));
+      const saved = await updateAppointmentRecord(appt.id, changed, appt.version, sectionLocks.owner);
+      // Keep the saved values and the new version, so this form is not "dirty"
+      // against an older copy and a later save is not mistaken for a conflict.
+      setCtx((c) =>
+        c
+          ? {
+              ...c,
+              appointment: {
+                ...c.appointment,
+                diagnosis: saved.appointment.diagnosis,
+                prescription: saved.appointment.prescription,
+                visitNotes: saved.appointment.visitNotes,
+                version: saved.appointment.version,
+                updatedAt: saved.appointment.updatedAt,
+                updatedByName: saved.appointment.updatedByName,
+              },
+            }
+          : c,
+      );
+      // Saving ends this editing session: hand the sections back so the other
+      // editor's "being edited by" banner clears. They are claimed again on the
+      // next keystroke (ensureClaim below).
+      void sectionLocks.release();
       setToast({ tone: 'success', message: 'Visit record updated.' });
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Could not save. Try again.');
+      if (isFieldLocked(err)) {
+        setFormError(err.message);
+        void sectionLocks.refresh();
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'Could not save. Try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -181,9 +278,10 @@ function VisitPage() {
           </div>
         )}
         <LiveBanner
-          stale={liveStale.stale}
+          stale={liveSync.stale}
           onReload={() => {
-            liveStale.clear();
+            liveSync.clear();
+            // Full reload: drops any open draft (and its now-stale version).
             setReloadKey((k) => k + 1);
           }}
         />
@@ -236,6 +334,21 @@ function VisitPage() {
                     Only confirmed visits can be completed. This visit is {appt.status}.
                   </InlineNotice>
                 )}
+                {!readOnly && sectionLocks.blockedSections.length > 0 && (
+                  <InlineNotice>
+                    {listAnd(sectionLocks.blockedSections.map((section) => SECTION_NAMES[section]))}{' '}
+                    {sectionLocks.blockedSections.length === 1 ? 'is' : 'are'} currently being edited by{' '}
+                    {listAnd([...new Set(sectionLocks.blockedSections.map(holderOf))])}. These sections are
+                    read-only until the other user saves their changes, cancels editing, or the lock expires.{' '}
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Reload this page
+                    </button>
+                  </InlineNotice>
+                )}
                 <div>
                   <label htmlFor="visit-diagnosis" className={fieldLabel}>Diagnosis</label>
                   <textarea
@@ -243,11 +356,21 @@ function VisitPage() {
                     rows={4}
                     maxLength={1000}
                     value={diagnosis}
-                    onChange={(e) => setDiagnosis(e.target.value)}
-                    disabled={readOnly}
+                    onChange={(e) => {
+                      ensureClaim();
+                      setDiagnosis(e.target.value);
+                    }}
+                    onFocus={ensureClaim}
+                    disabled={readOnly || !sectionLocks.ready || lockedByOther('diagnosis')}
+                    aria-describedby={lockedByOther('diagnosis') ? 'visit-diagnosis-lock' : undefined}
                     placeholder="e.g. Acute viral nasopharyngitis"
                     className={textareaClass}
                   />
+                  {lockedByOther('diagnosis') && (
+                    <p id="visit-diagnosis-lock" className="mt-1 text-[11.5px] font-medium text-amber-800">
+                      {holderOf('diagnosis')} is editing this section.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="visit-prescription" className={fieldLabel}>Prescription</label>
@@ -256,11 +379,21 @@ function VisitPage() {
                     rows={4}
                     maxLength={1000}
                     value={prescription}
-                    onChange={(e) => setPrescription(e.target.value)}
-                    disabled={readOnly}
+                    onChange={(e) => {
+                      ensureClaim();
+                      setPrescription(e.target.value);
+                    }}
+                    onFocus={ensureClaim}
+                    disabled={readOnly || !sectionLocks.ready || lockedByOther('prescription')}
+                    aria-describedby={lockedByOther('prescription') ? 'visit-prescription-lock' : undefined}
                     placeholder="e.g. Paracetamol 500mg every 6 hours for 3 days"
                     className={textareaClass}
                   />
+                  {lockedByOther('prescription') && (
+                    <p id="visit-prescription-lock" className="mt-1 text-[11.5px] font-medium text-amber-800">
+                      {holderOf('prescription')} is editing this section.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="visit-notes" className={fieldLabel}>Visit notes</label>
@@ -269,20 +402,38 @@ function VisitPage() {
                     rows={4}
                     maxLength={2000}
                     value={visitNotes}
-                    onChange={(e) => setVisitNotes(e.target.value)}
-                    disabled={readOnly}
+                    onChange={(e) => {
+                      ensureClaim();
+                      setVisitNotes(e.target.value);
+                    }}
+                    onFocus={ensureClaim}
+                    disabled={readOnly || !sectionLocks.ready || lockedByOther('visitNotes')}
+                    aria-describedby={lockedByOther('visitNotes') ? 'visit-notes-lock' : undefined}
                     placeholder="Advice, follow-up instructions…"
                     className={textareaClass}
                   />
+                  {lockedByOther('visitNotes') && (
+                    <p id="visit-notes-lock" className="mt-1 text-[11.5px] font-medium text-amber-800">
+                      {holderOf('visitNotes')} is editing this section.
+                    </p>
+                  )}
                 </div>
                 {formError && <InlineNotice>{formError}</InlineNotice>}
                 {!readOnly && (
                   <div className="flex flex-wrap gap-2">
-                    <button type="submit" disabled={saving} className={`${primaryButton} h-10 px-5`}>
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className={`${primaryButton} h-10 px-5`}
+                    >
                       {saving && <LoaderCircle size={15} className="animate-spin" aria-hidden />}
                       {completing ? 'Save & complete visit' : 'Save changes'}
                     </button>
-                    <Link to="/staff/appointments" className={`${secondaryButton} h-10 px-5`}>
+                    <Link
+                      to="/staff/appointments"
+                      onClick={() => void sectionLocks.release()}
+                      className={`${secondaryButton} h-10 px-5`}
+                    >
                       Cancel
                     </Link>
                   </div>
@@ -328,6 +479,7 @@ function VisitPage() {
 
               <MedicalProfileCard
                 medical={patient.medical}
+                onEditingChange={setMedicalEditing}
                 onSave={
                   canEditMedical
                     ? async (input: MedicalProfileInput) => {

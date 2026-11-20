@@ -217,8 +217,10 @@ export async function login(input: {
       return session;
     }
     if (status === 401) {
-      // Generic message on purpose — do not reveal whether the email exists.
-      throw new Error('INVALID_CREDENTIALS');
+      // The API's message stays generic ("Invalid email or password.") and now
+      // also carries how many tries are left before the account is locked, the
+      // same way the superadmin PIN does.
+      throw new AuthError(apiMessage(data) || 'Invalid email or password.');
     }
     if (status !== 404) {
       // 400 (CAPTCHA / validation), 429 (rate limited) and 503 (verifier or DB
@@ -227,9 +229,7 @@ export async function login(input: {
     }
     // 404 = this backend has no auth routes yet → local demo fallback below.
   } catch (err) {
-    if (err instanceof Error && (err.message === 'INVALID_CREDENTIALS' || err instanceof AuthError)) {
-      throw err;
-    }
+    if (err instanceof AuthError) throw err;
     // Network error or missing /api/auth/* on backend (only /api/health exists) → local demo session.
   }
   const session: AuthSession = {

@@ -14,7 +14,6 @@
     "backup": "node src/scripts/run-backup.js",
     "reminders": "node src/scripts/send-reminders.js",
     "sync:calendar": "node src/scripts/sync-google-calendar.js",
-    "demo:concurrency": "node src/scripts/concurrency-demo.mjs",
     "demo:realtime": "node src/scripts/realtime-demo.mjs",
     "typecheck": "node --check src/index.js",
     "lint": "node --check src/index.js"
