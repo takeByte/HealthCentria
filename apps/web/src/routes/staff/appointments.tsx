@@ -2,7 +2,7 @@ import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle, Search } from 'lucide-react';
+import { CalendarCheck, CalendarDays, CheckCircle2, Clock3, LoaderCircle, Lock, Search } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
 import { opsNav } from '../../components/ops-nav';
 import {
@@ -51,6 +51,13 @@ const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'declined', 'completed', 
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 type DatePreset = 'today' | 'week' | 'all';
 
+/**
+ * How often the queue re-reads who is editing. Locks are taken and released on
+ * the visit screen, which does not emit a live event, so the queue polls while
+ * it is open instead of waiting for a reload.
+ */
+const QUEUE_REFRESH_MS = 5_000;
+
 function toYMD(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
@@ -91,6 +98,8 @@ function QueueCard({
   const [busy, setBusy] = useState<'confirm' | 'decline' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const linkedPatientId = patientId(appt);
+  // A visit screen holds the record: nobody else may open it from the queue.
+  const editing = appt.editing ?? null;
 
   async function run(action: 'confirm' | 'decline') {
     if (action === 'decline' && !reason.trim()) {
@@ -165,6 +174,23 @@ function QueueCard({
         </p>
       )}
 
+      {editing && (
+        <p
+          role="status"
+          className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20"
+        >
+          <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
+          <span>
+            <span className="font-semibold">
+              {editing.mine
+                ? 'You are editing this visit in another tab.'
+                : `${editing.heldBy} is currently editing this visit.`}
+            </span>{' '}
+            It unlocks on save, on leaving the screen, or after 10 minutes without activity.
+          </span>
+        </p>
+      )}
+
       {appt.status === 'pending' && !declining && (
         <div className="mt-3.5 flex gap-2">
           <button
@@ -235,15 +261,26 @@ function QueueCard({
         </div>
       )}
 
-      {appt.status === 'confirmed' && (
-        <Link
-          to="/staff/visits/$appointmentId"
-          params={{ appointmentId: appt.id }}
-          className={`${secondaryButton} mt-3.5 h-9 px-3.5 text-[13px]`}
-        >
-          Complete visit
-        </Link>
-      )}
+      {appt.status === 'confirmed' &&
+        (editing ? (
+          <button
+            type="button"
+            disabled
+            className={`${secondaryButton} mt-3.5 h-9 cursor-not-allowed px-3.5 text-[13px]`}
+            title={editing.mine ? 'Already open in another tab' : `Locked by ${editing.heldBy}`}
+          >
+            <Lock size={14} aria-hidden />
+            Complete visit
+          </button>
+        ) : (
+          <Link
+            to="/staff/visits/$appointmentId"
+            params={{ appointmentId: appt.id }}
+            className={`${secondaryButton} mt-3.5 h-9 px-3.5 text-[13px]`}
+          >
+            Complete visit
+          </Link>
+        ))}
 
       {appt.status === 'completed' && (appt.diagnosis || appt.prescription || appt.visitNotes) && (
         <dl className="mt-3 space-y-2 rounded-xl bg-slate-50/80 p-3 text-[12.5px] leading-5">
@@ -267,15 +304,26 @@ function QueueCard({
           )}
         </dl>
       )}
-      {appt.status === 'completed' && (
-        <Link
-          to="/staff/visits/$appointmentId"
-          params={{ appointmentId: appt.id }}
-          className={`${secondaryButton} mt-3 h-9 px-3.5 text-[13px]`}
-        >
-          View / edit record
-        </Link>
-      )}
+      {appt.status === 'completed' &&
+        (editing ? (
+          <button
+            type="button"
+            disabled
+            className={`${secondaryButton} mt-3 h-9 cursor-not-allowed px-3.5 text-[13px]`}
+            title={editing.mine ? 'Already open in another tab' : `Locked by ${editing.heldBy}`}
+          >
+            <Lock size={14} aria-hidden />
+            View / edit record
+          </button>
+        ) : (
+          <Link
+            to="/staff/visits/$appointmentId"
+            params={{ appointmentId: appt.id }}
+            className={`${secondaryButton} mt-3 h-9 px-3.5 text-[13px]`}
+          >
+            View / edit record
+          </Link>
+        ))}
     </article>
   );
 }
@@ -306,6 +354,15 @@ function StaffQueue() {
 
   const [liveTick, setLiveTick] = useState(0);
   useLiveRefresh(['appointments'], () => setLiveTick((t) => t + 1));
+
+  // Lock changes do not emit a live event, so keep the queue's "being edited by"
+  // fresh while the page is visible. Paused in a background tab.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') setLiveTick((t) => t + 1);
+    }, QUEUE_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

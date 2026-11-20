@@ -52,6 +52,13 @@ export interface Appointment {
 export interface StaffAppointment extends Appointment {
   patient: { id: string; name: string; email: string } | string;
   updatedByName?: string;
+  /** Set while a visit screen holds the sections: who is editing it. */
+  editing?: {
+    heldBy: string;
+    /** True when the holder is this account (but another tab). */
+    mine: boolean;
+    sections: VisitLockSection[];
+  } | null;
 }
 
 export class ApiError extends Error {

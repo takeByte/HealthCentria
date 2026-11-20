@@ -26,7 +26,7 @@ import {
 
 const OWNER_KEY = 'healthcentria.visit-lock.owner';
 const POLL_MS = 5_000;
-const DEFAULT_HEARTBEAT_MS = 30_000;
+const DEFAULT_HEARTBEAT_MS = 60_000;
 const SECTIONS: VisitLockSection[] = ['diagnosis', 'prescription', 'visitNotes'];
 
 /** A token for this tab, kept across reloads of the same tab. */
@@ -154,7 +154,7 @@ export function useVisitLocks(appointmentId: string, enabled: boolean): VisitLoc
 
   const release = useCallback(async () => {
     // Stop the heartbeat first, so a renewal cannot land after the release and
-    // keep the sections held for another 90 seconds. endedRef also stops a poll
+    // keep the sections held for another 10 minutes. endedRef also stops a poll
     // that started before the delete from marking this tab as the holder again.
     endedRef.current = true;
     noteLocks(null);

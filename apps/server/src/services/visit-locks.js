@@ -9,7 +9,7 @@ import { VisitFieldLock } from '../models/visit-field-lock.model.js';
  * holds each section instead of typing into a record someone else is changing.
  *
  * It is a lease, not a permanent claim:
- *   - the holder renews it every 30 s and it expires after 90 s;
+ *   - the holder renews it every 60 s and it expires after 10 minutes;
  *   - the claim is one atomic write, so two tabs cannot both win;
  *   - an expired row never blocks, even before Mongo's TTL monitor removes it.
  *
@@ -20,10 +20,10 @@ import { VisitFieldLock } from '../models/visit-field-lock.model.js';
 export const VISIT_LOCK_SECTIONS = ['diagnosis', 'prescription', 'visitNotes'];
 
 /** How long a claim stays valid without a heartbeat. */
-export const VISIT_LOCK_TTL_MS = 90_000;
+export const VISIT_LOCK_TTL_MS = 600_000;
 
-/** How often the browser renews it (three chances before it expires). */
-export const VISIT_LOCK_HEARTBEAT_MS = 30_000;
+/** How often the browser renews it (ten chances before it expires). */
+export const VISIT_LOCK_HEARTBEAT_MS = 60_000;
 
 export const SECTION_LABELS = {
   diagnosis: 'Diagnosis',
@@ -145,4 +145,33 @@ export async function sectionsHeldByOthers({ appointmentId, sections, owner }) {
 
   const rows = await VisitFieldLock.find(filter).lean();
   return rows.map((row) => ({ section: row.section, heldBy: row.userName }));
+}
+
+/**
+ * "Who is editing this visit" for a page of appointments (the queue).
+ *
+ * One query for the whole page, keyed by appointment id. `mine` compares the
+ * account, not the tab, so the queue can say "you are editing this in another
+ * tab" instead of pretending a stranger holds it.
+ */
+export async function locksByAppointment(appointmentIds, viewerId) {
+  const map = new Map();
+  if (appointmentIds.length === 0) return map;
+
+  const rows = await VisitFieldLock.find({
+    appointmentId: { $in: appointmentIds.map(String) },
+    expiresAt: { $gt: new Date() },
+  }).lean();
+
+  for (const row of rows) {
+    const current = map.get(row.appointmentId) ?? {
+      heldBy: row.userName,
+      mine: false,
+      sections: [],
+    };
+    current.sections.push(row.section);
+    if (String(row.userId) === String(viewerId)) current.mine = true;
+    map.set(row.appointmentId, current);
+  }
+  return map;
 }

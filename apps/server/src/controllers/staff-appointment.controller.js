@@ -23,6 +23,7 @@ import { readEditOwner } from '../utils/edit-owner.js';
 import {
   SECTION_LABELS,
   VISIT_LOCK_SECTIONS,
+  locksByAppointment,
   releaseVisitLocks,
   sectionsHeldByOthers,
 } from '../services/visit-locks.js';
@@ -171,7 +172,18 @@ export const queueAppointments = asyncHandler(async (req, res) => {
     .populate('updatedBy', 'fullName')
     .sort({ createdAt: -1, _id: -1 })
     .lean();
-  res.json({ success: true, appointments: appointments.map(present) });
+  // "Being edited by X" for the queue, in one extra query for the whole page.
+  const editing = await locksByAppointment(
+    appointments.map((a) => a._id),
+    req.user.id,
+  );
+  res.json({
+    success: true,
+    appointments: appointments.map((a) => ({
+      ...present(a),
+      editing: editing.get(String(a._id)) ?? null,
+    })),
+  });
 });
 
 export const confirmAppointment = asyncHandler(async (req, res) => {

@@ -124,6 +124,8 @@ Staff B opens the same visit     -> 423 FIELD_LOCKED for each section A holds
 Staff A saves or cancels         -> sections released, B can type
 ```
 
+The appointments queue shows the same holders at record level: while any section is held, the card says **"A is currently editing this visit"** and its **Complete visit** / **View / edit record** button is disabled. The queue re-reads this every 5 seconds, so the badge appears and clears without a reload. The holder still sees the card (as "you are editing this in another tab"), and confirm/decline stay available.
+
 How it behaves:
 
 | Question | Answer |
@@ -131,9 +133,10 @@ How it behaves:
 | When is a lock taken? | As soon as the view/edit record screen opens. Nothing is typeable in a section until the claim attempt has been made. |
 | What happens to the other tab? | The held section is disabled and labelled with the holder's **name**, resolved on the server from the login — never from the request body. |
 | How does it end? | Save, Cancel, leaving the screen, or **expiry**. After a save the tab stops renewing, so the other editor can take over; the sections are claimed again on the next keystroke. |
-| How is a crashed tab handled? | The lock is a **lease**: 90 seconds without a renewal, and it expires. A late release cannot delete a newer claim because each acquisition carries a nonce. |
+| How is a crashed tab handled? | The lock is a **lease**: 10 minutes without a renewal, and it expires. A late release cannot delete a newer claim because each acquisition carries a nonce. |
+| How does a closed tab block the record? | Up to the lease: a tab closed without Cancel keeps the record for the rest of the 10 minutes. Back/Cancel releases it at once; the long lease is the price of not dropping a lock while someone steps away from an open screen. |
 | How is a stale claim taken over? | One atomic `findOneAndUpdate`, so a renewal and a takeover cannot both win. A unique index on `(appointmentId, section)` prevents two claims from existing. |
-| How does the other tab find out? | It polls `GET /api/appointments/:id/record/locks` every 5 seconds while the screen is open. The holder renews every 30 seconds. A release is picked up on the next poll, and the blocked notice also has a **Reload this page** button for an immediate refresh. |
+| How does the other tab find out? | It polls `GET /api/appointments/:id/record/locks` every 5 seconds while the screen is open. The holder renews every 60 seconds. A release is picked up on the next poll, and the blocked notice also has a **Reload this page** button for an immediate refresh. |
 | Is it enforced? | The save is refused with **423 FIELD_LOCKED** only when another owner holds a section that the request would actually change. An unchanged field never blocks a save. |
 | Does it replace the version check? | **No.** The lock is advisory: a script, an older client, or the patient chart can call the API without claiming anything. The version check is still the guarantee. |
 
@@ -263,7 +266,7 @@ Screen opens        Type                Save
 Every read on the screen sees one consistent snapshot, and the save runs inside `runInTransaction`: the `$set` of the clinical fields, the `$inc` of the version and the activity-log entry are one snapshot-isolated unit. A failure half-way writes nothing. This is MongoDB's own mechanism; nothing here re-implements it.
 
 **2. Pessimistic lock (the prevention layer, at open).**
-When the screen opens, the tab claims Diagnosis, Prescription and Visit notes. Another tab sees the holder's name, those fields are disabled, and a save that would change a held field is refused with `423 FIELD_LOCKED`. It prevents the wasted five minutes. It is a lease (90 seconds, renewed every 30) released on save, cancel or leaving the screen; a crashed tab therefore cannot freeze a section. After a save the tab does not grab the sections back: it stops renewing so the other editor can take over, and claims them again on the next keystroke.
+When the screen opens, the tab claims Diagnosis, Prescription and Visit notes. Another tab sees the holder's name, those fields are disabled, and a save that would change a held field is refused with `423 FIELD_LOCKED`. It prevents the wasted five minutes. It is a lease (10 minutes, renewed every 60 seconds) released on save, cancel or leaving the screen; a crashed tab therefore cannot freeze a section. After a save the tab does not grab the sections back: it stops renewing so the other editor can take over, and claims them again on the next keystroke.
 
 **3. Optimistic version (the guarantee layer, at save).**
 The record still carries `__v`. The save is pinned to the version the screen loaded (`versionFilterFor`), so even if a lock was bypassed, never taken, or expired at the wrong moment, a stale save **misses the filter and answers `409 EDIT_CONFLICT`** instead of overwriting the newer data.
@@ -288,9 +291,10 @@ Modified for this feature:
 | `apps/server/src/controllers/visit-lock.controller.js` | New: list / acquire / release endpoints |
 | `apps/server/src/utils/edit-owner.js` | New: `X-Edit-Owner` / `X-Edit-Nonce` parsing |
 | `apps/server/src/routes/appointment.routes.js` | Mounts the three lock routes |
-| `apps/server/src/controllers/staff-appointment.controller.js` | Enforces locks on complete + record edit; record edit now runs in a transaction; releases after save |
+| `apps/server/src/controllers/staff-appointment.controller.js` | Enforces locks on complete + record edit; record edit now runs in a transaction; releases after save; adds `editing` to each queue row |
 | `apps/web/src/lib/api.ts` | `FieldLockedError` (423), lock types + calls, owner header on saves |
-| `apps/web/src/lib/visit-lock.ts` | New: `useVisitLocks` - claim on open, 30 s renew while held, 5 s status poll, release on save, re-claim on the next keystroke |
+| `apps/web/src/lib/visit-lock.ts` | New: `useVisitLocks` - claim on open, 60 s renew while held, 5 s status poll, release on save, re-claim on the next keystroke |
 | `apps/web/src/routes/staff/visits.$appointmentId.tsx` | Locked fields disabled with the holder's name; sends changed fields + owner; reclaims after save |
+| `apps/web/src/routes/staff/appointments.tsx` | Queue shows "X is currently editing this visit", disables the visit links, and polls every 5 s |
 | `docs/concurrency-control.md` | This document |
 
