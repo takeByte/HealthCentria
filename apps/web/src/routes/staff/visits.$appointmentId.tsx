@@ -21,6 +21,7 @@ import { MedicalProfileCard } from '../../components/medical-profile';
 import { RecordMeta } from '../../components/record-meta';
 import { Toast, type ToastMessage } from '../../components/toast';
 import { getSession } from '../../lib/auth';
+import { flash } from '../../lib/flash';
 import {
   ApiError,
   completeAppointment,
@@ -201,6 +202,7 @@ function VisitPage() {
       // Nothing to write, but the button still means "done here": go back to
       // the queue and give the sections back, like a successful save.
       void sectionLocks.release();
+      flash('No changes to save.');
       void navigate({ to: '/staff/appointments' });
       return;
     }
@@ -209,6 +211,7 @@ function VisitPage() {
       if (completing) {
         await completeAppointment(appt.id, clinical, sectionLocks.owner);
         void sectionLocks.release();
+        flash('Visit completed and record saved.');
         void navigate({ to: '/staff/appointments' });
         return;
       }
@@ -235,6 +238,7 @@ function VisitPage() {
       // editor's "being edited by" banner clears, and return to the queue so the
       // updated record is visible where the user came from.
       void sectionLocks.release();
+      flash('Visit record saved.');
       void navigate({ to: '/staff/appointments' });
       return;
     } catch (err) {
