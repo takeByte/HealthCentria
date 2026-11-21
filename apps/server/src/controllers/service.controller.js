@@ -6,6 +6,8 @@ import { asyncHandler } from '../middleware/asyncHandler.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { Service } from '../models/service.model.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
+import { recordHeldByOther, releaseRecordLock } from '../services/record-locks.js';
+import { readEditOwner } from '../utils/edit-owner.js';
 import { scheduleText, todayYMD, upcomingValidDates } from '../utils/service-schedule.js';
 
 const scheduleSchema = z
@@ -107,6 +109,23 @@ export const updateService = asyncHandler(async (req, res) => {
   if (!service) return res.status(404).json({ success: false, message: 'Service not found.' });
   if (!versionMatches(req, res, service, 'service')) return;
 
+  // Courtesy lock: refuse a save from a tab that never claimed the service
+  // while somebody else has its editor open. The version check is the guarantee.
+  const holder = await recordHeldByOther({
+    resource: 'services',
+    resourceId: req.params.id,
+    owner: readEditOwner(req),
+  });
+  if (holder) {
+    return res.status(423).json({
+      success: false,
+      code: 'RECORD_LOCKED',
+      message: `This service is being edited by ${holder.heldBy}. Wait for them to save or cancel, then try again.`,
+      heldBy: holder.heldBy,
+      expiresAt: holder.expiresAt,
+    });
+  }
+
   const tracked = ['name', 'description', 'schedule', 'active'];
   const before = { ...service.toObject(), schedule: scheduleText(service.schedule) };
   for (const [field, value] of Object.entries(parsed.data)) service.set(field, value);
@@ -124,6 +143,13 @@ export const updateService = asyncHandler(async (req, res) => {
     ),
     detail: `Service updated: ${Object.keys(parsed.data).join(', ')}.`,
   });
+
+  // The editor is done, so the next person can take the service.
+  void releaseRecordLock({
+    resource: 'services',
+    resourceId: req.params.id,
+    owner: readEditOwner(req),
+  }).catch(() => {});
 
   live.services(service._id, req);
   res.json({ success: true, service: present(service.toObject()) });

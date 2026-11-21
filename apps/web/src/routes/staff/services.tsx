@@ -2,8 +2,9 @@ import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CalendarDays, EyeOff, Layers, LoaderCircle, Plus, X } from 'lucide-react';
+import { CalendarDays, EyeOff, Layers, LoaderCircle, Lock, Plus, X } from 'lucide-react';
 import { DashboardShell } from '../../components/dashboard-shell';
+import { LockedActionButton } from '../../components/locked-action';
 import { opsNav } from '../../components/ops-nav';
 import {
   CardHeading,
@@ -23,14 +24,19 @@ import {
 } from '../../components/app-ui';
 import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
+import { flash } from '../../lib/flash';
 import {
   ApiError,
   createService,
+  getRecordLocks,
+  isRecordLocked,
   listServices,
   updateService,
+  type RecordLockInfo,
   type Service,
   type ServiceSchedule,
 } from '../../lib/api';
+import { lockRemaining, useRecordLock } from '../../lib/record-lock';
 import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
 import { cn } from '../../lib/utils';
@@ -186,6 +192,8 @@ function ServicesManage() {
   const [eBusy, setEBusy] = useState(false);
   const [eError, setEError] = useState<string | null>(null);
   // One editor at a time: opening the form claims the service.
+  const [locksById, setLocksById] = useState<Record<string, RecordLockInfo>>({});
+  const recordLock = useRecordLock('services', editingId, !!editingId);
 
   async function reload() {
     try {
@@ -201,7 +209,67 @@ function ServicesManage() {
   }, []);
   useLiveRefresh(['services'], () => void reload());
 
+  // Lock changes do not emit a live event, so keep "being edited by" fresh
+  // while the page is visible. Paused in a background tab.
+  useEffect(() => {
+    if (!list || list.length === 0) {
+      setLocksById({});
+      return;
+    }
+    let cancelled = false;
+    const ids = list.map((s) => s.id);
+    const load = () => {
+      if (document.visibilityState !== 'visible') return;
+      getRecordLocks('services', ids, recordLock.owner)
+        .then((r) => {
+          if (!cancelled) setLocksById(r.locks);
+        })
+        .catch(() => {
+          // Best effort: the next poll retries.
+        });
+    };
+    load();
+    const timer = setInterval(load, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [list, recordLock.owner]);
+
+  /** Drop a released service from the badge map, so it does not linger until the next poll. */
+  function forgetLock(id: string) {
+    setLocksById((m) => {
+      if (!m[id]) return m;
+      const next = { ...m };
+      delete next[id];
+      return next;
+    });
+  }
+
+  /** Give the service back before closing. Capped at 1 s so a slow release never traps the user. */
+  async function releaseBeforeClose() {
+    let timer: number | undefined;
+    try {
+      await Promise.race([
+        recordLock.release(),
+        new Promise<void>((resolve) => {
+          timer = window.setTimeout(resolve, 1_000);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) window.clearTimeout(timer);
+    }
+  }
+
+  async function closeEdit() {
+    const id = editingId;
+    await releaseBeforeClose();
+    if (id) forgetLock(id);
+    setEditingId(null);
+  }
+
   function startEdit(s: Service) {
+    if (locksById[s.id]) return;
     setEditingId(s.id);
     setEName(s.name);
     setEDesc(s.description);
@@ -221,6 +289,7 @@ function ServicesManage() {
       setCDesc('');
       setCSched(emptySchedule());
       setShowCreate(false);
+      flash('Service created.');
       await reload();
     } catch (err) {
       setCError(err instanceof ApiError ? err.message : 'Could not create service.');
@@ -231,6 +300,12 @@ function ServicesManage() {
 
   async function handleUpdate(e: FormEvent, id: string) {
     e.preventDefault();
+    if (recordLock.heldByOther) {
+      setEError(
+        `${recordLock.lock?.heldBy ?? 'Another staff member'} is editing this service. Wait for them to save or cancel.`,
+      );
+      return;
+    }
     setEError(null);
     setEBusy(true);
     try {
@@ -238,11 +313,20 @@ function ServicesManage() {
         id,
         { name: eName.trim(), description: eDesc.trim(), schedule: eSched, active: eActive },
         eVersion,
+        recordLock.owner,
       );
+      await releaseBeforeClose();
+      forgetLock(id);
       setEditingId(null);
+      flash('Service saved.');
       await reload();
     } catch (err) {
-      setEError(err instanceof ApiError ? err.message : 'Could not update service.');
+      if (isRecordLocked(err)) {
+        setEError(err.message);
+        void recordLock.refresh();
+      } else {
+        setEError(err instanceof ApiError ? err.message : 'Could not update service.');
+      }
     } finally {
       setEBusy(false);
     }
@@ -397,6 +481,21 @@ function ServicesManage() {
                   onSubmit={(e) => handleUpdate(e, s.id)}
                   className="grid gap-4 border-t border-[var(--palette-veil)] pt-4"
                 >
+                  {recordLock.heldByOther && (
+                    <p
+                      role="status"
+                      className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20"
+                    >
+                      <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
+                      <span>
+                        <span className="font-semibold">
+                          {recordLock.lock?.heldBy ?? 'Another staff member'} is currently editing this service.
+                        </span>{' '}
+                        A save is refused until they finish or its lock ends{' '}
+                        {lockRemaining(recordLock.lock?.expiresAt)}.
+                      </span>
+                    </p>
+                  )}
                   <div>
                     <label htmlFor={`edit-name-${s.id}`} className={fieldLabel}>Name *</label>
                     <input id={`edit-name-${s.id}`} value={eName} onChange={(e) => setEName(e.target.value)} className={inputClass} />
@@ -414,17 +513,42 @@ function ServicesManage() {
                   <div className="flex gap-2">
                     <button
                       type="submit"
-                      disabled={eBusy}
+                      disabled={eBusy || recordLock.heldByOther}
                       className={`${primaryButton} flex-1`}
                     >
                       {eBusy && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                       Save
                     </button>
-                    <button type="button" onClick={() => setEditingId(null)} className={`${secondaryButton} flex-1`}>
+                    <button type="button" onClick={() => void closeEdit()} className={`${secondaryButton} flex-1`}>
                       Cancel
                     </button>
                   </div>
                 </form>
+              ) : locksById[s.id] ? (
+                <div className="grid gap-2">
+                  <p
+                    id={`svc-lock-${s.id}`}
+                    role="status"
+                    className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20"
+                  >
+                    <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
+                    <span>
+                      <span className="font-semibold">
+                        {locksById[s.id].mine
+                          ? 'You are editing this service in another tab.'
+                          : `${locksById[s.id].heldBy} is currently editing this service.`}
+                      </span>{' '}
+                      It unlocks on save, on leaving the editor, or {lockRemaining(locksById[s.id].expiresAt)}.
+                    </span>
+                  </p>
+                  <LockedActionButton
+                    label="Edit service"
+                    className={chipButton}
+                    describedBy={`svc-lock-${s.id}`}
+                    heldBy={locksById[s.id].heldBy}
+                    mine={locksById[s.id].mine}
+                  />
+                </div>
               ) : (
                 <button type="button" onClick={() => startEdit(s)} className={chipButton}>
                   Edit service

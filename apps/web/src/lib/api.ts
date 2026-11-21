@@ -130,6 +130,29 @@ export function isFieldLocked(error: unknown): error is FieldLockedError {
   return error instanceof FieldLockedError;
 }
 
+/**
+ * The whole record is held by another editor (423 RECORD_LOCKED), e.g. a
+ * colleague has the announcement or service form open. Waiting is the only
+ * useful move: retrying cannot succeed while that claim is live.
+ */
+export class RecordLockedError extends ApiError {
+  /** Name of the person currently editing, when the server sent it. */
+  heldBy?: string;
+  /** When the claim's lease runs out (ISO timestamp). */
+  expiresAt?: string;
+
+  constructor(status: number, message: string, data?: Record<string, unknown>) {
+    super(status, message, undefined, 'RECORD_LOCKED', data);
+    this.name = 'RecordLockedError';
+    this.heldBy = typeof data?.heldBy === 'string' ? data.heldBy : undefined;
+    this.expiresAt = typeof data?.expiresAt === 'string' ? data.expiresAt : undefined;
+  }
+}
+
+export function isRecordLocked(error: unknown): error is RecordLockedError {
+  return error instanceof RecordLockedError;
+}
+
 const EDIT_CONFLICT_CODES = new Set(['EDIT_CONFLICT', 'VERSION_CONFLICT']);
 const CONFLICT_FALLBACK =
   'This record was changed by someone else. Reload to see the latest version, then make your change again.';
@@ -234,6 +257,9 @@ async function apiFetch<T>(
     if (res.status === 423 && code === 'FIELD_LOCKED') {
       throw new FieldLockedError(res.status, message, data ?? undefined);
     }
+    if (res.status === 423 && code === 'RECORD_LOCKED') {
+      throw new RecordLockedError(res.status, message, data ?? undefined);
+    }
     if (res.status === 409 && code && EDIT_CONFLICT_CODES.has(code)) {
       const conflict = new EditConflictError(res.status, data?.message ?? CONFLICT_FALLBACK, code, data ?? undefined);
       reportEditConflict({ message: conflict.message, currentVersion: conflict.currentVersion });
@@ -294,8 +320,17 @@ export function createService(input: ServiceInput): Promise<{ service: Service }
   return apiFetch('/api/services', { method: 'POST', body: input });
 }
 
-export function updateService(id: string, input: Partial<ServiceInput>, version: number): Promise<{ service: Service }> {
-  return apiFetch(`/api/v2/services/${id}`, { method: 'PATCH', body: { ...input, version } });
+export function updateService(
+  id: string,
+  input: Partial<ServiceInput>,
+  version: number,
+  owner?: string,
+): Promise<{ service: Service }> {
+  return apiFetch(`/api/v2/services/${id}`, {
+    method: 'PATCH',
+    body: { ...input, version },
+    headers: owner ? { 'X-Edit-Owner': owner } : {},
+  });
 }
 
 export function validDates(serviceId: string, days = 30): Promise<{ dates: string[] }> {
@@ -450,6 +485,70 @@ export function releaseVisitLocks(id: string, owner: string, nonce?: string): Pr
   });
 }
 
+/** Records that take a whole-record lock while their editor is open. */
+export type RecordLockResource = 'announcements' | 'services';
+
+export interface RecordLockInfo {
+  /** Display name of the person editing it. */
+  heldBy: string;
+  /** When the claim's lease runs out (ISO timestamp). */
+  expiresAt: string;
+  /** True when this account holds it (this tab or another one). */
+  mine: boolean;
+}
+
+/** Who is editing one record right now. */
+export function getRecordLock(
+  resource: RecordLockResource,
+  id: string,
+  owner: string,
+): Promise<{ lock: RecordLockInfo | null }> {
+  return apiFetch(`/api/edit-locks/${resource}/${encodeURIComponent(id)}`, {
+    headers: lockHeaders(owner),
+  });
+}
+
+/** Claim the record when its editor opens. */
+export function acquireRecordLock(
+  resource: RecordLockResource,
+  id: string,
+  owner: string,
+  nonce: string,
+): Promise<{
+  acquired: boolean;
+  lock: RecordLockInfo | null;
+  blocked: RecordLockInfo | null;
+  heartbeatMs: number;
+}> {
+  return apiFetch(`/api/edit-locks/${resource}/${encodeURIComponent(id)}/acquire`, {
+    method: 'POST',
+    headers: lockHeaders(owner, nonce),
+  });
+}
+
+/** Give the record back (save, cancel, or leaving the editor). */
+export function releaseRecordLock(
+  resource: RecordLockResource,
+  id: string,
+  owner: string,
+  nonce?: string,
+): Promise<{ released: number }> {
+  return apiFetch(`/api/edit-locks/${resource}/${encodeURIComponent(id)}/release`, {
+    method: 'POST',
+    headers: lockHeaders(owner, nonce),
+  });
+}
+
+/** Who is editing each record on a page, keyed by record id (one request). */
+export function getRecordLocks(
+  resource: RecordLockResource,
+  ids: string[],
+  owner: string,
+): Promise<{ locks: Record<string, RecordLockInfo> }> {
+  const query = ids.map((id) => encodeURIComponent(id)).join(',');
+  return apiFetch(`/api/edit-locks/${resource}?ids=${query}`, { headers: lockHeaders(owner) });
+}
+
 export type AnnouncementCategory = 'schedule-change' | 'vaccination-day' | 'health-advisory' | 'general';
 
 export interface AnnouncementImage {
@@ -511,8 +610,13 @@ export function updateAnnouncement(
     images: AnnouncementImage[];
   }>,
   version: number,
+  owner?: string,
 ): Promise<{ announcement: Announcement }> {
-  return apiFetch(`/api/v2/announcements/${id}`, { method: 'PATCH', body: { ...input, version } });
+  return apiFetch(`/api/v2/announcements/${id}`, {
+    method: 'PATCH',
+    body: { ...input, version },
+    headers: owner ? { 'X-Edit-Owner': owner } : {},
+  });
 }
 
 export function deleteAnnouncement(id: string): Promise<{ success: boolean }> {

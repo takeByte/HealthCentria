@@ -5,6 +5,7 @@ import { announcementRouter } from './announcement.routes.js';
 import { appointmentRouter } from './appointment.routes.js';
 import { notificationRouter } from './notification.routes.js';
 import { patientRouter } from './patient.routes.js';
+import { recordLockRouter } from './record-lock.routes.js';
 import { reportRouter } from './report.routes.js';
 import { staffRouter } from './staff.routes.js';
 import { authRouter } from './auth.routes.js';
@@ -22,6 +23,8 @@ apiRouter.use('/auth', authRouter);
 apiRouter.use('/v2', v2Router);
 apiRouter.use('/assistant', assistantRouter);
 apiRouter.use('/activity', activityRouter);
+// Record-level edit locks for the announcement and service editors.
+apiRouter.use('/edit-locks', recordLockRouter);
 apiRouter.use('/announcements', announcementRouter);
 apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/patients', patientRouter);

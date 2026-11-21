@@ -22,6 +22,7 @@ import {
 } from '../../components/app-ui';
 import { RecordMeta } from '../../components/record-meta';
 import { getSession } from '../../lib/auth';
+import { flash } from '../../lib/flash';
 import {
   ApiError,
   confirmAppointment,
@@ -155,6 +156,7 @@ function QueueCard({
           ? await confirmAppointment(appt.id)
           : await declineAppointment(appt.id, reason.trim());
       onChange(r.appointment);
+      flash(action === 'confirm' ? 'Appointment confirmed.' : 'Appointment declined.');
       setDeclining(false);
       setReason('');
     } catch (err) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { makeToken, tabOwner } from './edit-owner';
 import {
   acquireVisitLocks,
   getVisitLocks,
@@ -24,32 +25,9 @@ import {
  * a lost update - see lib/api.ts (EditConflictError) and utils/concurrency.js.
  */
 
-const OWNER_KEY = 'healthcentria.visit-lock.owner';
 const POLL_MS = 5_000;
 const DEFAULT_HEARTBEAT_MS = 60_000;
 const SECTIONS: VisitLockSection[] = ['diagnosis', 'prescription', 'visitNotes'];
-
-/** A token for this tab, kept across reloads of the same tab. */
-function tabOwner(): string {
-  try {
-    const existing = sessionStorage.getItem(OWNER_KEY);
-    if (existing) return existing;
-    const made = makeToken();
-    sessionStorage.setItem(OWNER_KEY, made);
-    return made;
-  } catch {
-    // Private mode / storage disabled: still works, just per mount.
-    return makeToken();
-  }
-}
-
-function makeToken(): string {
-  try {
-    return crypto.randomUUID().replace(/-/g, '');
-  } catch {
-    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
-  }
-}
 
 export function isHeldByOther(locks: VisitLocks | null, section: VisitLockSection): boolean {
   const lock = locks?.[section];

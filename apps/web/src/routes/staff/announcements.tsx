@@ -1,11 +1,12 @@
 import { useLiveRefresh } from '../../lib/realtime';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
-import { LoaderCircle, Plus, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { LoaderCircle, Lock, Plus } from 'lucide-react';
 import { AnnouncementFeed } from '../../components/announcement-feed';
 import { ImageUploader } from '../../components/image-uploader';
 import { DashboardShell } from '../../components/dashboard-shell';
+import { LockedActionButton } from '../../components/locked-action';
 import { opsNav } from '../../components/ops-nav';
 import {
   CardHeading,
@@ -22,17 +23,22 @@ import {
   textareaClass,
 } from '../../components/app-ui';
 import { getSession } from '../../lib/auth';
+import { flash } from '../../lib/flash';
 import {
   ApiError,
   CATEGORY_LABELS,
   createAnnouncement,
   deleteAnnouncement,
+  getRecordLocks,
+  isRecordLocked,
   listAnnouncements,
   updateAnnouncement,
   type Announcement,
   type AnnouncementImage,
   type AnnouncementCategory,
+  type RecordLockInfo,
 } from '../../lib/api';
+import { lockRemaining, useRecordLock } from '../../lib/record-lock';
 import { getTodayService } from '../../lib/schedule';
 import { sessionCan } from '../../lib/permissions';
 
@@ -70,8 +76,12 @@ function StaffAnnouncements() {
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<'all' | AnnouncementCategory>('all');
+  // Who is editing each post, refreshed while the page is visible. The edit
+  // form claims one post, so nobody else can open the same form and type.
+  const [locksById, setLocksById] = useState<Record<string, RecordLockInfo>>({});
+
+  const composerId = composer?.id ?? null;
+  const recordLock = useRecordLock('announcements', composerId, !!composerId);
 
   const [liveTick, setLiveTick] = useState(0);
   useLiveRefresh(['announcements'], () => setLiveTick((t) => t + 1));
@@ -93,20 +103,90 @@ function StaffAnnouncements() {
     };
   }, [liveTick]);
 
-  const filtered = useMemo(() => {
-    if (!items) return null;
-    const q = query.trim().toLowerCase();
-    return items.filter((a) => {
-      const matchesCategory = category === 'all' || a.category === category;
-      const matchesQuery = !q || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
-      return matchesCategory && matchesQuery;
+  // Lock changes do not emit a live event, so keep "being edited by" fresh
+  // while the page is visible. Paused in a background tab.
+  useEffect(() => {
+    if (!items || items.length === 0) {
+      setLocksById({});
+      return;
+    }
+    let cancelled = false;
+    const ids = items.map((a) => a.id);
+    const load = () => {
+      if (document.visibilityState !== 'visible') return;
+      getRecordLocks('announcements', ids, recordLock.owner)
+        .then((r) => {
+          if (!cancelled) setLocksById(r.locks);
+        })
+        .catch(() => {
+          // Best effort: the next poll retries.
+        });
+    };
+    load();
+    const timer = setInterval(load, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [items, recordLock.owner]);
+
+  /** Drop a released post from the badge map, so it does not linger until the next poll. */
+  function forgetLock(id: string) {
+    setLocksById((m) => {
+      if (!m[id]) return m;
+      const next = { ...m };
+      delete next[id];
+      return next;
     });
-  }, [items, query, category]);
+  }
+
+  /** Give the post back before closing. Capped at 1 s so a slow release never traps the user. */
+  async function releaseBeforeClose() {
+    let timer: number | undefined;
+    try {
+      await Promise.race([
+        recordLock.release(),
+        new Promise<void>((resolve) => {
+          timer = window.setTimeout(resolve, 1_000);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) window.clearTimeout(timer);
+    }
+  }
+
+  async function closeComposer() {
+    await releaseBeforeClose();
+    if (composerId) forgetLock(composerId);
+    setComposer(null);
+  }
+
+  function startEdit(a: Announcement) {
+    // The button is inert while held; this also covers a click landing between
+    // polls, where the claim below reports the holder anyway.
+    if (locksById[a.id]) return;
+    setFormError(null);
+    setComposer({
+      id: a.id,
+      version: a.version,
+      title: a.title,
+      body: a.body,
+      category: a.category,
+      pinned: a.pinned,
+      images: a.images ?? [],
+    });
+  }
 
   async function submit() {
     if (!composer) return;
     if (!composer.title.trim() || !composer.body.trim()) {
       setFormError('Title and message are both required.');
+      return;
+    }
+    if (composer.id && recordLock.heldByOther) {
+      setFormError(
+        `${recordLock.lock?.heldBy ?? 'Another staff member'} is editing this post. Wait for them to save or cancel.`,
+      );
       return;
     }
     setPending(true);
@@ -123,8 +203,10 @@ function StaffAnnouncements() {
             images: composer.images,
           },
           composer.version ?? 0,
+          recordLock.owner,
         );
         setItems((l) => (l ?? []).map((x) => (x.id === r.announcement.id ? r.announcement : x)));
+        flash('Announcement saved.');
       } else {
         const r = await createAnnouncement({
           title: composer.title.trim(),
@@ -134,10 +216,22 @@ function StaffAnnouncements() {
           images: composer.images,
         });
         setItems((l) => [r.announcement, ...(l ?? [])]);
+        flash('Announcement published.');
+      }
+      if (composer.id) {
+        // Hand the post back before closing, so the other editor's badge clears
+        // now rather than on the next poll.
+        await releaseBeforeClose();
+        forgetLock(composer.id);
       }
       setComposer(null);
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'Could not publish. Try again.');
+      if (isRecordLocked(err)) {
+        setFormError(err.message);
+        void recordLock.refresh();
+      } else {
+        setFormError(err instanceof ApiError ? err.message : 'Could not publish. Try again.');
+      }
     } finally {
       setPending(false);
     }
@@ -194,90 +288,72 @@ function StaffAnnouncements() {
             <Plus size={16} aria-hidden /> New post
           </button>
         </div>
-
-        <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
-          <div className="relative flex-1">
-            <Search
-              size={16}
-              aria-hidden
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search announcements…"
-              aria-label="Search announcements"
-              className={`${inputClass} pl-10`}
-            />
-          </div>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as 'all' | AnnouncementCategory)}
-            aria-label="Filter by category"
-            className={`${selectClass} sm:w-auto sm:min-w-44`}
-          >
-            <option value="all">All categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </div>
       </motion.section>
 
       {error && <InlineNotice>{error}</InlineNotice>}
-      {filtered === null && !error && <EmptyNote>Loading announcements…</EmptyNote>}
-      {filtered !== null && (
+      {items === null && !error && <EmptyNote>Loading announcements…</EmptyNote>}
+      {items !== null && (
         <motion.div
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
           transition={{ type: 'spring', bounce: 0, duration: 0.35, delay: 0.04 }}
         >
           <AnnouncementFeed
-            items={filtered}
-            emptyNote={
-              items?.length === 0
-                ? 'Nothing posted yet. Use “New post” to publish the first announcement.'
-                : 'No announcements match this search.'
-            }
-            actions={(a) => (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormError(null);
-                    setComposer({
-                      id: a.id,
-                      version: a.version,
-                      title: a.title,
-                      body: a.body,
-                      category: a.category,
-                      pinned: a.pinned,
-                      images: a.images ?? [],
-                    });
-                  }}
-                  className={chipButton}
-                >
-                  Edit
-                </button>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => remove(a.id)}
-                    disabled={deletingId === a.id}
-                    aria-label={`Delete ${a.title}`}
-                    className={dangerChipButton}
-                  >
-                    {deletingId === a.id ? (
-                      <LoaderCircle size={14} className="animate-spin" aria-hidden />
-                    ) : null}
-                    Delete
-                  </button>
-                )}
-              </div>
-            )}
+            items={items}
+            emptyNote="Nothing posted yet. Use “New post” to publish the first announcement."
+            actions={(a) => {
+              const editing = locksById[a.id];
+              return (
+                <div className="grid gap-2">
+                  {editing && (
+                    <p
+                      id={`ann-edit-lock-${a.id}`}
+                      role="status"
+                      className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20"
+                    >
+                      <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
+                      <span>
+                        <span className="font-semibold">
+                          {editing.mine
+                            ? 'You are editing this post in another tab.'
+                            : `${editing.heldBy} is currently editing this post.`}
+                        </span>{' '}
+                        It unlocks on save, on leaving the editor, or {lockRemaining(editing.expiresAt)}.
+                      </span>
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {editing ? (
+                      <LockedActionButton
+                        label="Edit"
+                        className={chipButton}
+                        describedBy={`ann-edit-lock-${a.id}`}
+                        heldBy={editing.heldBy}
+                        mine={editing.mine}
+                      />
+                    ) : (
+                      <button type="button" onClick={() => startEdit(a)} className={chipButton}>
+                        Edit
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => remove(a.id)}
+                        disabled={deletingId === a.id}
+                        aria-label={`Delete ${a.title}`}
+                        className={dangerChipButton}
+                      >
+                        {deletingId === a.id ? (
+                          <LoaderCircle size={14} className="animate-spin" aria-hidden />
+                        ) : null}
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            }}
           />
         </motion.div>
       )}
@@ -291,7 +367,7 @@ function StaffAnnouncements() {
           <>
             <motion.div
               aria-hidden
-              onClick={() => setComposer(null)}
+              onClick={() => void closeComposer()}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -314,6 +390,21 @@ function StaffAnnouncements() {
               <p className="mt-1 text-[12.5px] leading-5 text-slate-500">
                 Patients see this in their feed and receive a notification.
               </p>
+              {recordLock.heldByOther && (
+                <p
+                  role="status"
+                  className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900 ring-1 ring-inset ring-amber-600/20"
+                >
+                  <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
+                  <span>
+                    <span className="font-semibold">
+                      {recordLock.lock?.heldBy ?? 'Another staff member'} is currently editing this post.
+                    </span>{' '}
+                    You can read it, but a save is refused until they finish or its lock ends{' '}
+                    {lockRemaining(recordLock.lock?.expiresAt)}.
+                  </span>
+                </p>
+              )}
               <div className="mt-4 space-y-4">
                 <div>
                   <label htmlFor="ann-title" className={fieldLabel}>
@@ -376,13 +467,18 @@ function StaffAnnouncements() {
                 </label>
                 {formError && <InlineNotice>{formError}</InlineNotice>}
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={submit} disabled={pending} className={`${primaryButton} flex-1`}>
+                  <button
+                    type="button"
+                    onClick={submit}
+                    disabled={pending || recordLock.heldByOther}
+                    className={`${primaryButton} flex-1`}
+                  >
                     {pending && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
                     {composer.id ? 'Save changes' : 'Publish to patients'}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setComposer(null)}
+                    onClick={() => void closeComposer()}
                     disabled={pending}
                     className={`${secondaryButton} flex-1`}
                   >

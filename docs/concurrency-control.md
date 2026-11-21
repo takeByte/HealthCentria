@@ -152,6 +152,37 @@ POST /api/appointments/:id/record/locks/release    give this tab's sections back
 
 The tab identifies itself with `X-Edit-Owner`, a per-tab token kept in `sessionStorage`; it is not a credential and is only used to tell "my lock" from "someone else's".
 
+### Record-level locks (announcements and services)
+
+Announcements and services are edited through one form, so their sections are not independent: a second person cannot usefully change the body while the first changes the title. They take **one lock for the whole record** instead of one per field.
+
+```
+Staff A opens Edit on a post   -> claims the post
+Admin opens the same post      -> sees "Staff A is currently editing this post",
+                                  the Edit button is aria-disabled, save is refused
+Staff A saves or cancels       -> post released, admin can open it
+```
+
+| Question | Answer |
+|---|---|
+| When is the lock taken? | As soon as the editor opens (the announcement composer, the inline service form). Creating a new record takes no lock. |
+| How does the list show it? | Both screens poll `GET /api/edit-locks/<resource>?ids=…` every 5 seconds and show the holder on the card, with the remaining lease. |
+| How does it end? | Save, Cancel, closing the editor, or expiry. A save releases it before navigating, capped at 1 s. |
+| How is a crashed tab handled? | Same lease as the visit locks: 10 minutes without a renewal, renewed every 60 s. A late release cannot delete a newer claim (nonce). |
+| Is it enforced? | Yes: a save from a tab that does not own the record gets **423 RECORD_LOCKED** while another tab holds it. 409 stays reserved for a stale version. |
+| Does it replace the version check? | **No.** It is advisory in the same way: a script or older client can skip the claim, and the version check still prevents a lost update. |
+
+Endpoints (any staff/admin with the resource's own permission):
+
+```
+GET  /api/edit-locks/:resource?ids=…   who is editing each record (one query)
+GET  /api/edit-locks/:resource/:id     who is editing one record
+POST /api/edit-locks/:resource/:id/acquire    claim or renew
+POST /api/edit-locks/:resource/:id/release    give this tab's claim back
+```
+
+`:resource` is `announcements` or `services`; the registry lives in `utils/record-resources.js`, so adding another single-form editor means adding it there and calling `useRecordLock` from its screen. Deleting a locked announcement releases the lock with the record.
+
 
 ---
 
@@ -298,5 +329,24 @@ Modified for this feature:
 | `apps/web/src/lib/visit-lock.ts` | New: `useVisitLocks` - claim on open, 60 s renew while held, 5 s status poll, release on save, re-claim on the next keystroke |
 | `apps/web/src/routes/staff/visits.$appointmentId.tsx` | Locked fields disabled with the holder's name; sends changed fields + owner; reclaims after save |
 | `apps/web/src/routes/staff/appointments.tsx` | Queue shows "X is currently editing this visit", disables the visit links, and polls every 5 s |
+| `docs/concurrency-control.md` | This document |
+
+Modified for record-level locks (announcements, services):
+
+| File | Change |
+|---|---|
+| `apps/server/src/models/record-lock.model.js` | New: one lease per `(resource, record)`, unique + TTL indexes |
+| `apps/server/src/services/record-locks.js` | New: atomic claim/renew/takeover, release, "held by others", one-query batch |
+| `apps/server/src/controllers/record-lock.controller.js` | New: list / claim / release endpoints |
+| `apps/server/src/utils/record-resources.js` | New: resource registry (permission + existence check) |
+| `apps/server/src/routes/record-lock.routes.js` | New: `/api/edit-locks/:resource/...`, gated by the resource's own permission |
+| `apps/server/src/controllers/announcement.controller.js` | Refuses a save from a non-owner while another tab holds the post; releases after save and delete |
+| `apps/server/src/controllers/service.controller.js` | Same for services |
+| `apps/web/src/lib/edit-owner.ts` | New: the shared per-tab token (used by visit and record locks) |
+| `apps/web/src/lib/record-lock.ts` | New: `useRecordLock` - claim on open, 60 s renew, 5 s poll, release on close |
+| `apps/web/src/lib/api.ts` | `RecordLockedError` (423) and the generic lock calls |
+| `apps/web/src/components/locked-action.tsx` | New: focusable `aria-disabled` action for a held record |
+| `apps/web/src/routes/staff/announcements.tsx` | "X is editing this post", disabled Edit, poll every 5 s, claim on composer open |
+| `apps/web/src/routes/staff/services.tsx` | "X is editing this service", disabled Edit, poll every 5 s, claim on form open |
 | `docs/concurrency-control.md` | This document |
 

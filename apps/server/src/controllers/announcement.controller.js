@@ -7,7 +7,9 @@ import { Announcement } from '../models/announcement.model.js';
 import { isNotificationEmailEnabled } from '../models/app-settings.model.js';
 import { User } from '../models/user.model.js';
 import { logActivity, snapshotChanges } from '../services/activity.js';
+import { recordHeldByOther, releaseRecordLock } from '../services/record-locks.js';
 import { announcementEmailText, sendEmail } from '../utils/email.js';
+import { readEditOwner } from '../utils/edit-owner.js';
 import { notifyRoles, prefAllows } from '../utils/notifications.js';
 
 const CATEGORIES = ['schedule-change', 'vaccination-day', 'health-advisory', 'general'];
@@ -52,6 +54,20 @@ function requireDB(res) {
     return false;
   }
   return true;
+}
+
+/**
+ * 423 while another tab holds the editor open. 409 stays reserved for a stale
+ * version, so the UI can tell "wait for this person" from "reload".
+ */
+function recordLocked(res, label, holder) {
+  return res.status(423).json({
+    success: false,
+    code: 'RECORD_LOCKED',
+    message: `This ${label} is being edited by ${holder.heldBy}. Wait for them to save or cancel, then try again.`,
+    heldBy: holder.heldBy,
+    expiresAt: holder.expiresAt,
+  });
 }
 
 function present(a) {
@@ -150,6 +166,15 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
   if (!item) return res.status(404).json({ success: false, message: 'Announcement not found.' });
   if (!versionMatches(req, res, item, 'announcement')) return;
 
+  // Courtesy lock: refuse a save from a tab that never claimed the post while
+  // somebody else is editing it. The version check above is still the guarantee.
+  const holder = await recordHeldByOther({
+    resource: 'announcements',
+    resourceId: req.params.id,
+    owner: readEditOwner(req),
+  });
+  if (holder) return recordLocked(res, 'announcement', holder);
+
   const tracked = ['title', 'body', 'category', 'pinned', 'active'];
   const imagesBefore = item.images?.length ?? 0;
   const before = {};
@@ -169,6 +194,13 @@ export const updateAnnouncement = asyncHandler(async (req, res) => {
     detail: `Announcement updated: ${Object.keys(parsed.data).join(', ')}.`,
   });
 
+  // The editor is done, so the next person can take the post.
+  void releaseRecordLock({
+    resource: 'announcements',
+    resourceId: req.params.id,
+    owner: readEditOwner(req),
+  }).catch(() => {});
+
   await item.populate(POPULATE);
   live.announcements(item._id, req);
   res.json({ success: true, announcement: present(item.toObject()) });
@@ -178,6 +210,8 @@ export const deleteAnnouncement = asyncHandler(async (req, res) => {
   if (!requireDB(res)) return;
   const item = await Announcement.findByIdAndDelete(req.params.id);
   if (!item) return res.status(404).json({ success: false, message: 'Announcement not found.' });
+  // The record is gone, so its lock must not outlive it (the TTL is only a backstop).
+  void releaseRecordLock({ resource: 'announcements', resourceId: req.params.id }).catch(() => {});
   await logActivity({
     req,
     action: 'announcement.delete',
